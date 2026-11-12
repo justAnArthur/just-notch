@@ -5,12 +5,12 @@
  * default plugins. Fails on any console error.
  */
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Page } from 'playwright'
 
 const url = process.argv[2] ?? 'http://localhost:5175/'
-const shots = process.argv[3] ?? '/private/tmp/claude-501/just-notch-shots'
+const shots = process.argv[3] ?? join(tmpdir(), 'just-notch-shots')
 mkdirSync(shots, { recursive: true })
 const defaults = readdirSync(join(import.meta.dir, '../../../plugins'))
 
