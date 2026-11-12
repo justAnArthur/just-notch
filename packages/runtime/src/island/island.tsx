@@ -185,6 +185,8 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   const bubbleR = useMotionValue(bubble.r)
   const [goo, setGoo] = useState(false)
   const [bubbleShown, setBubbleShown] = useState(split)
+  // The content clip is a full-panel mask layer: only needed while the outline moves, at rest content sits inside it.
+  const [moving, setMoving] = useState(false)
 
   const current = (): Shape => ({ w: w.get(), h: h.get(), radius: radius.get(), shoulder: shoulder.get() })
   const d = useTransform(() => islandPath(cx, current()))
@@ -211,6 +213,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
 
     // While it moves, clicks land anywhere it is or is going; at rest, only where it is.
     setIslandRegions([union(rectOf(current(), geometry), target), ...(split ? [bubbleRect()] : [])])
+    setMoving(!reduced)
     const splitChanged = (from === 'split') !== split
     if (splitChanged) {
       setGoo(!reduced)
@@ -228,6 +231,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
     void Promise.all(controls.map((c) => c.finished)).then(() => {
       if (run !== token.current) return
       setGoo(false)
+      setMoving(false)
       setBubbleShown(split)
       setIslandRegions([target, ...(split ? [bubbleRect()] : [])])
     })
@@ -299,29 +303,31 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
         </g>
       </svg>
 
-      <motion.div className="pointer-events-none absolute inset-0 text-foreground" style={{ clipPath }}>
+      <motion.div className="pointer-events-none absolute inset-0 text-foreground" style={moving ? { clipPath } : undefined}>
         <AnimatePresence initial={false}>{content}</AnimatePresence>
       </motion.div>
 
-      <motion.div
-        className="pointer-events-auto absolute top-0 left-0 flex items-center justify-center text-foreground"
-        style={{ x: bubbleLeft, y: notch.h / 2 - bubble.r, width: bubble.r * 2, height: bubble.r * 2 }}
-      >
-        <AnimatePresence initial={false}>
-          {split && secondary && (
-            <motion.div
-              key={secondary.plugin}
-              className="flex size-full items-center justify-center"
-              initial={reduced ? { opacity: 0 } : contentHidden}
-              animate={reduced ? { opacity: 1 } : contentShown}
-              exit={{ opacity: 0, transition: contentLeave }}
-              transition={contentEnter}
-            >
-              <PluginView plugin={secondary.plugin} view={secondary.spec.minimal} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+      {(split || bubbleShown) && (
+        <motion.div
+          className="pointer-events-auto absolute top-0 left-0 flex items-center justify-center text-foreground"
+          style={{ x: bubbleLeft, y: notch.h / 2 - bubble.r, width: bubble.r * 2, height: bubble.r * 2 }}
+        >
+          <AnimatePresence initial={false}>
+            {split && secondary && (
+              <motion.div
+                key={secondary.plugin}
+                className="flex size-full items-center justify-center"
+                initial={reduced ? { opacity: 0 } : contentHidden}
+                animate={reduced ? { opacity: 1 } : contentShown}
+                exit={{ opacity: 0, transition: contentLeave }}
+                transition={contentEnter}
+              >
+                <PluginView plugin={secondary.plugin} view={secondary.spec.minimal} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
     </div>
   )
 }

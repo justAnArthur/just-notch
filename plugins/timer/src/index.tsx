@@ -56,15 +56,22 @@ const addMinute = (r: Run) =>
     ...(r.endsAt === undefined ? { remainingMs: (r.remainingMs ?? 0) + MINUTE } : { endsAt: r.endsAt + MINUTE }),
   })
 
+/** Re-renders once per shown second, on the second's edge (counted from the end), never in between. */
 function useRemaining(r: Run) {
   const [now, setNow] = useState(Date.now)
-  const running = r.endsAt !== undefined
+  const { endsAt } = r
   useEffect(() => {
-    if (!running) return
-    const timer = setInterval(() => setNow(Date.now()), 250)
-    return () => clearInterval(timer)
-  }, [running])
-  return remainingOf(r, running ? now : Date.now())
+    if (endsAt === undefined) return
+    let timer: ReturnType<typeof setTimeout>
+    const tick = () => {
+      const t = Date.now()
+      setNow(t)
+      timer = setTimeout(tick, (endsAt - t) % 1000 || 1000)
+    }
+    tick()
+    return () => clearTimeout(timer)
+  }, [endsAt])
+  return remainingOf(r, endsAt === undefined ? Date.now() : now)
 }
 
 const clock = (ms: number) => {
@@ -79,7 +86,8 @@ function Ring({ r, className, stroke }: { r: Run; className: string; stroke: num
   return (
     <svg viewBox="0 0 24 24" className={`${className} shrink-0 -rotate-90 text-status-warning`} aria-label={`${clock(remaining)} left`}>
       <circle cx="12" cy="12" r={radius} fill="none" className="stroke-active" strokeWidth={stroke} />
-      <motion.circle
+      {/* Set, not sprung: a spring per tick repainted the ring most of every second for a sub-pixel change. */}
+      <circle
         cx="12"
         cy="12"
         r={radius}
@@ -88,9 +96,7 @@ function Ring({ r, className, stroke }: { r: Run; className: string; stroke: num
         strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={c}
-        initial={false}
-        animate={{ strokeDashoffset: c * (1 - remaining / r.totalMs) }}
-        transition={spring.moderate}
+        strokeDashoffset={c * (1 - remaining / r.totalMs)}
       />
     </svg>
   )

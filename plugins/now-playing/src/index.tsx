@@ -2,12 +2,19 @@ import { Button, Slider, Switch, SwitchGroup, spring } from '@justanarthur/modo-
 import { definePlugin, type MediaState, type PluginContext, useMediaPosition, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
 import { Music, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { motion, useReducedMotion, useReducedMotionConfig } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const PAUSED_MS = 30_000
 const ANNOUNCE = 'announceTracks'
-const TICK_MS = spring.moderate.duration * 2000
 const BARS = { rest: [0.2, 0.2, 0.2, 0.2], still: [0.5, 0.85, 0.65, 0.4] }
+// Each bar loops its own levels at its own pace, so together they read as random. A `transform` keyframe loop runs
+// as a native compositor animation: no timer, no JS per frame while music plays.
+const LOOPS = [
+  { levels: [0.35, 1, 0.5, 0.8, 0.35], beats: 5 },
+  { levels: [0.7, 0.4, 0.95, 0.55, 0.7], beats: 4 },
+  { levels: [0.5, 0.9, 0.3, 1, 0.5], beats: 6 },
+  { levels: [0.4, 0.75, 0.6, 0.3, 0.4], beats: 4.5 },
+]
 
 const APPS: Record<string, string> = {
   'com.apple.Music': 'Music',
@@ -104,29 +111,48 @@ function Bars() {
   const reduced = useReduce()
   const playing = media?.playing ?? false
   const live = playing && !reduced
-  const [levels, setLevels] = useState(BARS.still)
+  const still = playing ? BARS.still : BARS.rest
 
-  useEffect(() => {
-    if (!live) return
-    const timer = setInterval(() => setLevels((l) => l.map(() => 0.3 + Math.random() * 0.7)), TICK_MS)
-    return () => clearInterval(timer)
-  }, [live])
-
-  const shown = live ? levels : playing ? BARS.still : BARS.rest
   return (
     <div className="flex h-3.5 shrink-0 items-center gap-0.5" aria-hidden>
-      {shown.map((level, i) => (
-        <motion.span
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed bars
-          key={i}
-          className={`h-full w-0.75 rounded-full ${tint ? '' : 'bg-foreground'}`}
-          style={tint ? { backgroundColor: tint } : undefined}
-          initial={false}
-          animate={{ scaleY: level }}
-          transition={spring.moderate}
-        />
+      {LOOPS.map((loop, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: fixed bars
+        <Bar key={i} loop={loop} live={live} level={still[i]} tint={tint} />
       ))}
     </div>
+  )
+}
+
+interface BarProps {
+  loop: (typeof LOOPS)[number]
+  live: boolean
+  level: number
+  tint?: string
+}
+
+/** Playing, the bar loops on the Web Animations API, which WebKit runs on the compositor: no JS per frame. */
+function Bar({ loop, live, level, tint }: BarProps) {
+  const ref = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    const bar = ref.current
+    if (!live || !bar) return
+    const animation = bar.animate(
+      loop.levels.map((l) => ({ transform: `scaleY(${l})` })),
+      { duration: spring.slow.duration * loop.beats * 1000, easing: 'ease-in-out', iterations: Number.POSITIVE_INFINITY },
+    )
+    return () => animation.cancel()
+  }, [live, loop])
+
+  return (
+    <motion.span
+      ref={ref}
+      className={`h-full w-0.75 rounded-full ${tint ? '' : 'bg-foreground'}`}
+      style={tint ? { backgroundColor: tint } : undefined}
+      initial={false}
+      animate={{ scaleY: level }}
+      transition={spring.moderate}
+    />
   )
 }
 

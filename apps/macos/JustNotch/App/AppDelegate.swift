@@ -117,9 +117,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func pointerMoved() {
-        let drag = NSPasteboard(name: .drag)
-        let fileDrag = NSEvent.pressedMouseButtons & 1 != 0 && drag.changeCount != dragChangeCount
-            && drag.types?.contains(.fileURL) ?? false
+        // The drag pasteboard is an IPC round-trip: read it only while the button is held.
+        let fileDrag = NSEvent.pressedMouseButtons & 1 != 0 && {
+            let drag = NSPasteboard(name: .drag)
+            return drag.changeCount != dragChangeCount && drag.types?.contains(.fileURL) ?? false
+        }()
         for panel in panels.values { panel.pointerMoved(fileDrag: fileDrag) }
     }
 

@@ -18,6 +18,8 @@ const subscribeCurrent = (cb: () => void) => {
   return () => listeners.delete(cb)
 }
 function setCurrent(next: typeof current) {
+  // The ticker runs every second: only an actual change may re-render the views.
+  if (next?.event.id === current?.event.id && next?.event.start === current?.event.start && next?.leadMs === current?.leadMs) return
   current = next
   for (const cb of [...listeners]) cb()
 }

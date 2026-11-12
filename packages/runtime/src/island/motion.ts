@@ -35,7 +35,8 @@ export const bubbleTransition = (detaching: boolean): Transition => (detaching ?
  * leaving content blurs out. Blur is a filter string a spring can't drive, so
  * these are tweens on a tier's duration, as modo-ui's icon swaps.
  */
-export const contentShown = { opacity: 1, scale: 1, filter: 'blur(0px)' }
+// At rest the filter is dropped (`none`, not `blur(0px)`): any filter keeps an offscreen buffer alive.
+export const contentShown = { opacity: 1, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }
 export const contentHidden = { opacity: 0, scale: 0.94, filter: 'blur(6px)' }
 export const contentEnter: Transition = { type: 'tween', duration: spring.slow.duration, ease: 'easeOut', delay: spring.fast.duration }
 export const contentLeave: Transition = { type: 'tween', ...spring.fast.exit, ease: 'easeIn' }
