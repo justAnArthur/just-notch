@@ -87,7 +87,7 @@ export interface MediaState {
 }
 
 export interface PowerState {
-  percent: number
+  percent: number // 0…100
   charging: boolean
   pluggedIn: boolean
   /** Minutes until empty / full; absent while the system estimates. */
@@ -124,7 +124,7 @@ export interface BluetoothDevice {
   name: string
   kind: 'headphones' | 'keyboard' | 'mouse' | 'speaker' | 'other'
   connected: boolean
-  batteryPercent?: number
+  batteryPercent?: number // 0…100
 }
 
 export interface StatsState {

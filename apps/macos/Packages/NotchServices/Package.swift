@@ -4,9 +4,16 @@ import PackageDescription
 let package = Package(
     name: "NotchServices",
     platforms: [.macOS(.v14)],
-    products: [.library(name: "NotchServices", targets: ["NotchServices"])],
+    products: [
+        .library(name: "NotchServices", targets: ["NotchServices"]),
+        // Loaded into /usr/bin/perl by MediaService, never linked into the host:
+        // the host embeds the built dylib (see MediaBridgeBackend.swift).
+        .library(name: "NotchMediaBridge", type: .dynamic, targets: ["NotchMediaBridge"]),
+    ],
     targets: [
         .target(name: "NotchServices"),
+        .target(name: "NotchMediaBridge", linkerSettings: [.linkedFramework("Foundation")]),
         .testTarget(name: "NotchServicesTests", dependencies: ["NotchServices"]),
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )
