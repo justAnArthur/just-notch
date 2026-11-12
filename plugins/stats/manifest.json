@@ -1,0 +1,14 @@
+{
+  "id": "stats",
+  "name": "System",
+  "version": "0.1.0",
+  "description": "CPU, memory and network with live sparklines; optional CPU load beside the notch.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "stats.read"
+  ],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

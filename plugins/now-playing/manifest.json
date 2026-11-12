@@ -1,0 +1,12 @@
+{
+  "id": "now-playing",
+  "name": "Now Playing",
+  "version": "0.1.0",
+  "description": "Artwork and a live equalizer beside the notch, with a scrubber and playback controls when expanded.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": ["media.read", "media.control"],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

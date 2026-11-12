@@ -1,0 +1,25 @@
+{
+  "name": "@just-notch/plugin-hud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "notch build",
+    "dev": "notch dev",
+    "check": "notch check"
+  },
+  "dependencies": {
+    "@just-notch/sdk": "workspace:*",
+    "lucide-react": "^1.72.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@justanarthur/modo-ui": "^0.6.0",
+    "@just-notch/cli": "workspace:*",
+    "@types/react": "^18.3.0",
+    "motion": "^13.4.0",
+    "react": "^18.3.1"
+  }
+}
