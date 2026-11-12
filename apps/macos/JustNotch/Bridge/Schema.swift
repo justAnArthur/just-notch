@@ -75,6 +75,15 @@ struct HostInfo: Codable {
     var geometry: ScreenGeometry
 }
 
+struct AppPreferences: Codable, Equatable {
+    enum Screens: String, Codable {
+        case notched, all
+    }
+
+    var launchAtLogin: Bool
+    var screens: Screens
+}
+
 enum Schema {
     static let topicPermission: [String: Permission] = [
         "media": .mediaRead,
@@ -83,12 +92,14 @@ enum Schema {
         "calendar": .calendarRead,
         "bluetooth": .bluetoothRead,
         "stats": .statsRead,
+        "display": .displayControl,
     ]
 
     static let methodPermission: [String: Permission] = [
         "media.command": .mediaControl,
         "audio.setVolume": .audioControl,
         "display.setBrightness": .displayControl,
+        "display.setKeyboardBacklight": .displayControl,
         "hud.setEnabled": .hud,
         "calendar.requestAccess": .calendarRead,
         "files.thumbnail": .files,
@@ -98,7 +109,14 @@ enum Schema {
         "files.beginDrag": .files,
     ]
 
-    static let runtimeOnly: Set<String> = ["host.ready", "window.setHitRegions", "window.setFocusable", "plugins.setEnabled"]
+    static let runtimeOnly: Set<String> = [
+        "host.ready",
+        "window.setHitRegions",
+        "window.setFocusable",
+        "plugins.setEnabled",
+        "app.preferences",
+        "app.setPreferences",
+    ]
 }
 
 // Params of the methods the host answers itself.
@@ -139,6 +157,12 @@ struct PermissionParams: Decodable {
 struct SetEnabledParams: Decodable {
     var id: String
     var enabled: Bool
+}
+
+/// `Partial<AppPreferences>`.
+struct PreferencesParams: Decodable {
+    var launchAtLogin: Bool?
+    var screens: AppPreferences.Screens?
 }
 
 struct GrantedResult: Encodable {

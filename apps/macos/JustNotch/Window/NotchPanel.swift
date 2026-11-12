@@ -77,10 +77,16 @@ enum ScreenLayout {
         return CFUUIDCreateString(nil, uuid) as String
     }
 
+    /// `panel.screens` in the app's defaults; anything but `all` means `notched`.
+    static var screens: AppPreferences.Screens {
+        get { UserDefaults.standard.string(forKey: "panel.screens") == "all" ? .all : .notched }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "panel.screens") }
+    }
+
     /// The screens that get a panel: by default only the notched (else built-in, else main) screen.
     static func targetScreens() -> [NSScreen] {
         let screens = NSScreen.screens
-        if UserDefaults.standard.string(forKey: "panel.screens") == "all" { return screens }
+        if Self.screens == .all { return screens }
         let preferred = screens.first { $0.safeAreaInsets.top > 0 }
             ?? screens.first { CGDisplayIsBuiltin(displayId($0)) != 0 }
             ?? NSScreen.main

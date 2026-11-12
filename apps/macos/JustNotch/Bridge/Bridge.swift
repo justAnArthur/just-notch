@@ -103,7 +103,10 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         case "storage.set":
             let object = try JSONSerialization.jsonObject(with: params) as? [String: Any] ?? [:]
             guard let key = object["key"] as? String else { throw ServiceError("storage.set needs a key") }
-            try storage.set(plugin: plugin, key: key, value: object["value"] ?? NSNull())
+            let value = object["value"] ?? NSNull()
+            try storage.set(plugin: plugin, key: key, value: value)
+            let changed = try JSONSerialization.data(withJSONObject: ["plugin": plugin, "key": key, "value": value])
+            events.send("storage.changed", payload: changed, key: "storage.changed:\(plugin)/\(key)", to: app.webViews)
             return nil
 
         case "system.openUrl":
@@ -122,6 +125,13 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             guard plugins.manifest(p.id) != nil else { throw ServiceError("unknown plugin \(p.id)") }
             plugins.setEnabled(p.id, p.enabled)
             return nil
+
+        case "app.preferences":
+            return app.preferences.json()
+
+        case "app.setPreferences":
+            try app.setPreferences(try decode(PreferencesParams.self, params))
+            return app.preferences.json()
 
         case "files.beginDrag":
             guard let panel = app.panel(for: webView) else { throw ServiceError("files.beginDrag works from the island only") }

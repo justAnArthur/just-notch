@@ -49,6 +49,11 @@ struct ShapeTests {
         #expect(try keys(StatsState(cpu: 0, memoryUsed: 0, memoryTotal: 0, netInBps: 0, netOutBps: 0)) == ["cpu", "memoryUsed", "memoryTotal", "netInBps", "netOutBps"])
     }
 
+    @Test func display() throws {
+        #expect(try keys(DisplayState(brightness: 0.5, keyboardBacklight: 0.25)) == ["brightness", "keyboardBacklight"])
+        #expect(try keys(DisplayState(brightness: 0.5)) == ["brightness"])
+    }
+
     @Test func hud() throws {
         #expect(try keys(HUDEvent(kind: .volume, value: 0.5, muted: false)) == ["kind", "value", "muted"])
         #expect(try keys(HUDEvent(kind: .brightness, value: 0.5)) == ["kind", "value"])
@@ -163,5 +168,32 @@ struct ShapeTests {
         let jpeg = try #require(Data(base64Encoded: String(url.dropFirst("data:image/jpeg;base64,".count))))
         let rep = try #require(NSBitmapImageRep(data: jpeg))
         #expect(max(rep.pixelsWide, rep.pixelsHigh) == 300)
+    }
+}
+
+@MainActor private final class FakeBackend: MediaBackend {
+    let name = "fake"
+    var onChange: ((RawNowPlaying?) -> Void)?
+    var onFailure: (() -> Void)?
+    var sent: [MediaCommand] = []
+    var stopped = false
+    func start() {}
+    func stop() { stopped = true }
+    func send(_ command: MediaCommand) { sent.append(command) }
+}
+
+@Suite @MainActor struct MediaCommandTests {
+    @Test func worksWithoutSubscriber() async throws {
+        let backend = FakeBackend()
+        var picks = 0
+        let service = MediaService { _ in
+            picks += 1
+            return backend
+        }
+        _ = try await service.handle(method: "media.command", params: Data(#"{"command":"toggle"}"#.utf8))
+        _ = try await service.handle(method: "media.command", params: Data(#"{"command":"seek","positionS":3}"#.utf8))
+        #expect(backend.sent == [.toggle, .seek(positionS: 3)])
+        #expect(picks == 1)
+        #expect(!backend.stopped)
     }
 }

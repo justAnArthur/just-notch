@@ -6,6 +6,8 @@ let mediaLog = Logger(subsystem: "just-notch", category: "media")
 /// `media` topic and `media.command`. Picks a backend at start, in order:
 /// MediaRemote in-process (if it actually returns data), the perl bridge
 /// (macOS 15.4+), then AppleScript polling of Music and Spotify.
+/// `media.command` works without a subscriber: it picks a backend on demand
+/// and stops it after a minute without commands.
 @MainActor
 public final class MediaService: NotchService {
     public let topics = ["media"]
@@ -24,7 +26,18 @@ public final class MediaService: NotchService {
     private var artworkUrl: String?
     private var latest = Latest<MediaState?>()
 
-    public init() {}
+    private static let idleTimeout: TimeInterval = 60
+    private let picker: @MainActor (Set<String>) async -> MediaBackend
+    private var onDemand: Task<MediaBackend, Never>?
+    private var idleStop: Timer?
+
+    public convenience init() {
+        self.init { await MediaService.pick(skipping: $0) }
+    }
+
+    init(picker: @escaping @MainActor (Set<String>) async -> MediaBackend) {
+        self.picker = picker
+    }
 
     public func start(topic: String) {
         guard !running else { return }
@@ -54,22 +67,43 @@ public final class MediaService: NotchService {
     public func handle(method: String, params: Data) async throws -> Data? {
         guard method == "media.command" else { throw ServiceError("unknown method \(method)") }
         let command = try decode(MediaCommand.self, params)
-        guard let backend else { throw ServiceError("no media backend is active") }
-        backend.send(command)
+        let target = if let backend { backend } else { await commandBackend() }
+        target.send(command)
         return nil
+    }
+
+    private func commandBackend() async -> MediaBackend {
+        let task = onDemand ?? Task { await picker([]) }
+        onDemand = task
+        let chosen = await task.value
+        guard onDemand == task else { return backend ?? chosen }
+        chosen.onFailure = { [weak self] in self?.dropOnDemand() }
+        idleStop?.invalidate()
+        idleStop = Timer.scheduledTimer(withTimeInterval: Self.idleTimeout, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.dropOnDemand() }
+        }
+        return chosen
+    }
+
+    private func dropOnDemand() {
+        idleStop?.invalidate()
+        idleStop = nil
+        guard let task = onDemand else { return }
+        onDemand = nil
+        Task { await task.value.stop() }
     }
 
     private func select(skipping failed: Set<String>) {
         generation += 1
         let current = generation
         Task { @MainActor in
-            let chosen = await self.pick(skipping: failed)
+            let chosen = await self.picker(failed)
             guard self.running, self.generation == current else { return chosen.stop() }
             self.use(chosen, skipping: failed)
         }
     }
 
-    private func pick(skipping failed: Set<String>) async -> MediaBackend {
+    private static func pick(skipping failed: Set<String>) async -> MediaBackend {
         let direct = MediaRemoteDirect()
         if !failed.contains(direct.name), MediaRemoteDirect.available {
             let restricted = ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 4, patchVersion: 0))
@@ -86,6 +120,7 @@ public final class MediaService: NotchService {
     }
 
     private func use(_ chosen: MediaBackend, skipping failed: Set<String>) {
+        dropOnDemand()
         backend = chosen
         activeBackend = chosen.name
         mediaLog.info("media backend: \(chosen.name, privacy: .public)")

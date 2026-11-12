@@ -65,6 +65,11 @@ public struct StatsState: Codable, Equatable, Sendable {
     public var netOutBps: Double
 }
 
+public struct DisplayState: Codable, Equatable, Sendable {
+    public var brightness: Double
+    public var keyboardBacklight: Double?
+}
+
 // Events
 
 public struct HUDEvent: Codable, Equatable, Sendable {
@@ -103,6 +108,7 @@ public enum MediaCommand: Equatable, Sendable, Decodable {
 
 struct VolumeParams: Decodable { var volume: Double }
 struct BrightnessParams: Decodable { var brightness: Double }
+struct LevelParams: Decodable { var level: Double }
 struct EnabledParams: Decodable { var enabled: Bool }
 struct EnabledResult: Encodable { var enabled: Bool }
 struct GrantedResult: Encodable { var granted: Bool }

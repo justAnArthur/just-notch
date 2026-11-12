@@ -2,49 +2,6 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 
-/// The keyboard backlight through CoreBrightness' private `KeyboardBrightnessClient`, best effort.
-enum KeyboardBacklight {
-    private typealias Get = @convention(c) (AnyObject, Selector, UInt64) -> Float
-    private typealias Set = @convention(c) (AnyObject, Selector, Float, UInt64) -> Bool
-    private typealias IDs = @convention(c) (AnyObject, Selector) -> NSArray?
-
-    private struct Client {
-        let object: NSObject
-        let id: UInt64
-        let get: Get
-        let set: Set
-    }
-
-    private static let client: Client? = {
-        dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_LAZY)
-        guard let type = NSClassFromString("KeyboardBrightnessClient") as? NSObject.Type else { return nil }
-        let object = type.init()
-        let getSel = NSSelectorFromString("brightnessForKeyboard:")
-        let setSel = NSSelectorFromString("setBrightness:forKeyboard:")
-        let idsSel = NSSelectorFromString("copyKeyboardBacklightIDs")
-        guard object.responds(to: getSel), object.responds(to: setSel), object.responds(to: idsSel) else { return nil }
-        let ids = unsafeBitCast(object.method(for: idsSel), to: IDs.self)(object, idsSel) as? [NSNumber]
-        guard let id = ids?.first?.uint64Value else { return nil }
-        return Client(
-            object: object,
-            id: id,
-            get: unsafeBitCast(object.method(for: getSel), to: Get.self),
-            set: unsafeBitCast(object.method(for: setSel), to: Set.self)
-        )
-    }()
-
-    static func get() -> Double? {
-        guard let client else { return nil }
-        return Double(client.get(client.object, NSSelectorFromString("brightnessForKeyboard:"), client.id))
-    }
-
-    @discardableResult
-    static func set(_ value: Double) -> Bool {
-        guard let client else { return false }
-        return client.set(client.object, NSSelectorFromString("setBrightness:forKeyboard:"), Float(min(1, max(0, value))), client.id)
-    }
-}
-
 /// Media key codes in an `NX_SYSDEFINED` aux-control event (IOKit `ev_keymap.h`).
 enum MediaKey: Int {
     case soundUp = 0

@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Keeps one panel per target screen: moves existing ones (sending `geometry`), adds and removes the rest.
-    private func rebuildPanels() {
+    func rebuildPanels() {
         let screens = ScreenLayout.targetScreens()
         let ids = Set(screens.map(ScreenLayout.id))
         for (id, panel) in panels where !ids.contains(id) {
@@ -141,12 +141,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openSettings() {
         if settingsWindow == nil {
-            let frame = NSRect(x: 0, y: 0, width: 760, height: 560)
+            let frame = NSRect(x: 0, y: 0, width: 760, height: 520)
             let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable],
                                   backing: .buffered, defer: false)
             window.title = "Just Notch Settings"
             window.isReleasedWhenClosed = false
-            window.minSize = NSSize(width: 520, height: 400)
+            window.minSize = NSSize(width: 640, height: 440)
             let webView = WebViews.make(WKWebView.self, frame: frame, bridge: bridge, scheme: scheme, lifecycle: lifecycle)
             window.contentView = webView
             window.center()
@@ -154,7 +154,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = window
             settingsWebView = webView
         }
-        NSApp.activate()
+        // The cooperative `activate()` is declined when opened from the non-activating panel.
+        NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
@@ -184,16 +185,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             log.error("launch at login: \(error.localizedDescription, privacy: .public)")
         }
-        launchAtLoginItem?.state = launchAtLogin ? .on : .off
     }
+
+    // MARK: preferences
 
     var launchAtLogin: Bool { SMAppService.mainApp.status == .enabled }
 
     func setLaunchAtLogin(_ enabled: Bool) throws {
+        defer { launchAtLoginItem?.state = launchAtLogin ? .on : .off }
         if enabled {
             try SMAppService.mainApp.register()
         } else {
             try SMAppService.mainApp.unregister()
+        }
+    }
+
+    var preferences: AppPreferences {
+        AppPreferences(launchAtLogin: launchAtLogin, screens: ScreenLayout.screens)
+    }
+
+    func setPreferences(_ update: PreferencesParams) throws {
+        if let screens = update.screens, screens != ScreenLayout.screens {
+            ScreenLayout.screens = screens
+            rebuildPanels()
+        }
+        if let enabled = update.launchAtLogin, enabled != launchAtLogin {
+            try setLaunchAtLogin(enabled)
         }
     }
 }
