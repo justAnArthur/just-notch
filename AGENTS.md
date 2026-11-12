@@ -31,3 +31,10 @@ Sparse: smallest correct code, trust the types, early returns, no comments excep
 - `bun run check` (typecheck all workspaces)
 - `cd apps/macos/Packages/NotchServices && swift build`
 - `cd apps/macos && xcodegen && xcodebuild -scheme JustNotch -configuration Debug build`
+
+## releases
+
+- One versioned product: the app, versioned in the root `package.json` (`just-notch`, tags `just-notch@x.y.z`). The workspace packages and plugins are private and ship inside the app.
+- `bump-version.yml` (from just-github-actions-n-workflows, see `.github/AGENTS.md`) bumps on push to `main` from Conventional Commits whose scope is one of the root `properties.gitCommitScopeRelatedNames` (`app`, `macos`, `host`, `services`, `runtime`, `island`, `sdk`, `cli`, `bridge-schema`, `plugins`, or a plugin id): `feat` minor, `fix`/`perf`/`refactor`/… patch, `!` major. Unscoped commits (and `[skip bump]`) don't release.
+- A new tag starts `release-on-tag.yml` (GitHub release with notes) and `build-macos-on-tag.yml` (builds the app on macOS with `MARKETING_VERSION` from the tag, attaches `JustNotch-x.y.z.zip`).
+- Toolkit workflow files are managed by its CLI (`npx @justanarthur/just-github-actions-n-workflows-cli update`); don't edit `bump-version.yml` / `release-on-tag.yml` by hand. `ci.yml` and `build-macos-on-tag.yml` are this repo's own.

@@ -1,9 +1,14 @@
 {
   "name": "@just-notch/cli",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
-  "bin": { "notch": "./src/cli.ts" },
-  "exports": { ".": "./src/index.ts" },
+  "bin": {
+    "notch": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "check": "tsc -p . --noEmit",
     "test": "bun test"

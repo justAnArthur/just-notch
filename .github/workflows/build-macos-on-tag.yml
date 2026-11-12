@@ -1,0 +1,71 @@
+# build-macos-on-tag.yml
+# ---
+# builds Just Notch for a release tag (`just-notch@x.y.z`) and attaches the zipped app to that tag's
+# GitHub release (created by release-on-tag.yml from the same tag).
+#
+# bump-version.yml dispatches this workflow for every new tag that matches `push.tags`, passing the
+# tag as the `tag` input — keep that input.
+#
+# the app is ad-hoc signed, not notarized: first launch needs right-click → Open, or
+# `xattr -dr com.apple.quarantine JustNotch.app`.
+# ---
+name: build-macos-on-tag
+run-name: "macOS app — ${{ inputs.tag || github.ref_name }}"
+
+on:
+  push:
+    tags: [ "just-notch@*" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tag to build (e.g. "just-notch@0.2.0")'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build the web runtime and plugins
+        run: bun run build
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build the app
+        working-directory: apps/macos
+        run: |
+          xcodegen
+          xcodebuild -project JustNotch.xcodeproj -scheme JustNotch -configuration Release \
+            -derivedDataPath build build \
+            MARKETING_VERSION="${TAG#just-notch@}" CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+
+      - name: Package
+        id: pkg
+        run: |
+          zip="JustNotch-${TAG#just-notch@}.zip"
+          ditto -c -k --sequesterRsrc --keepParent apps/macos/build/Build/Products/Release/JustNotch.app "$zip"
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # release-on-tag.yml creates the release from the same tag, possibly after this build starts.
+          for _ in $(seq 1 30); do gh release view "$TAG" > /dev/null 2>&1 && break; sleep 10; done
+          gh release upload "$TAG" "${{ steps.pkg.outputs.zip }}" --clobber

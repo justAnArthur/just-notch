@@ -1,5 +1,7 @@
 {
   "name": "just-notch",
+  "version": "0.1.0",
+  "description": "A modular Dynamic Island for the MacBook notch: a native Swift host, a React + modo-ui island, plugins for everything else.",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -15,5 +17,8 @@
     "typescript": "^5.9.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0"
+  },
+  "properties": {
+    "gitCommitScopeRelatedNames": "just-notch,app,macos,host,services,runtime,island,sdk,cli,bridge-schema,plugins,now-playing,power,shelf,timer,calendar,hud,devices,stats"
   }
 }

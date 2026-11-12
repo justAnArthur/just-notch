@@ -48,6 +48,7 @@ targets:
       base:
         PRODUCT_NAME: JustNotch
         PRODUCT_BUNDLE_IDENTIFIER: com.justanarthur.justnotch
+        # Local builds only; release builds pass the root package.json version (.github/workflows/build-macos-on-tag.yml).
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
