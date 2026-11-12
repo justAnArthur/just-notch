@@ -4,7 +4,7 @@
 
 ## commands
 
-Run inside a plugin folder, or pass `--cwd <dir>`.
+Run inside a plugin folder (its `build` / `dev` / `check` scripts call `notch`), or pass `--cwd <dir>`. At the repo root the workspace CLI is the `notch` script: `bun run notch build --cwd plugins/<id>`. Don't use `bunx notch` there: it resolves an unrelated npm package.
 
 | command | does |
 | --- | --- |

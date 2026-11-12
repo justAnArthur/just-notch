@@ -1,4 +1,5 @@
 import {
+  type AppPreferences,
   type BluetoothDevice,
   type HostEvent,
   type HostInfo,
@@ -58,6 +59,7 @@ const values: Topics = {
   },
   power: { percent: 76, charging: false, pluggedIn: false, minutesRemaining: 312, lowPowerMode: false, hasBattery: true },
   audio: { volume: 0.5, muted: false, outputDevice: 'MacBook Pro Speakers' },
+  display: { brightness: 0.6, keyboardBacklight: 0.4 },
   calendar: {
     access: 'granted',
     upcoming: [
@@ -80,6 +82,21 @@ function emit(...events: HostEvent[]) {
   queueMicrotask(() => window.__notch?.dispatch(events))
 }
 
+/*
+ * The real host delivers storage and plugin changes to every web view; tabs of
+ * one browser (an island and a settings page) share them over this channel.
+ */
+const channel = new BroadcastChannel('notch:mock')
+channel.onmessage = ({ data }: MessageEvent<HostEvent>) => {
+  if (data.type === 'plugins.changed') plugins = data.payload.plugins
+  emit(data)
+}
+
+function broadcast(event: HostEvent) {
+  emit(event)
+  channel.postMessage(event)
+}
+
 function publish<T extends Topic>(topic: T, value: Topics[T]) {
   values[topic] = value
   if (subscribed.has(topic)) emit({ type: 'topic', payload: { topic, value } as HostEvent['payload'] } as HostEvent)
@@ -94,7 +111,8 @@ function mediaNow(): MediaState | null {
 
 function setTrack(index: number, playing = true) {
   track = (index + TRACKS.length) % TRACKS.length
-  publish('media', { ...(values.media as MediaState), ...TRACKS[track], artworkUrl: artwork(track), positionS: 0, playing, updatedAt: Date.now() })
+  const base = values.media ?? { rate: 1, sourceApp: 'com.apple.Music' }
+  publish('media', { ...base, ...TRACKS[track], artworkUrl: artwork(track), positionS: 0, playing, updatedAt: Date.now() })
 }
 
 setInterval(() => {
@@ -108,6 +126,13 @@ setInterval(() => {
 
 const storageKey = (plugin: string, key: string) => `notch:mock:storage:${plugin}:${key}`
 const enabledKey = (id: string) => `notch:mock:enabled:${id}`
+const PREFERENCES_KEY = 'notch:mock:preferences'
+const DEFAULT_PREFERENCES: AppPreferences = { launchAtLogin: false, screens: 'notched' }
+
+function preferences(): AppPreferences {
+  const raw = localStorage.getItem(PREFERENCES_KEY)
+  return { ...DEFAULT_PREFERENCES, ...(raw ? JSON.parse(raw) : {}) }
+}
 
 async function loadPlugins(): Promise<InstalledPlugin[]> {
   const response = await fetch('/plugins/index.json').catch(() => null)
@@ -164,7 +189,14 @@ const handlers: Handlers = {
     publish('audio', { ...values.audio, volume })
     return null
   },
-  'display.setBrightness': () => null,
+  'display.setBrightness': ({ brightness }) => {
+    publish('display', { ...values.display, brightness })
+    return null
+  },
+  'display.setKeyboardBacklight': ({ level }) => {
+    publish('display', { ...values.display, keyboardBacklight: level })
+    return null
+  },
   'hud.setEnabled': ({ enabled }) => ({ enabled }),
   'calendar.requestAccess': () => ({ granted: true }),
   'files.thumbnail': ({ path }) => ({ url: artwork(path.length) }),
@@ -178,6 +210,7 @@ const handlers: Handlers = {
   },
   'storage.set': ({ key, value }, plugin) => {
     localStorage.setItem(storageKey(plugin, key), JSON.stringify(value))
+    broadcast({ type: 'storage.changed', payload: { plugin, key, value } })
     return null
   },
   'system.openUrl': ({ url }) => {
@@ -188,8 +221,14 @@ const handlers: Handlers = {
   'plugins.setEnabled': ({ id, enabled }) => {
     localStorage.setItem(enabledKey(id), String(enabled))
     plugins = plugins.map((p) => (p.manifest.id === id ? { ...p, enabled } : p))
-    emit({ type: 'plugins.changed', payload: { plugins } })
+    broadcast({ type: 'plugins.changed', payload: { plugins } })
     return null
+  },
+  'app.preferences': preferences,
+  'app.setPreferences': (changes) => {
+    const next = { ...preferences(), ...changes }
+    localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next))
+    return next
   },
 }
 
@@ -228,8 +267,26 @@ export const mock = {
       )
     }, 1500)
   },
+  /** A brightness or keyboard-backlight key: one step of sixteen up, wrapping at full. */
+  displayKey(kind: 'brightness' | 'keyboard') {
+    const current = kind === 'brightness' ? values.display.brightness : (values.display.keyboardBacklight ?? 0)
+    const value = Math.round(((current + 0.0625) % 1.0625) * 16) / 16
+    publish('display', kind === 'brightness' ? { ...values.display, brightness: value } : { ...values.display, keyboardBacklight: value })
+    emit({ type: 'hud', payload: { kind, value } })
+  },
+  /** Discharging at `percent`: 19 crosses the low threshold, 9 the critical one. */
+  battery(percent: number) {
+    publish('power', { ...values.power, percent, charging: false, pluggedIn: false, minutesRemaining: percent * 4 })
+  },
+  /** An event starting in `minutes`, ahead of the others. */
+  eventSoon(minutes = 8) {
+    const start = Date.now() + minutes * 60_000
+    const event = { id: `soon-${start}`, title: 'Sync with Alex', start, end: start + 30 * 60_000, allDay: false, calendarColor: '#22c55e', meetingUrl: 'https://meet.example.com/sync' }
+    publish('calendar', { ...values.calendar, upcoming: [event, ...values.calendar.upcoming].sort((a, b) => a.start - b.start) })
+  },
   togglePlay: () => handlers['media.command']({ command: 'toggle' }, 'runtime'),
   stopMedia: () => publish('media', null),
+  startMedia: () => setTrack(track),
   hitRegions,
 }
 

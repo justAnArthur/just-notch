@@ -29,6 +29,7 @@ export type ActivityAction =
   | { type: 'hide'; plugin: string }
   | { type: 'flash'; plugin: string; spec: FlashSpec }
   | { type: 'flashEnd'; id: number }
+  | { type: 'dismiss'; plugin: string; key?: string }
   | { type: 'remove'; plugin: string }
   | { type: 'expand' }
   | { type: 'collapse' }
@@ -73,6 +74,12 @@ export function reduce(state: ActivityState, action: ActivityAction): ActivitySt
       return flash(state, action.plugin, action.spec)
     case 'flashEnd':
       return state.flash?.id === action.id ? advance(state) : state
+    case 'dismiss': {
+      const matches = (f: FlashEntry) => f.plugin === action.plugin && (action.key === undefined || f.spec.key === action.key)
+      if (!state.queue.some(matches) && !(state.flash && matches(state.flash))) return state
+      const kept = { ...state, queue: state.queue.filter((f) => !matches(f)) }
+      return state.flash && matches(state.flash) ? advance(kept) : kept
+    }
     case 'remove': {
       const kept = {
         ...state,

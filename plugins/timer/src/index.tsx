@@ -268,6 +268,6 @@ function activate(ctx: PluginContext) {
 
 export default definePlugin({
   activate,
-  widget: { title: 'Timer', icon: () => <TimerIcon size={14} strokeWidth={1.5} />, view: Widget },
+  widget: { title: 'Timer', icon: TimerIcon, view: Widget },
   settings: Settings,
 })

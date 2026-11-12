@@ -21,8 +21,9 @@ const running = new Map<string, Running>()
 let snapshot: LoadedPlugin[] = []
 const listeners = new Set<() => void>()
 
-function changed() {
-  snapshot = [...running.values()]
+/** Publishes the running plugins in the host's order, not the order their imports happened to finish. */
+function changed(order: InstalledPlugin[]) {
+  snapshot = order.flatMap((p) => running.get(p.manifest.id) ?? [])
   for (const listener of [...listeners]) listener()
 }
 
@@ -89,7 +90,7 @@ export function syncPlugins(plugins: InstalledPlugin[], live = true) {
       if (!next || next.manifest.version !== entry.installed.manifest.version || next.baseUrl !== entry.installed.baseUrl) stop(id)
     }
     await Promise.all([...wanted.values()].filter((p) => !running.has(p.manifest.id)).map((p) => start(p, live)))
-    changed()
+    changed(plugins)
   })
   return queue
 }

@@ -25,6 +25,8 @@ export type IslandState = 'idle' | 'compact' | 'split' | 'expanded' | 'flash'
 /** A long-lived activity (Now Playing, a running timer). */
 export interface ActivitySpec {
   priority: Exclude<Priority, 'alert' | 'hud'>
+  /** The activity's tab label in the expanded island. Defaults to the plugin's manifest name. */
+  title?: string
   /** Beside the notch while this activity owns the island. Each slot is about as wide as the notch is tall. */
   compact: { leading?: ComponentType; trailing?: ComponentType }
   /** The detached bubble when another activity owns the island (`split`). */
@@ -48,11 +50,15 @@ export interface ActivityController {
   show(spec: ActivitySpec): void
   hide(): void
   flash(spec: FlashSpec): void
+  /** Ends this plugin's running or queued flash with `key`, or every flash of this plugin without one. */
+  dismiss(key?: string): void
 }
 
 export interface PluginStorage {
   get<T>(key: string): Promise<T | undefined>
   set<T>(key: string, value: T): Promise<void>
+  /** Runs `cb` with the new value whenever `key` changes, from this view or another (the settings window). */
+  subscribe<T>(key: string, cb: (value: T | undefined) => void): Unsubscribe
 }
 
 export interface PluginContext {
@@ -68,11 +74,18 @@ export interface PluginContext {
   readonly island: { get(): IslandState; subscribe(cb: (state: IslandState) => void): Unsubscribe }
 }
 
+/** What the runtime passes an icon: lucide-react icons take these as they are. */
+export interface IconProps {
+  size?: number | string
+  strokeWidth?: number | string
+  className?: string
+}
+
 export interface PluginDefinition {
   /** Runs once when the plugin is enabled; return a cleanup for when it is disabled. */
   activate?(ctx: PluginContext): void | Unsubscribe | Promise<void | Unsubscribe>
   /** A tab in the expanded island. */
-  widget?: { title: string; icon?: ComponentType; view: ComponentType }
+  widget?: { title: string; icon?: ComponentType<IconProps>; view: ComponentType }
   /** A section in the settings window. */
   settings?: ComponentType
 }
@@ -119,7 +132,14 @@ export function useStorage<T>(key: string, fallback: T): [T, (value: T) => void]
   const { storage } = usePlugin()
   const [value, setValue] = useState(fallback)
   useEffect(() => {
-    storage.get<T>(key).then((stored) => stored === undefined || setValue(stored))
+    let live = true
+    storage.get<T>(key).then((stored) => live && stored !== undefined && setValue(stored))
+    const stop = storage.subscribe<T>(key, (next) => setValue(next === undefined ? fallback : next))
+    return () => {
+      live = false
+      stop()
+    }
+    // `fallback` stays out of the deps: a new literal each render must not resubscribe.
   }, [storage, key])
   const set = (next: T) => {
     setValue(next)

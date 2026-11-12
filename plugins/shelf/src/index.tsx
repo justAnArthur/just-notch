@@ -63,17 +63,6 @@ function useThumbnail(path: string) {
   return url
 }
 
-// Menus portal out of the island; this keeps them in its dark scope.
-function menuContainer() {
-  const existing = document.getElementById('shelf-menus')
-  if (existing) return existing
-  const el = document.createElement('div')
-  el.id = 'shelf-menus'
-  el.className = 'dark island'
-  document.body.append(el)
-  return el
-}
-
 function Tile({ path, index, persist }: { path: string; index: number; persist: (paths: string[]) => void }) {
   const { call } = usePlugin()
   const url = useThumbnail(path)
@@ -105,7 +94,7 @@ function Tile({ path, index, persist }: { path: string; index: number; persist: 
             <span className="w-full truncate text-center text-micro text-foreground">{name}</span>
           </FluidHover.Item>
         </MenuTrigger>
-        <ContextMenuContent container={menuContainer()}>
+        <ContextMenuContent>
           <ContextMenuItem index={0} label="Open" onSelect={() => void call('files.open', { path })} />
           <ContextMenuItem index={1} label="Show in Finder" onSelect={() => void call('files.reveal', { path })} />
           <ContextMenuItem index={2} label="Remove from shelf" onSelect={() => persist(shelf.get().filter((p) => p !== path))} />
@@ -231,7 +220,7 @@ function activate(ctx: PluginContext) {
     // A drop arrives right after the drag ends; only a drag that ends without one closes the target.
     cancel = setTimeout(() => {
       targetOpen = false
-      flash(1)
+      ctx.activity.dismiss('drop')
     }, 150)
   })
 
@@ -256,5 +245,5 @@ function activate(ctx: PluginContext) {
 
 export default definePlugin({
   activate,
-  widget: { title: 'Shelf', icon: () => <Files size={14} strokeWidth={1.5} />, view: Shelf },
+  widget: { title: 'Shelf', icon: Files, view: Shelf },
 })

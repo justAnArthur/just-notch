@@ -4,6 +4,7 @@ import {
   Keyboard,
   KeyboardOff,
   type LucideIcon,
+  SlidersHorizontal,
   Speaker,
   Sun,
   SunDim,
@@ -21,10 +22,8 @@ type Kind = Hud['kind']
 const FLASH_MS = 1500
 const ACCESSIBILITY_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
 
-/** The level the flash shows; the host's key events and the slider both write it. */
+/** The level the flash shows; the host's key events and the flash's slider both write it. */
 let level: Hud = { kind: 'volume', value: 0 }
-/** The host publishes no brightness, so the last one a key or the slider set is the best known. */
-let brightness = 0.5
 const listeners = new Set<() => void>()
 const subscribeLevel = (cb: () => void) => {
   listeners.add(cb)
@@ -32,11 +31,9 @@ const subscribeLevel = (cb: () => void) => {
 }
 function setLevel(next: Hud) {
   level = next
-  if (next.kind === 'brightness') brightness = next.value
   for (const cb of [...listeners]) cb()
 }
 const useLevel = () => useSyncExternalStore(subscribeLevel, () => level)
-const useBrightness = () => useSyncExternalStore(subscribeLevel, () => brightness)
 
 function glyph({ kind, value, muted }: Hud): LucideIcon {
   if (kind === 'volume') {
@@ -50,20 +47,21 @@ function glyph({ kind, value, muted }: Hud): LucideIcon {
 const LABEL: Record<Kind, string> = { volume: 'Volume', brightness: 'Brightness', keyboard: 'Keyboard brightness' }
 const percent = (v: number) => Math.round(v * 100)
 
-/** Sets a level from a slider: volume and display brightness have host methods; the keyboard backlight has none. */
+/** Sets a level from a slider. */
 function useSetLevel() {
   const { call } = usePlugin()
   return (kind: Kind, value: number) => {
     if (kind === 'volume') void call('audio.setVolume', { volume: value })
     if (kind === 'brightness') void call('display.setBrightness', { brightness: value })
+    if (kind === 'keyboard') void call('display.setKeyboardBacklight', { level: value })
   }
 }
 
-function Level({ hud, onChange }: { hud: Hud; onChange?: (value: number) => void }) {
+function Level({ hud, onChange }: { hud: Hud; onChange: (value: number) => void }) {
   const Icon = glyph(hud)
   const value = hud.muted ? 0 : hud.value
   return (
-    <div className="flex h-9 items-center gap-3">
+    <div className="flex h-7 items-center gap-3">
       <Icon size={16} strokeWidth={1.5} className="shrink-0 text-foreground" />
       <Slider
         className="min-w-0 flex-1"
@@ -73,8 +71,7 @@ function Level({ hud, onChange }: { hud: Hud; onChange?: (value: number) => void
         trackClassName="bg-surface-3"
         fillClassName="bg-foreground"
         value={percent(value)}
-        disabled={!onChange}
-        onChange={(v) => onChange?.((v as number) / 100)}
+        onChange={(v) => onChange((v as number) / 100)}
       />
       <span className="w-7 shrink-0 text-right text-caption text-muted-foreground tabular-nums">{percent(value)}</span>
     </div>
@@ -91,25 +88,22 @@ function Flash() {
     setLevel({ kind: hud.kind, value, muted: false })
     flashAgain(hud.kind)
   }
-  return <Level hud={hud} onChange={hud.kind === 'keyboard' ? undefined : change} />
+  return <Level hud={hud} onChange={change} />
 }
 
 function Controls() {
   const audio = useTopic('audio')
-  const brightness = useBrightness()
+  const display = useTopic('display')
   const set = useSetLevel()
-  if (!audio) return null
+  if (!audio || !display) return null
   return (
-    <div className="flex size-full flex-col justify-center gap-1">
+    <div className="flex size-full flex-col justify-center">
       <Level hud={{ kind: 'volume', value: audio.volume, muted: audio.muted }} onChange={(v) => set('volume', v)} />
-      <Level
-        hud={{ kind: 'brightness', value: brightness }}
-        onChange={(v) => {
-          set('brightness', v)
-          setLevel({ kind: 'brightness', value: v })
-        }}
-      />
-      <div className="flex h-9 items-center gap-3">
+      <Level hud={{ kind: 'brightness', value: display.brightness }} onChange={(v) => set('brightness', v)} />
+      {display.keyboardBacklight !== undefined && (
+        <Level hud={{ kind: 'keyboard', value: display.keyboardBacklight }} onChange={(v) => set('keyboard', v)} />
+      )}
+      <div className="flex h-7 items-center gap-3">
         <Speaker size={16} strokeWidth={1.5} className="shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate text-body text-muted-foreground">{audio.outputDevice}</span>
       </div>
@@ -162,17 +156,21 @@ function Settings() {
 
 function activate(ctx: PluginContext) {
   let enabled = false
+  const replace = (next: boolean) => {
+    if (next === enabled) return
+    enabled = next
+    void ctx.call('hud.setEnabled', { enabled })
+  }
   flashAgain = (kind) => ctx.activity.flash({ priority: 'hud', key: kind, view: Flash, durationMs: FLASH_MS })
-  void ctx.storage.get<boolean>('replaceHud').then((stored) => {
-    enabled = stored === true
-    if (enabled) void ctx.call('hud.setEnabled', { enabled: true })
-  })
+  void ctx.storage.get<boolean>('replaceHud').then((stored) => replace(stored === true))
+  const stopSwitch = ctx.storage.subscribe<boolean>('replaceHud', (stored) => replace(stored === true))
   const stop = ctx.on('hud', (hud) => {
     setLevel(hud)
     flashAgain(hud.kind)
   })
   return () => {
     stop()
+    stopSwitch()
     flashAgain = () => {}
     if (enabled) void ctx.call('hud.setEnabled', { enabled: false })
   }
@@ -180,6 +178,6 @@ function activate(ctx: PluginContext) {
 
 export default definePlugin({
   activate,
-  widget: { title: 'Controls', view: Controls },
+  widget: { title: 'Controls', icon: SlidersHorizontal, view: Controls },
   settings: Settings,
 })

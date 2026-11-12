@@ -4,9 +4,10 @@
  * ladder from that black, so `bg-surface-2` inside it reads as a raised tile.
  *
  * modo-ui resolves its light-dark() tokens where they are declared
- * (`:root, .light, .dark`), so the island root carries `dark` as well:
- * `<div class="dark island">`. The doubled class out-specifies that block in
- * any stylesheet order.
+ * (`:root, .light, .dark`), so the scope carries `dark` as well. It sits on
+ * the island page's root, `<html class="dark island">`: popups portal to
+ * <body>, and the page shows nothing but the island. The doubled class
+ * out-specifies that block in any stylesheet order.
  */
 
 :root {
@@ -44,4 +45,9 @@
 html[data-notch='island'],
 html[data-notch='island'] body {
   background-color: transparent;
+}
+
+/* In a browser (the mock host) a raised backdrop stands in for the desktop, so the black island shows. */
+html[data-notch='mock'] body {
+  background-color: var(--surface-4);
 }

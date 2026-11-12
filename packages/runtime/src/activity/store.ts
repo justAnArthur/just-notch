@@ -6,13 +6,33 @@ let state = initialState
 const listeners = new Set<() => void>()
 let timer: ReturnType<typeof setTimeout> | undefined
 let timedFlash: number | undefined
+let remaining = 0
+let deadline = 0
+let held = false
+
+function runFlashTimer() {
+  clearTimeout(timer)
+  const flash = state.flash
+  if (!flash || held) return
+  deadline = Date.now() + remaining
+  timer = setTimeout(() => dispatch({ type: 'flashEnd', id: flash.id }), remaining)
+}
 
 function scheduleFlashEnd() {
   const flash = state.flash
   if (flash?.id === timedFlash) return
-  clearTimeout(timer)
   timedFlash = flash?.id
-  if (flash) timer = setTimeout(() => dispatch({ type: 'flashEnd', id: flash.id }), flash.spec.durationMs ?? FLASH_MS)
+  remaining = flash ? (flash.spec.durationMs ?? FLASH_MS) : 0
+  runFlashTimer()
+}
+
+/** While held (the pointer rests on it) the running flash doesn't time out; letting go resumes the time it had left. */
+export function holdFlash(hold: boolean) {
+  if (hold === held) return
+  held = hold
+  if (!hold) return runFlashTimer()
+  clearTimeout(timer)
+  if (state.flash) remaining = Math.max(0, deadline - Date.now())
 }
 
 export function dispatch(action: ActivityAction) {

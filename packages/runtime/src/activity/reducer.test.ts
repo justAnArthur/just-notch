@@ -117,6 +117,35 @@ describe('flashes', () => {
   })
 })
 
+describe('dismiss', () => {
+  test('ends the running flash with the key and advances the queue', () => {
+    const state = run(
+      { type: 'flash', plugin: 'shelf', spec: flashSpec('alert', 'drop') },
+      { type: 'flash', plugin: 'power', spec: flashSpec('alert') },
+      { type: 'dismiss', plugin: 'shelf', key: 'drop' },
+    )
+    expect(state.flash?.plugin).toBe('power')
+    expect(state.queue).toHaveLength(0)
+  })
+
+  test('without a key, drops every flash of the plugin, running and queued', () => {
+    const state = run(
+      { type: 'flash', plugin: 'a', spec: flashSpec('hud', 'x') },
+      { type: 'flash', plugin: 'b', spec: flashSpec('hud') },
+      { type: 'flash', plugin: 'a', spec: flashSpec('hud', 'y') },
+      { type: 'dismiss', plugin: 'a' },
+    )
+    expect(state.flash?.plugin).toBe('b')
+    expect(state.queue).toHaveLength(0)
+  })
+
+  test('another key or plugin is untouched', () => {
+    const state = run({ type: 'flash', plugin: 'a', spec: flashSpec('hud', 'x') })
+    expect(reduce(state, { type: 'dismiss', plugin: 'a', key: 'y' })).toBe(state)
+    expect(reduce(state, { type: 'dismiss', plugin: 'b' })).toBe(state)
+  })
+})
+
 describe('expansion', () => {
   test('expanded wins over everything, collapse returns', () => {
     let state = run({ type: 'flash', plugin: 'a', spec: flashSpec('alert') }, { type: 'expand' })

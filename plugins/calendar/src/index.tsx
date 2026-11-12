@@ -257,7 +257,6 @@ function activate(ctx: PluginContext) {
   let shown: string | undefined
   const alerted = new Set<string>()
 
-  // The settings window writes storage from another page and nothing announces it, so re-read it.
   const readSettings = async () => {
     leadMs = ((await ctx.storage.get<number>('leadMinutes')) ?? DEFAULT_LEAD) * MINUTE
     flashOn = (await ctx.storage.get<boolean>('flash')) ?? true
@@ -275,7 +274,7 @@ function activate(ctx: PluginContext) {
     setCurrent({ event, leadMs })
     if (shown !== event.id) {
       shown = event.id
-      ctx.activity.show({ priority: 'calendar', compact: { leading: Glyph, trailing: Countdown }, minimal: Ring, expanded: Upcoming })
+      ctx.activity.show({ priority: 'calendar', title: 'Up next', compact: { leading: Glyph, trailing: Countdown }, minimal: Ring, expanded: Upcoming })
     }
     const left = event.start - now
     if (flashOn && left > 0 && left <= ALERT_MS && !alerted.has(event.id)) {
@@ -288,13 +287,20 @@ function activate(ctx: PluginContext) {
     state = value
     tick()
   })
+  const stopLead = ctx.storage.subscribe<number>('leadMinutes', (minutes) => {
+    leadMs = (minutes ?? DEFAULT_LEAD) * MINUTE
+    tick()
+  })
+  const stopFlash = ctx.storage.subscribe<boolean>('flash', (on) => {
+    flashOn = on ?? true
+  })
   void readSettings().then(tick)
   const ticker = setInterval(tick, 1000)
-  const settings = setInterval(() => void readSettings(), 5000)
   return () => {
     stopTopic()
+    stopLead()
+    stopFlash()
     clearInterval(ticker)
-    clearInterval(settings)
     ctx.activity.hide()
     setCurrent(undefined)
   }
@@ -302,6 +308,6 @@ function activate(ctx: PluginContext) {
 
 export default definePlugin({
   activate,
-  widget: { title: 'Calendar', icon: () => <CalendarDays size={14} strokeWidth={1.5} />, view: Agenda },
+  widget: { title: 'Calendar', icon: CalendarDays, view: Agenda },
   settings: Settings,
 })

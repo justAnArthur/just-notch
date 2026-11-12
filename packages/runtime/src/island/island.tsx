@@ -1,12 +1,14 @@
 import type { Rect, ScreenGeometry } from '@just-notch/bridge-schema'
+import type { IslandState } from '@just-notch/sdk'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'motion/react'
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { present } from '../activity/reducer'
-import { dispatch, getState, useActivityState } from '../activity/store'
+import { dispatch, getState, holdFlash, useActivityState } from '../activity/store'
 import { on } from '../host/bus'
 import { call } from '../host/client'
 import PluginView from '../plugins/plugin-view'
 import Expanded from './expanded'
+import { POPUP_SELECTOR, setIslandRegions, trackPopups } from './hit-regions'
 import { type Box, boxOf, bubbleFor, centerX, islandPath, rectOf, type Shape, shapeFor, slotWidth, union } from './geometry'
 import {
   bubbleTransition,
@@ -24,31 +26,64 @@ const HOVER_LEAVE_MS = 400
 const GOO_MATRIX = '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10'
 const GOO_BLUR = 6
 
-function setHitRegions(rects: Rect[]) {
-  void call('runtime', 'window.setHitRegions', { rects }).catch(() => {})
-}
+const INTERACTIVE = 'button, a, input, select, textarea, label, [role=slider], [role=switch], [role=tab], [role=menuitem], [contenteditable]'
 
-/** Expands after a short hover intent or on click; collapses a moment after the pointer leaves, or on Escape. */
-function useHoverIntent(expanded: boolean) {
+/** The pointer is over the island (its shape or content) or over one of its popups. */
+const overIsland = (target: EventTarget | null) => target instanceof Element && target.closest(`#island, ${POPUP_SELECTOR}`) !== null
+
+/**
+ * Hover from the host's native tracking and from the page. Expands after a short hover intent and collapses a
+ * moment after the pointer leaves; over a flash it only holds the flash open (a click expands it).
+ */
+function useHover(island: IslandState) {
+  const [hovering, setHovering] = useState(false)
   const inside = useRef({ host: false, dom: false })
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-
-  const update = () => {
-    clearTimeout(timer.current)
-    const hovering = inside.current.host || inside.current.dom
-    const open = getState().expanded
-    if (hovering && !open) timer.current = setTimeout(() => dispatch({ type: 'expand' }), HOVER_INTENT_MS)
-    if (!hovering && open) timer.current = setTimeout(() => dispatch({ type: 'collapse' }), HOVER_LEAVE_MS)
-  }
+  const sync = () => setHovering(inside.current.host || inside.current.dom)
 
   useEffect(
     () =>
       on('hover', ({ inside: host }) => {
         inside.current.host = host
-        update()
+        // Outside the host's zone and hit regions nothing on the page is under the pointer, whatever the page last saw.
+        if (!host) inside.current.dom = false
+        sync()
       }),
     [],
   )
+
+  // Hit-tested on every move, not pointerleave: that never fires when the hovered node is removed (a tab
+  // swapped by a newly enabled plugin), which left the island stuck open.
+  useEffect(() => {
+    const set = (dom: boolean) => {
+      if (dom === inside.current.dom) return
+      inside.current.dom = dom
+      sync()
+    }
+    const move = (event: PointerEvent) => set(overIsland(event.target))
+    const out = (event: PointerEvent) => event.relatedTarget === null && set(false)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerover', move)
+    document.addEventListener('pointerout', out)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerover', move)
+      document.removeEventListener('pointerout', out)
+    }
+  }, [])
+
+  const flash = island === 'flash'
+  const expanded = island === 'expanded'
+  useEffect(() => holdFlash(hovering && flash), [hovering, flash])
+
+  // Only entering and leaving act, so Escape (or a flash ending) under a resting pointer doesn't reopen it.
+  useEffect(() => {
+    const act = () => {
+      if (hovering === getState().expanded || (hovering && present(getState()).island === 'flash')) return
+      dispatch({ type: hovering ? 'expand' : 'collapse' })
+    }
+    const timer = setTimeout(act, hovering ? HOVER_INTENT_MS : HOVER_LEAVE_MS)
+    return () => clearTimeout(timer)
+  }, [hovering])
 
   useEffect(() => {
     if (!expanded) return
@@ -56,14 +91,27 @@ function useHoverIntent(expanded: boolean) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [expanded])
+}
 
-  useEffect(() => () => clearTimeout(timer.current), [])
-
-  const dom = (value: boolean) => () => {
-    inside.current.dom = value
-    update()
+/**
+ * A click expands the island unless its press went to a control (a slider in a flash, a button). Controls that
+ * handle the press themselves stop or prevent it, so only a press that reaches the root untouched counts.
+ */
+function useClickToExpand(island: IslandState) {
+  const onSurface = useRef(false)
+  return {
+    onPointerDownCapture: () => {
+      onSurface.current = false
+    },
+    onPointerDown: (event: React.PointerEvent) => {
+      onSurface.current = !event.defaultPrevented && event.target instanceof Element && event.target.closest(INTERACTIVE) === null
+    },
+    onClick: () => {
+      const surface = onSurface.current
+      onSurface.current = false
+      if (surface && island !== 'expanded') dispatch({ type: 'expand' })
+    },
   }
-  return { onPointerEnter: dom(true), onPointerLeave: dom(false) }
 }
 
 function GooFilter({ id }: { id: string }) {
@@ -118,7 +166,10 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   const { island, primary, secondary, flash } = presentation
   const reduced = useReduceMotion()
   const gooId = useId()
-  const hover = useHoverIntent(island === 'expanded')
+  const root = useRef<HTMLDivElement>(null)
+  useHover(island)
+  const click = useClickToExpand(island)
+  useEffect(() => (root.current ? trackPopups(root.current) : undefined), [])
 
   const shape = shapeFor(island, geometry)
   const split = island === 'split'
@@ -159,7 +210,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
     const target = rectOf(shape, geometry)
 
     // While it moves, clicks land anywhere it is or is going; at rest, only where it is.
-    setHitRegions([union(rectOf(current(), geometry), target), ...(split ? [bubbleRect()] : [])])
+    setIslandRegions([union(rectOf(current(), geometry), target), ...(split ? [bubbleRect()] : [])])
     const splitChanged = (from === 'split') !== split
     if (splitChanged) {
       setGoo(!reduced)
@@ -178,7 +229,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
       if (run !== token.current) return
       setGoo(false)
       setBubbleShown(split)
-      setHitRegions([target, ...(split ? [bubbleRect()] : [])])
+      setIslandRegions([target, ...(split ? [bubbleRect()] : [])])
     })
   }, [island, shape.w, shape.h, shape.radius, shape.shoulder, bubble.x, bubble.r, cx])
 
@@ -222,15 +273,14 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   }
 
   return (
-    // Hover and click arrive from the shape and the content inside it; everything else passes through.
+    // Clicks arrive from the shape and the content inside it; everything else passes through.
     <div
+      ref={root}
       id="island"
       data-state={island}
-      className="dark island pointer-events-none absolute top-0 left-0"
+      className="pointer-events-none absolute top-0 left-0"
       style={{ width: panel.w, height: panel.h }}
-      onPointerEnter={hover.onPointerEnter}
-      onPointerLeave={hover.onPointerLeave}
-      onClick={() => island === 'expanded' || dispatch({ type: 'expand' })}
+      {...click}
     >
       <svg aria-hidden className="pointer-events-none absolute inset-0 overflow-visible" width={panel.w} height={panel.h}>
         <defs>

@@ -315,6 +315,6 @@ function activate(ctx: PluginContext) {
 
 export default definePlugin({
   activate,
-  widget: { title: 'Now Playing', icon: () => <Music size={14} strokeWidth={1.5} />, view: Widget },
+  widget: { title: 'Now Playing', icon: Music, view: Widget },
   settings: Settings,
 })

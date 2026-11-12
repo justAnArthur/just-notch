@@ -1,6 +1,7 @@
-import type { HostInfo, InstalledPlugin, Methods } from '@just-notch/bridge-schema'
+import type { AppPreferences, HostInfo, InstalledPlugin, Methods } from '@just-notch/bridge-schema'
 import {
   Badge,
+  Radio,
   SidebarContent,
   SidebarGroup,
   SidebarGroupLabel,
@@ -13,7 +14,7 @@ import {
   Switch,
   SwitchGroup,
 } from '@justanarthur/modo-ui'
-import { Info, Puzzle, ShieldCheck } from 'lucide-react'
+import { Info, Puzzle, Settings2, ShieldCheck } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call } from '../host/client'
@@ -37,6 +38,44 @@ function Section({ title, lead, children }: { title: string; lead?: string; chil
       </div>
       {children}
     </section>
+  )
+}
+
+const SCREENS: { value: AppPreferences['screens']; label: string }[] = [
+  { value: 'notched', label: 'Notched screen only' },
+  { value: 'all', label: 'All screens' },
+]
+
+function General() {
+  const [preferences, setPreferences] = useState<AppPreferences>()
+  useEffect(() => {
+    void call('runtime', 'app.preferences', {}).then(setPreferences)
+  }, [])
+  if (!preferences) return null
+  const change = (changes: Partial<AppPreferences>) => {
+    setPreferences({ ...preferences, ...changes })
+    void call('runtime', 'app.setPreferences', changes).then(setPreferences)
+  }
+  return (
+    <div className="flex flex-col gap-6">
+      <SwitchGroup>
+        <Switch
+          label="Launch at login"
+          description="Starts Just Notch when you log in to your Mac."
+          checked={preferences.launchAtLogin}
+          onCheckedChange={(launchAtLogin) => change({ launchAtLogin })}
+        />
+      </SwitchGroup>
+      <div className="flex flex-col gap-2">
+        <span className="text-body text-muted-foreground">Show the island on</span>
+        <Radio.Group value={preferences.screens} onValueChange={(screens) => change({ screens: screens as AppPreferences['screens'] })}>
+          {SCREENS.map(({ value, label }) => (
+            <Radio key={value} value={value} label={label} />
+          ))}
+        </Radio.Group>
+        <span className="text-caption text-muted-foreground">Without a notched screen, the built-in display shows a virtual notch.</span>
+      </div>
+    </div>
   )
 }
 
@@ -98,10 +137,13 @@ function About({ info }: { info: HostInfo }) {
   )
 }
 
-/** The settings window: plugins with their switches and settings views, permissions, about. */
+/**
+ * The settings window: general preferences, plugins with their switches and settings views, permissions, about.
+ * The host's window is small (about 760 × 520), so the sidebar is a fixed column that never turns into a drawer.
+ */
 export default function Settings({ info }: { info: HostInfo }) {
   const [installed, setInstalled] = useState(info.plugins)
-  const [section, setSection] = useState('plugins')
+  const [section, setSection] = useState('general')
   const loaded = usePlugins()
 
   useEffect(() => {
@@ -113,12 +155,15 @@ export default function Settings({ info }: { info: HostInfo }) {
   const current = withSettings.find((p) => `plugin:${p.installed.manifest.id}` === section)
 
   return (
-    <SidebarProvider className="h-screen min-h-0" persist={false} mobileBreakpoint={0}>
-      <Sidebar className="h-full" value={section} onValueChange={setSection}>
+    <SidebarProvider className="h-screen min-h-0" persist={false} shortcut={null} width="13rem">
+      <Sidebar className="h-full" collapsible="none" value={section} onValueChange={setSection}>
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupLabel>Just Notch</SidebarGroupLabel>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton icon={Settings2} value="general">General</SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton icon={Puzzle} value="plugins">Plugins</SidebarMenuButton>
               </SidebarMenuItem>
@@ -145,7 +190,12 @@ export default function Settings({ info }: { info: HostInfo }) {
         </SidebarContent>
       </Sidebar>
       <SidebarInset className="min-h-0 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-160 flex-col gap-8 px-8 py-10">
+        <div className="mx-auto flex w-full max-w-160 flex-col gap-8 px-8 py-8">
+          {section === 'general' && (
+            <Section title="General">
+              <General />
+            </Section>
+          )}
           {section === 'plugins' && (
             <Section title="Plugins" lead="Each plugin adds activities and widgets to the island.">
               <Plugins plugins={installed} />

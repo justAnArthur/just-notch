@@ -51,12 +51,14 @@ export function createPluginContext({ manifest }: InstalledPlugin, live = true):
       show: (spec) => live && dispatch({ type: 'show', plugin: id, spec }),
       hide: () => live && dispatch({ type: 'hide', plugin: id }),
       flash: (spec) => live && dispatch({ type: 'flash', plugin: id, spec }),
+      dismiss: (key) => live && dispatch({ type: 'dismiss', plugin: id, key }),
     },
     storage: {
       get: (key) => call(id, 'storage.get', { key }) as Promise<never>,
       set: async (key, value) => {
         await call(id, 'storage.set', { key, value })
       },
+      subscribe: (key, cb) => own(on('storage.changed', (change) => change.plugin === id && change.key === key && cb(change.value as never))),
     },
     island: { get: getIslandState, subscribe: (cb) => own(subscribeIsland(cb)) },
   }

@@ -7,7 +7,7 @@ A modular macOS notch app. A thin Swift host owns the window and system services
 - `packages/bridge-schema` — the host ⇄ web contract (methods, topics, events, manifest). Source of truth; the Swift host mirrors it as Codable by hand. Change both in the same commit.
 - `packages/sdk` — `@just-notch/sdk`: `definePlugin`, `PluginContext`, hooks. Shared at runtime through the import map.
 - `packages/runtime` — the React app inside the web view: island shell, activity manager, plugin loader, settings page, mock host (runs in any browser).
-- `packages/cli` — `notch create | dev | build | pack` for plugins.
+- `packages/cli` — `notch create | dev | build | pack | check` for plugins. At the root: `bun run notch <command> --cwd plugins/<id>` (not `bunx notch`, an unrelated npm package).
 - `plugins/<id>` — default plugins, written only against the public SDK.
 - `apps/macos` — Swift 6, macOS 14+, XcodeGen `project.yml`. `Packages/NotchServices` — system services as a SwiftPM package (protocol in `Service.swift`).
 

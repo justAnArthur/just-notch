@@ -124,5 +124,5 @@ export default definePlugin({
       ctx.activity.flash({ priority: 'alert', key: `device:${device.id}`, view: Connected, durationMs: FLASH_MS })
     })
   },
-  widget: { title: 'Devices', view: Devices },
+  widget: { title: 'Devices', icon: Bluetooth, view: Devices },
 })

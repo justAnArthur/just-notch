@@ -1,6 +1,6 @@
 import { Switch, SwitchGroup } from '@justanarthur/modo-ui'
 import { definePlugin, type PluginContext, type StatsState, usePlugin, useStorage } from '@just-notch/sdk'
-import { ArrowDown, ArrowUp, Cpu, type LucideIcon, MemoryStick, Network } from 'lucide-react'
+import { Activity, ArrowDown, ArrowUp, Cpu, type LucideIcon, MemoryStick, Network } from 'lucide-react'
 import { type ReactNode, useEffect, useReducer } from 'react'
 
 const HISTORY = 30
@@ -149,24 +149,22 @@ function Settings() {
 
 function activate(ctx: PluginContext) {
   let shown = false
-  const sync = async () => {
-    const on = (await ctx.storage.get<boolean>('activity')) === true
+  const sync = (on: boolean) => {
     if (on === shown) return
     shown = on
     if (on) ctx.activity.show({ priority: 'ambient', compact: { leading: CpuGlyph, trailing: CpuLoad } })
     else ctx.activity.hide()
   }
-  void sync()
-  // The settings window writes storage from another page and nothing announces it, so re-read it.
-  const timer = setInterval(() => void sync(), 3000)
+  void ctx.storage.get<boolean>('activity').then((on) => sync(on === true))
+  const stop = ctx.storage.subscribe<boolean>('activity', (on) => sync(on === true))
   return () => {
-    clearInterval(timer)
+    stop()
     ctx.activity.hide()
   }
 }
 
 export default definePlugin({
   activate,
-  widget: { title: 'System', view: System },
+  widget: { title: 'System', icon: Activity, view: System },
   settings: Settings,
 })
