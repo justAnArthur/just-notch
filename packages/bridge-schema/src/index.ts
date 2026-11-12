@@ -188,6 +188,8 @@ export interface Methods {
   /** Lets the panel become key so text fields can take focus; the runtime sets it while expanded. */
   'window.setFocusable': { params: { focusable: boolean }; result: null }
   'window.openSettings': { params: Record<string, never>; result: null }
+  /** Trackpad haptic feedback (Force Touch trackpads; a no-op elsewhere). `alignment` for snapping, `levelChange` for steps. */
+  'window.haptic': { params: { pattern: 'generic' | 'alignment' | 'levelChange' }; result: null }
 
   subscribe: { params: { topic: Topic }; result: Topics[Topic] }
   unsubscribe: { params: { topic: Topic }; result: null }

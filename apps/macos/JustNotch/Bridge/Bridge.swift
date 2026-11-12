@@ -90,6 +90,15 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             app.openSettings()
             return nil
 
+        case "window.haptic":
+            let pattern: NSHapticFeedbackManager.FeedbackPattern = switch try decode(HapticParams.self, params).pattern {
+            case .alignment: .alignment
+            case .levelChange: .levelChange
+            case .generic: .generic
+            }
+            NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
+            return nil
+
         case "subscribe":
             return try await subscribe(try decode(TopicParams.self, params).topic, from: webView)
 
@@ -229,6 +238,9 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     }
 
     private func hostLog(level: String, _ message: String) {
+        #if DEBUG
+        DebugProbe.append(log: "\(level) \(message)")
+        #endif
         switch level {
         case "error": log.error("\(message, privacy: .public)")
         case "warn": log.warning("\(message, privacy: .public)")

@@ -22,6 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var monitors: [Any] = []
     private var pressTimer: Timer?
     private var dragChangeCount = 0
+    #if DEBUG
+    private var probe: DebugProbe?
+    #endif
 
     private var origin: String { devServer?.absoluteString ?? SchemeHandler.origin }
 
@@ -40,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         rebuildPanels()
         installPointerMonitors()
+        #if DEBUG
+        probe = DebugProbe { [weak self] in self?.panels.values.first?.webView }
+        #endif
 
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.rebuildPanels() }

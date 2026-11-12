@@ -181,3 +181,8 @@ struct DraggingPayload: Encodable {
 struct PluginsChangedPayload: Encodable {
     var plugins: [InstalledPlugin]
 }
+
+struct HapticParams: Decodable {
+    enum Pattern: String, Decodable { case generic, alignment, levelChange }
+    let pattern: Pattern
+}

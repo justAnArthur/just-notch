@@ -2,6 +2,7 @@ import 'virtual:uno.css'
 import './styles.css'
 import { createRoot } from 'react-dom/client'
 import { installDispatch, on } from './host/bus'
+import { log } from './host/client'
 import DevToolbar from './host/dev-toolbar'
 import { installMockHost, mock } from './host/mock'
 import { ready, useGeometry } from './host/session'
@@ -15,6 +16,9 @@ if (isMock) {
   document.documentElement.dataset.notch = 'mock'
 }
 installDispatch()
+// The host has no console: page errors go to its log.
+window.addEventListener('error', (event) => log('error', `${event.message} at ${event.filename}:${event.lineno}`))
+window.addEventListener('unhandledrejection', (event) => log('error', `unhandled rejection: ${String(event.reason)}`))
 
 function App() {
   const geometry = useGeometry()
