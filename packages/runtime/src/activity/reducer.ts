@@ -22,6 +22,8 @@ export interface ActivityState {
   flash: FlashEntry | null
   queue: FlashEntry[]
   expanded: boolean
+  /** The activity the user swapped into the island over the ranking; kept until the set of activities changes. */
+  promoted: string | null
 }
 
 export type ActivityAction =
@@ -33,8 +35,10 @@ export type ActivityAction =
   | { type: 'remove'; plugin: string }
   | { type: 'expand' }
   | { type: 'collapse' }
+  /** Swaps the primary activity and the bubble of a split island. */
+  | { type: 'swap' }
 
-export const initialState: ActivityState = { seq: 0, activities: [], flash: null, queue: [], expanded: false }
+export const initialState: ActivityState = { seq: 0, activities: [], flash: null, queue: [], expanded: false, promoted: null }
 
 const rankOf = (priority: Priority) => PRIORITY_ORDER.indexOf(priority)
 
@@ -63,12 +67,13 @@ export function reduce(state: ActivityState, action: ActivityAction): ActivitySt
   switch (action.type) {
     case 'show': {
       const seq = state.seq + 1
+      const known = state.activities.some((a) => a.plugin === action.plugin)
       const activities = [...state.activities.filter((a) => a.plugin !== action.plugin), { plugin: action.plugin, spec: action.spec, seq }]
-      return { ...state, seq, activities }
+      return { ...state, seq, activities, promoted: known ? state.promoted : null }
     }
     case 'hide': {
       if (!state.activities.some((a) => a.plugin === action.plugin)) return state
-      return { ...state, activities: state.activities.filter((a) => a.plugin !== action.plugin) }
+      return { ...state, activities: state.activities.filter((a) => a.plugin !== action.plugin), promoted: null }
     }
     case 'flash':
       return flash(state, action.plugin, action.spec)
@@ -81,10 +86,12 @@ export function reduce(state: ActivityState, action: ActivityAction): ActivitySt
       return state.flash && matches(state.flash) ? advance(kept) : kept
     }
     case 'remove': {
+      const activities = state.activities.filter((a) => a.plugin !== action.plugin)
       const kept = {
         ...state,
-        activities: state.activities.filter((a) => a.plugin !== action.plugin),
+        activities,
         queue: state.queue.filter((f) => f.plugin !== action.plugin),
+        promoted: activities.length === state.activities.length ? state.promoted : null,
       }
       return state.flash?.plugin === action.plugin ? advance(kept) : kept
     }
@@ -92,6 +99,13 @@ export function reduce(state: ActivityState, action: ActivityAction): ActivitySt
       return state.expanded ? state : { ...state, expanded: true }
     case 'collapse':
       return state.expanded ? { ...state, expanded: false } : state
+    case 'swap': {
+      const { primary, secondary } = present(state)
+      // The primary becomes the bubble, so it needs a minimal view of its own.
+      if (!primary?.spec.minimal || !secondary) return state
+      const promoted = secondary.plugin === ranked(state.activities)[0]?.plugin ? null : secondary.plugin
+      return { ...state, promoted }
+    }
   }
 }
 
@@ -109,7 +123,9 @@ export interface Presentation {
 }
 
 export function present(state: ActivityState): Presentation {
-  const [primary, ...rest] = ranked(state.activities)
+  const order = ranked(state.activities)
+  const lead = order.find((a) => a.plugin === state.promoted)
+  const [primary, ...rest] = lead ? [lead, ...order.filter((a) => a !== lead)] : order
   const secondary = rest.find((a) => a.spec.minimal)
   const flash = state.flash ?? undefined
   const island: IslandState = state.expanded ? 'expanded' : flash ? 'flash' : secondary ? 'split' : primary ? 'compact' : 'idle'

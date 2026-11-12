@@ -7,9 +7,10 @@ import { dispatch, getState, holdFlash, useActivityState } from '../activity/sto
 import { on } from '../host/bus'
 import { call } from '../host/client'
 import PluginView from '../plugins/plugin-view'
-import Expanded from './expanded'
+import Expanded, { type TabStep } from './expanded'
 import { POPUP_SELECTOR, setIslandRegions, trackPopups } from './hit-regions'
 import { type Box, boxOf, bubbleFor, centerX, islandPath, rectOf, type Shape, shapeFor, slotWidth, union } from './geometry'
+import { type Swipe, useSwipes } from './gestures'
 import {
   bubbleTransition,
   contentEnter,
@@ -114,6 +115,27 @@ function useClickToExpand(island: IslandState) {
   }
 }
 
+const haptic = (pattern: 'generic' | 'alignment') => void call('runtime', 'window.haptic', { pattern }).catch(() => {})
+
+/**
+ * Swipe down opens the island, swipe up closes it; sideways, the open island changes tab and a split one
+ * swaps its activities. Each committed swipe taps the trackpad.
+ */
+function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: React.MutableRefObject<TabStep | null>) {
+  useSwipes(root, (swipe: Swipe) => {
+    const { island } = present(getState())
+    if (swipe === 'down' || swipe === 'up') {
+      if ((swipe === 'down') === (island === 'expanded')) return
+      dispatch({ type: swipe === 'down' ? 'expand' : 'collapse' })
+      return haptic('generic')
+    }
+    if (island === 'expanded' && step.current?.(swipe === 'left' ? 1 : -1)) return haptic('alignment')
+    if (island !== 'split') return
+    dispatch({ type: 'swap' })
+    haptic('alignment')
+  })
+}
+
 function GooFilter({ id }: { id: string }) {
   return (
     <filter id={id} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
@@ -167,7 +189,9 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   const reduced = useReduceMotion()
   const gooId = useId()
   const root = useRef<HTMLDivElement>(null)
+  const step = useRef<TabStep | null>(null)
   useHover(island)
+  useIslandSwipes(root, step)
   const click = useClickToExpand(island)
   useEffect(() => (root.current ? trackPopups(root.current) : undefined), [])
 
@@ -250,7 +274,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   if (island === 'expanded') {
     content = (
       <Layer key="expanded" box={box} origin={origin} reduced={reduced}>
-        <Expanded primary={primary} shape={shape} geometry={geometry} />
+        <Expanded primary={primary} shape={shape} geometry={geometry} step={step} />
       </Layer>
     )
   } else if (island === 'flash' && flash) {
@@ -282,6 +306,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
       ref={root}
       id="island"
       data-state={island}
+      data-primary={primary?.plugin}
       className="pointer-events-none absolute top-0 left-0"
       style={{ width: panel.w, height: panel.h }}
       {...click}

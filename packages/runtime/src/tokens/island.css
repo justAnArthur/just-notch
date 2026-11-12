@@ -51,3 +51,35 @@ html[data-notch='island'] body {
 html[data-notch='mock'] body {
   background-color: var(--surface-4);
 }
+
+/*
+ * Edge fades for the island's scrollers (`useEdgeFade` names the edges with
+ * more to scroll in `data-fade`). Nothing to scroll, no mask, so a scroller at
+ * rest adds no layer. The tab strip also cuts out the notch it scrolls behind.
+ */
+.edge-fade {
+  --fade-start: 0px;
+  --fade-end: 0px;
+}
+.edge-fade[data-fade~='start'] {
+  --fade-start: 16px;
+}
+.edge-fade[data-fade~='end'] {
+  --fade-end: 16px;
+}
+.edge-fade-y:is([data-fade~='start'], [data-fade~='end']) {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+}
+.edge-fade-notch:is([data-fade~='start'], [data-fade~='end']) {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--fade-start),
+    #000 calc(var(--hole-start) - 8px),
+    transparent var(--hole-start),
+    transparent var(--hole-end),
+    #000 calc(var(--hole-end) + 8px),
+    #000 calc(100% - var(--fade-end)),
+    transparent
+  );
+}

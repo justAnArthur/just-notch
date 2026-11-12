@@ -154,6 +154,7 @@ export default definePlugin({
       ctx.activity.show({
         priority: 'media',
         compact: { leading: () => <Artwork className="size-5.5 rounded-md" />, trailing: Bars },
+        minimal: Bars,
         expanded: NowPlaying,
       })
     })

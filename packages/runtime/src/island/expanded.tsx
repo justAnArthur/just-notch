@@ -1,37 +1,31 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
-import type { IconProps } from '@just-notch/sdk'
-import { Button, ScrollArea, SizeProvider, TabsSubtle } from '@justanarthur/modo-ui'
+import { Button, SizeProvider } from '@justanarthur/modo-ui'
 import { Puzzle, Settings } from 'lucide-react'
-import { type ComponentType, useEffect, useRef, useState } from 'react'
+import { type MutableRefObject, useEffect, useRef, useState } from 'react'
 import type { ActivityEntry } from '../activity/reducer'
 import { call } from '../host/client'
-import { usePlugins } from '../plugins/loader'
+import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
-import type { Shape } from './geometry'
+import { useEdgeFade } from './edge-fade'
+import { type Shape, stripLayout } from './geometry'
+import TabStrip, { type Tab } from './tabs'
 
-interface Tab {
-  id: string
-  plugin: string
-  label: string
-  icon: ComponentType<IconProps>
-  view: ComponentType
-}
+/** Moves the selection `delta` tabs; false at either end. */
+export type TabStep = (delta: number) => boolean
+
+/** Arrows move a caret, a value or a menu's focus there, not the tab. */
+const OWN_ARROWS = 'input, textarea, select, [contenteditable], [role=slider], [data-base-ui-portal]'
 
 interface ExpandedProps {
   primary?: ActivityEntry
   shape: Shape
   geometry: ScreenGeometry
+  /** Set while mounted, for the swipe gestures. */
+  step: MutableRefObject<TabStep | null>
 }
 
-/**
- * The open island: a tab strip beside the notch (the primary activity, then every other plugin's widget), the selected view below.
- * Tabs are icons with only the selected one labelled, so eight fit beside the notch; past that the strip scrolls.
- */
-export default function Expanded({ primary, shape, geometry }: ExpandedProps) {
-  const plugins = usePlugins()
-  const [selected, setSelected] = useState<string>()
-  const strip = useRef<HTMLDivElement>(null)
-
+/** The primary activity's view, then every other plugin's widget. */
+function tabsOf(primary: ActivityEntry | undefined, plugins: LoadedPlugin[]): Tab[] {
   const tabs: Tab[] = []
   const activityView = primary?.spec.expanded
   if (primary && activityView) {
@@ -49,38 +43,60 @@ export default function Expanded({ primary, shape, geometry }: ExpandedProps) {
     if (!definition.widget || tabs[0]?.plugin === id) continue
     tabs.push({ id: `widget:${id}`, plugin: id, label: definition.widget.title, icon: definition.widget.icon ?? Puzzle, view: definition.widget.view })
   }
+  return tabs
+}
+
+/**
+ * The open island: icon tabs in both wings around the notch and settings at the far right, the tab's title
+ * (or the hovered tab's, as a preview), and its view in a fixed area that scrolls when the view is taller.
+ */
+export default function Expanded({ primary, shape, geometry, step }: ExpandedProps) {
+  const plugins = usePlugins()
+  const [selected, setSelected] = useState<string>()
+  const [hovered, setHovered] = useState<number | null>(null)
+  const content = useRef<HTMLDivElement>(null)
+
+  const tabs = tabsOf(primary, plugins)
   const index = Math.max(0, tabs.findIndex((t) => t.id === selected))
   const tab = tabs[index]
-  const side = (shape.w - geometry.notch.w) / 2
+  const title = tabs[hovered ?? index]?.label ?? tab?.label
+  const layout = stripLayout(tabs.length, shape.w, geometry)
+  useEdgeFade(content, 'y', tab?.id)
 
-  // Scrolls only the strip: scrollIntoView would also scroll the page under the island.
+  const move: TabStep = (delta) => {
+    const next = tabs[index + delta]
+    if (!next) return false
+    setSelected(next.id)
+    return true
+  }
   useEffect(() => {
-    const viewport = strip.current?.querySelector<HTMLElement>('[data-slot=scroll-area-viewport]')
-    const active = viewport?.querySelector('[role=tab][aria-selected=true]')
-    if (!viewport || !active) return
-    const view = viewport.getBoundingClientRect()
-    const rect = active.getBoundingClientRect()
-    if (rect.left < view.left) viewport.scrollLeft -= view.left - rect.left
-    else if (rect.right > view.right) viewport.scrollLeft += rect.right - view.right
-  }, [index, tabs.length])
+    step.current = move
+    return () => {
+      step.current = null
+    }
+  })
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') || event.defaultPrevented) return
+      if (event.target instanceof Element && event.target.closest(OWN_ARROWS)) return
+      event.preventDefault()
+      step.current?.(event.key === 'ArrowRight' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [step])
 
   return (
     <div className="absolute inset-0 flex flex-col">
       <SizeProvider size="compact">
-        <div className="flex shrink-0 items-center justify-between" style={{ height: geometry.notch.h + 4 }}>
-          <div ref={strip} className="flex h-full min-w-0 items-center pl-3" style={{ width: side }}>
-            {tabs.length > 1 && (
-              <ScrollArea orientation="horizontal" className="min-w-0 [&_[data-slot=scroll-area-scrollbar]]:hidden" viewportClassName="scroll-fade-x ![--scroll-fade-size:20px]">
-                <TabsSubtle className="w-max" activeLabel selectedIndex={index} onSelect={(i) => setSelected(tabs[i]?.id)}>
-                  {tabs.map((t, i) => (
-                    <TabsSubtle.Item key={t.id} index={i} label={t.label} icon={t.icon} />
-                  ))}
-                </TabsSubtle>
-              </ScrollArea>
-            )}
-            {tabs.length === 1 && <span className="truncate pl-1 text-caption text-muted-foreground">{tabs[0].label}</span>}
-          </div>
-          <div className="flex items-center justify-end pr-3" style={{ width: side }}>
+        <div className="flex shrink-0 items-center px-5" style={{ height: geometry.notch.h }}>
+          {tabs.length > 0 ? (
+            <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => setSelected(tabs[i]?.id)} onHover={setHovered} />
+          ) : (
+            <div className="flex-1" />
+          )}
+          <div className="flex shrink-0 items-center pl-1">
             <Button
               variant="ghost"
               size="icon-compact"
@@ -92,12 +108,23 @@ export default function Expanded({ primary, shape, geometry }: ExpandedProps) {
           </div>
         </div>
       </SizeProvider>
-      <div className="relative min-h-0 flex-1 px-6 pt-2 pb-5">
-        {tab ? (
-          <PluginView key={tab.id} plugin={tab.plugin} view={tab.view} />
-        ) : (
-          <div className="flex size-full items-center justify-center text-caption text-muted-foreground">Nothing here yet</div>
-        )}
+      <div className="flex min-h-0 flex-1 flex-col pb-3">
+        <div className="flex h-6 shrink-0 items-end px-5">
+          <span data-island-title className="truncate text-caption weight-medium text-muted-foreground">
+            {title}
+          </span>
+        </div>
+        <div
+          ref={content}
+          data-island-content
+          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-1 scrollbar-hide"
+        >
+          {tab ? (
+            <PluginView key={tab.id} plugin={tab.plugin} view={tab.view} />
+          ) : (
+            <div className="flex size-full items-center justify-center text-caption text-muted-foreground">Nothing here yet</div>
+          )}
+        </div>
       </div>
     </div>
   )

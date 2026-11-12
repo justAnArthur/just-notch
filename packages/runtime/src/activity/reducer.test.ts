@@ -53,6 +53,28 @@ describe('activities', () => {
     expect(present(state).island).toBe('compact')
   })
 
+  test('swap trades the primary and the bubble until the activities change', () => {
+    const split = run(
+      { type: 'show', plugin: 'music', spec: activity('media', true) },
+      { type: 'show', plugin: 'timer', spec: activity('timer', true) },
+    )
+    let state = reduce(split, { type: 'swap' })
+    expect(present(state)).toMatchObject({ island: 'split', primary: { plugin: 'timer' }, secondary: { plugin: 'music' } })
+    state = reduce(state, { type: 'show', plugin: 'music', spec: activity('media', true) })
+    expect(present(state).primary?.plugin).toBe('timer')
+    expect(present(reduce(state, { type: 'swap' })).primary?.plugin).toBe('music')
+    state = reduce(state, { type: 'show', plugin: 'cal', spec: activity('calendar', true) })
+    expect(present(state).primary?.plugin).toBe('music')
+  })
+
+  test('swap needs a minimal view on the primary', () => {
+    const state = run(
+      { type: 'show', plugin: 'music', spec: activity('media') },
+      { type: 'show', plugin: 'timer', spec: activity('timer', true) },
+    )
+    expect(reduce(state, { type: 'swap' })).toBe(state)
+  })
+
   test('show replaces the plugin activity, hide removes it', () => {
     let state = run({ type: 'show', plugin: 'music', spec: activity('media') }, { type: 'show', plugin: 'music', spec: activity('ambient') })
     expect(state.activities).toHaveLength(1)

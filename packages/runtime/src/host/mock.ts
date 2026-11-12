@@ -75,6 +75,9 @@ const values: Topics = {
 }
 
 const subscribed = new Set<Topic>()
+/** Topics whose next subscription is answered with `null`, as the real host does before its first sample. */
+const nullOnce = new Set<Topic>()
+const haptics: Methods['window.haptic']['params']['pattern'][] = []
 let plugins: InstalledPlugin[] = []
 export const hitRegions: { rects: Rect[]; focusable: boolean } = { rects: [], focusable: false }
 
@@ -164,12 +167,17 @@ const handlers: Handlers = {
     hitRegions.focusable = focusable
     return null
   },
+  'window.haptic': ({ pattern }) => {
+    haptics.push(pattern)
+    return null
+  },
   'window.openSettings': () => {
     window.open('/settings.html', 'notch-settings')
     return null
   },
   subscribe: ({ topic }) => {
     subscribed.add(topic)
+    if (nullOnce.delete(topic)) return null
     return topic === 'media' ? mediaNow() : values[topic]
   },
   unsubscribe: ({ topic }) => {
@@ -287,7 +295,15 @@ export const mock = {
   togglePlay: () => handlers['media.command']({ command: 'toggle' }, 'runtime'),
   stopMedia: () => publish('media', null),
   startMedia: () => setTrack(track),
+  /** A screen `w` points wide, as when the panel moves to a smaller display. */
+  resize(w = PANEL.w) {
+    const panel = { ...PANEL, w }
+    emit({ type: 'geometry', payload: { ...geometry, panel, notch: { ...geometry.notch, x: (w - NOTCH.w) / 2 } } })
+  },
+  /** The next subscription to `topic` is answered with `null`, its first sample arriving later. */
+  nullSnapshot: (topic: Topic) => nullOnce.add(topic),
   hitRegions,
+  haptics,
 }
 
 export function installMockHost() {

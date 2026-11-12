@@ -11,6 +11,20 @@ interface Entry {
 
 const entries = new Map<Topic, Entry>()
 
+/** Topics whose schema type admits `null`; typed against the schema, so a new topic has to be classified. */
+const NULLABLE: { [T in Topic]: null extends Topics[T] ? true : false } = {
+  media: true,
+  power: false,
+  audio: false,
+  display: false,
+  calendar: false,
+  bluetooth: false,
+  stats: false,
+}
+
+/** The host answers a subscription with `null` until its first sample; plugins wait for a real value instead. */
+const deliverable = (topic: Topic, value: unknown) => value != null || NULLABLE[topic]
+
 function publish(entry: Entry, value: unknown) {
   entry.value = value
   entry.has = true
@@ -19,7 +33,7 @@ function publish(entry: Entry, value: unknown) {
 
 on('topic', ({ topic, value }) => {
   const entry = entries.get(topic)
-  if (entry) publish(entry, value)
+  if (entry && deliverable(topic, value)) publish(entry, value)
 })
 
 /**
@@ -34,7 +48,7 @@ export function subscribeTopic<T extends Topic>(topic: T, cb: (value: Topics[T])
     entries.set(topic, created)
     call('runtime', 'subscribe', { topic })
       .then((value) => {
-        if (entries.get(topic) === created && !created.has) publish(created, value)
+        if (entries.get(topic) === created && !created.has && deliverable(topic, value)) publish(created, value)
       })
       .catch((error) => log('error', `subscribe ${topic}: ${error}`))
     entry = created

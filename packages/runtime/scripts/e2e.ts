@@ -44,6 +44,21 @@ const enable = (p: Page, id: string, enabled: boolean) => host(p, 'plugins.setEn
 const mock = (p: Page, js: string) => p.evaluate(`window.__notchMock.${js}`)
 const regions = (p: Page) => mock(p, 'hitRegions') as Promise<{ rects: { x: number; y: number; w: number; h: number }[]; focusable: boolean }>
 const settle = (p: Page) => p.waitForTimeout(700)
+/** A two-finger swipe: `n` wheel events at `selector`, then a quiet gap that ends the gesture. Chromium's deltas are the finger's (no natural scrolling). */
+const swipe = (p: Page, selector: string, dx: number, dy: number, n = 10) =>
+  p.evaluate(
+    async ([selector, dx, dy, n]) => {
+      const el = document.querySelector(selector)!
+      for (let i = 0; i < n; i++) {
+        el.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, bubbles: true, cancelable: true }))
+        await new Promise((r) => setTimeout(r, 16))
+      }
+      await new Promise((r) => setTimeout(r, 250))
+    },
+    [selector, dx, dy, n] as const,
+  )
+const primary = (p: Page) => p.locator('#island').getAttribute('data-primary')
+const selectedTab = (p: Page) => p.locator('#island [role=tab][aria-selected=true]').getAttribute('aria-label')
 async function shoot(p: Page, name: string, full = false) {
   const path = join(shots, `${name}.png`)
   await (full ? p.screenshot({ path }) : p.locator('#island').screenshot({ path }))
@@ -93,6 +108,14 @@ await settle(page)
 check(true, 'a second activity with a minimal view: split')
 await shoot(page, '3-split')
 
+await swipe(page, '#island svg path', 10, 0)
+await settle(page)
+check((await state(page)) === 'split' && (await primary(page)) === 'timer-plugin', 'a sideways swipe over the split island swaps primary and bubble')
+await shoot(page, '3b-split-swapped')
+await swipe(page, '#island svg path', -10, 0)
+await settle(page)
+check((await primary(page)) === 'hello-plugin', 'another swipe swaps them back')
+
 await mock(page, 'hover(true)')
 await waitState(page, 'expanded')
 await settle(page)
@@ -138,6 +161,8 @@ check(true, 'disabling plugins removes their activities')
 
 // ── The default plugins ──
 
+// The real host answers some subscriptions with `null` before its first sample; the System widget must never see it.
+await mock(page, "nullSnapshot('stats')")
 for (const id of defaults) await enable(page, id, true)
 await waitState(page, 'compact')
 await settle(page)
@@ -172,22 +197,83 @@ check(true, 'a click on the flash expands it')
 await settle(page)
 
 const names = (await tabs()).map((n) => n?.replace(/^(.+)\1$/, '$1'))
-const strip = await page.evaluate(() => {
-  const viewport = document.querySelector('#island [data-slot=scroll-area-viewport]') as HTMLElement
-  const wing = viewport.closest('[data-slot=scroll-area]')!.parentElement!.getBoundingClientRect()
-  const v = viewport.getBoundingClientRect()
-  return { inside: v.left >= wing.left && v.right <= wing.right, scrolls: viewport.scrollWidth > viewport.clientWidth }
+const spread = await page.evaluate(() => {
+  const island = document.querySelector('#island')!.getBoundingClientRect()
+  const strip = document.querySelector('#island [data-tab-strip]') as HTMLElement
+  // The mock's notch: 185 wide, centered in the 720 panel.
+  const notch = { left: island.left + 267.5, right: island.left + 452.5 }
+  const rects = [...document.querySelectorAll('#island [role=tab]')].map((t) => t.getBoundingClientRect())
+  return {
+    scrolls: strip.scrollWidth > strip.clientWidth,
+    clear: rects.every((r) => r.left >= island.left + 19 && r.right <= island.right - 19 && (r.right <= notch.left || r.left >= notch.right)),
+    wings: [rects.filter((r) => r.right <= notch.left).length, rects.filter((r) => r.left >= notch.right).length],
+  }
 })
-check(new Set(names).size === names.length && names.length === 7 && strip.inside, `one tab per plugin beside the notch, no duplicates: ${names.join(', ')}`)
+check(
+  new Set(names).size === names.length && names.length === 7 && !spread.scrolls && spread.clear && spread.wings[0] > 0 && spread.wings[1] > 0,
+  `every tab in view at a glance, ${spread.wings[0]} left and ${spread.wings[1]} right of the notch, none under it: ${names.join(', ')}`,
+)
 await page.locator('#island [role=tab]').last().click()
 await settle(page)
-const last = await page.evaluate(() => {
-  const viewport = document.querySelector('#island [data-slot=scroll-area-viewport]')!.getBoundingClientRect()
-  const tab = document.querySelector('#island [role=tab][aria-selected=true]')!.getBoundingClientRect()
-  return tab.left >= viewport.left - 1 && tab.right <= viewport.right + 1
-})
-check(last, `the strip ${strip.scrolls ? 'scrolls the selected tab into view' : 'fits every tab'}`)
+check((await selectedTab(page)) === names.at(-1), 'the last tab is a click away')
 await shoot(page, '8-tabs')
+await page.keyboard.press('ArrowLeft')
+check((await selectedTab(page)) === names.at(-2), 'ArrowLeft moves to the previous tab')
+await page.keyboard.press('ArrowRight')
+check((await selectedTab(page)) === names.at(-1), 'ArrowRight moves to the next tab')
+
+await swipe(page, '#island [data-island-content]', 12, 0)
+check((await selectedTab(page)) === names.at(-2), 'a swipe to the right goes back one tab (one per gesture)')
+await swipe(page, '#island [data-island-content]', -12, 0)
+check((await selectedTab(page)) === names.at(-1), 'a swipe to the left goes forward one tab')
+
+await page.getByRole('tab', { name: 'System' }).click()
+await page.locator('#island [data-island-content]').getByText(/%/).first().waitFor({ timeout: 4000 })
+check(true, 'the System widget waits out a null snapshot and renders its first sample')
+
+// A view taller than the content area scrolls; the wheel stays with it, it never collapses the island.
+await page.evaluate(() => {
+  const filler = document.createElement('div')
+  filler.style.height = '400px'
+  document.querySelector('#island [data-island-content]')!.append(filler)
+})
+const content = page.locator('#island [data-island-content]')
+const scrollTop = () => content.evaluate((el) => el.scrollTop)
+const box = (await content.boundingBox())!
+await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 40)
+await page.waitForTimeout(300)
+const down = await scrollTop()
+for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -40)
+await page.waitForTimeout(300)
+check(down > 100 && (await scrollTop()) < down && (await state(page)) === 'expanded', `the content scrolls both ways (${down}px → ${await scrollTop()}px) and the island stays open`)
+check((await content.getAttribute('data-fade')) === 'start end', 'mid-scroll both content edges fade')
+await shoot(page, '8c-content-scroll')
+await content.evaluate((el) => el.scrollTo({ top: 0 }))
+await swipe(page, '#island [data-island-content]', 0, -12)
+await page.waitForTimeout(300)
+check((await state(page)) === 'compact', 'at the top a swipe up collapses the island')
+await swipe(page, '#island svg path', 0, 12)
+await waitState(page, 'expanded')
+check(true, 'a swipe down expands it')
+const haptics = (await mock(page, 'haptics')) as string[]
+check(haptics.includes('generic') && haptics.includes('alignment'), `committed swipes tap the trackpad (${[...new Set(haptics)].join(', ')})`)
+
+await mock(page, 'resize(500)')
+await settle(page)
+const strip = page.locator('#island [data-tab-strip]')
+const overflow = await strip.evaluate((el) => ({ scrolls: el.scrollWidth > el.clientWidth, left: el.scrollLeft, fade: el.getAttribute('data-fade') }))
+check(overflow.scrolls && overflow.left === 0 && overflow.fade === 'end', 'on a narrower screen the strip overflows and fades its far edge')
+await swipe(page, '#island [data-tab-strip]', 0, 30, 20)
+const scrolled = await strip.evaluate((el) => {
+  const view = el.getBoundingClientRect()
+  const last = el.querySelector('[role=tab]:last-child')!.getBoundingClientRect()
+  return { left: el.scrollLeft, end: last.right <= view.right + 0.5 }
+})
+check(scrolled.left > 0 && scrolled.end && (await state(page)) === 'expanded', `a vertical wheel over it scrolls it sideways to the last tab (${scrolled.left}px)`)
+await shoot(page, '8b-tabs-overflow')
+await mock(page, 'resize()')
+await settle(page)
 
 await away()
 await mock(page, 'hover(false)')

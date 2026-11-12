@@ -20,6 +20,38 @@ const EXPANDED = { w: 640, h: 200 }
 /** Room for one compact slot beside the notch: about as wide as the notch is tall. */
 export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
 
+/** The expanded island's one content inset (px-5): header, title and content all start here, clear of the bottom corners. */
+export const INSET = 20
+/** An icon tab's width (w-7.5): a compact control's height plus the icon's breathing room. */
+export const TAB_W = 30
+/** Kept free on each side of the notch. */
+const NOTCH_GAP = 8
+/** The settings button (size-7) and its gap, at the far right of the header. */
+const GEAR_W = 32
+
+export interface StripLayout {
+  /** Tabs in the left wing; the rest follow in the right one. */
+  before: number
+  /** More tabs than both wings hold: the strip scrolls (behind the notch). */
+  overflow: boolean
+  /** The notch and its gaps in the strip's coordinates (it starts at the inset). */
+  hole: { start: number; end: number }
+  /** Least width of the gap between the wings, so the right wing starts past the notch. */
+  spacer: number
+}
+
+/** Tabs flow from the left wing into the right one, balanced, each wing filling from its outer edge. */
+export function stripLayout(count: number, w: number, g: ScreenGeometry): StripLayout {
+  const side = (w - g.notch.w) / 2
+  const left = side - INSET - NOTCH_GAP
+  const leftCap = Math.floor(left / TAB_W)
+  const rightCap = Math.floor((left - GEAR_W) / TAB_W)
+  const overflow = count > leftCap + rightCap
+  const before = overflow ? leftCap : Math.min(leftCap, Math.max(Math.ceil(count / 2), count - rightCap))
+  const hole = { start: left, end: side + g.notch.w + NOTCH_GAP - INSET }
+  return { before, overflow, hole, spacer: hole.end - before * TAB_W }
+}
+
 export function shapeFor(state: IslandState, g: ScreenGeometry): Shape {
   const { notch, panel } = g
   const slot = slotWidth(g)
