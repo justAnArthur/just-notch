@@ -7,19 +7,24 @@ const HISTORY = 30
 
 /** The last samples, kept only while something on screen subscribes, so the host samples only then. */
 let samples: StatsState[] = []
+let watchers = 0
 
 function useStats() {
   const ctx = usePlugin()
   const [, rerender] = useReducer((n: number) => n + 1, 0)
-  useEffect(
-    () =>
-      ctx.subscribe('stats', (value) => {
-        // Every subscriber gets the same object, so a sample is kept once however many views watch.
-        if (samples.at(-1) !== value) samples = [...samples, value].slice(-HISTORY)
-        rerender()
-      }),
-    [ctx],
-  )
+  useEffect(() => {
+    watchers++
+    const stop = ctx.subscribe('stats', (value) => {
+      // The host has no value until it has taken two samples; every subscriber gets the same object, so a sample is kept once.
+      if (value && samples.at(-1) !== value) samples = [...samples, value].slice(-HISTORY)
+      rerender()
+    })
+    return () => {
+      stop()
+      // A history with a gap would draw a line across it: start over next time.
+      if (--watchers === 0) samples = []
+    }
+  }, [ctx])
   return samples
 }
 
@@ -32,16 +37,16 @@ function rate(bps: number) {
   return `${Math.round(bps)} B/s`
 }
 
+/** The samples so far span the whole width: the island is open for seconds, too short to fill a fixed window. */
 function points(values: number[], max: number) {
-  const step = 100 / (HISTORY - 1)
-  const offset = (HISTORY - values.length) * step
-  return values.map((v, i) => `${(offset + i * step).toFixed(2)},${(30 - (v / max) * 28).toFixed(2)}`).join(' ')
+  const step = 100 / Math.max(1, values.length - 1)
+  return values.map((v, i) => `${(i * step).toFixed(2)},${(30 - (v / max) * 28).toFixed(2)}`).join(' ')
 }
 
-/** Lines over a fixed 30-sample window, newest at the right edge; `max` scales every series of one tile alike. */
 function Sparkline({ series, max }: { series: { values: number[]; className: string }[]; max: number }) {
   return (
     <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="h-10 w-full overflow-visible" aria-hidden>
+      <line x1="0" y1="31" x2="100" y2="31" className="stroke-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       {series.map(({ values, className }, i) => (
         <polyline
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed series
@@ -76,7 +81,7 @@ function Tile({ icon: Icon, label, value, children }: { icon: LucideIcon; label:
 function System() {
   const history = useStats()
   const last = history.at(-1)
-  if (!last) return null
+  if (!last) return <Measuring />
   const netMax = Math.max(1, ...history.flatMap((s) => [s.netInBps, s.netOutBps]))
   return (
     <div className="grid size-full grid-cols-3 gap-3">
@@ -123,13 +128,30 @@ function System() {
   )
 }
 
+/** CPU and network are rates between two samples: the first one lands about a second after opening. */
+function Measuring() {
+  return (
+    <div className="grid size-full grid-cols-3 gap-3" aria-busy>
+      {[
+        { icon: Cpu, label: 'CPU' },
+        { icon: MemoryStick, label: 'Memory' },
+        { icon: Network, label: 'Network' },
+      ].map(({ icon, label }) => (
+        <Tile key={label} icon={icon} label={label} value={<span className="text-muted-foreground">–</span>}>
+          <Sparkline max={1} series={[]} />
+        </Tile>
+      ))}
+    </div>
+  )
+}
+
 function CpuGlyph() {
   return <Cpu size={16} strokeWidth={1.5} className="text-muted-foreground" />
 }
 
 function CpuLoad() {
   const last = useStats().at(-1)
-  if (!last) return null
+  if (!last) return <span className="text-caption weight-semibold text-muted-foreground">–</span>
   return <span className="text-caption weight-semibold text-foreground tabular-nums">{percent(last.cpu)}</span>
 }
 

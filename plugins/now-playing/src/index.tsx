@@ -21,16 +21,27 @@ const APPS: Record<string, string> = {
   'com.apple.podcasts': 'Podcasts',
   'com.apple.TV': 'TV',
   'com.apple.Safari': 'Safari',
+  'com.apple.QuickTimePlayerX': 'QuickTime Player',
   'com.spotify.client': 'Spotify',
   'com.google.Chrome': 'Chrome',
+  'com.brave.Browser': 'Brave',
+  'com.microsoft.edgemac': 'Edge',
+  'com.operasoftware.Opera': 'Opera',
+  'com.vivaldi.Vivaldi': 'Vivaldi',
   'company.thebrowser.Browser': 'Arc',
+  'app.zen-browser.zen': 'Zen',
   'org.mozilla.firefox': 'Firefox',
+  'org.videolan.vlc': 'VLC',
+  'com.tidal.desktop': 'TIDAL',
 }
+// Segments that name the vendor's domain or the app's kind, not the app.
+const GENERIC = new Set(['app', 'com', 'org', 'net', 'io', 'co', 'desktop', 'client', 'mac', 'macos', 'browser', 'player'])
 
 function appName(bundleId?: string) {
   if (!bundleId) return undefined
-  const last = bundleId.split('.').pop() ?? bundleId
-  return APPS[bundleId] ?? last.charAt(0).toUpperCase() + last.slice(1)
+  if (APPS[bundleId]) return APPS[bundleId]
+  const word = bundleId.split('.').reverse().find((w) => !GENERIC.has(w.toLowerCase())) ?? bundleId
+  return word.charAt(0).toUpperCase() + word.slice(1)
 }
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -83,12 +94,12 @@ function useTint(url?: string) {
   return tint
 }
 
-function Artwork({ className }: { className: string }) {
+function Artwork({ className, glyph = 14 }: { className: string; glyph?: number }) {
   const url = useTopic('media')?.artworkUrl
   if (!url)
     return (
       <div className={`${className} flex shrink-0 items-center justify-center bg-surface-3 text-muted-foreground`}>
-        <Music size={14} strokeWidth={1.5} />
+        <Music size={glyph} strokeWidth={1.5} />
       </div>
     )
   return (
@@ -215,21 +226,25 @@ function Controls({ media }: { media: MediaState }) {
   )
 }
 
+/** Without artwork the big square would be an empty box: a small tile leads the title row instead. */
 function Player({ media }: { media: MediaState }) {
+  const art = media.artworkUrl !== undefined
+  const source = appName(media.sourceApp)
   return (
     <div className="flex size-full items-center gap-5">
-      <Artwork className="size-30 rounded-2xl" />
+      {art && <Artwork className="size-30 rounded-2xl" />}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-center gap-3">
+          {!art && <Artwork className="size-10 rounded-xl" glyph={18} />}
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-subtitle weight-semibold text-foreground">{media.title}</span>
-            <span className="truncate text-caption text-muted-foreground">{media.artist}</span>
+            <span className="truncate text-subtitle weight-semibold text-foreground">{media.title || 'Unknown title'}</span>
+            {(media.artist || media.album) && <span className="truncate text-caption text-muted-foreground">{media.artist || media.album}</span>}
           </div>
           <Bars />
         </div>
-        <Scrubber media={media} />
+        {media.durationS > 0 && <Scrubber media={media} />}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <span className="truncate text-caption text-muted-foreground">{appName(media.sourceApp)}</span>
+          <span className="truncate text-caption text-muted-foreground">{source}</span>
           <Controls media={media} />
           <span />
         </div>
@@ -266,8 +281,8 @@ function TrackFlash() {
     <div className="flex items-center gap-3">
       <Artwork className="size-8 rounded-lg" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body weight-semibold text-foreground">{media.title}</span>
-        <span className="truncate text-caption text-muted-foreground">{media.artist}</span>
+        <span className="truncate text-body weight-semibold text-foreground">{media.title || 'Unknown title'}</span>
+        <span className="truncate text-caption text-muted-foreground">{media.artist || media.album || appName(media.sourceApp)}</span>
       </div>
       <Bars />
     </div>

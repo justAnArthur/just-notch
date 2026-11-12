@@ -57,21 +57,28 @@ function useSetLevel() {
   }
 }
 
+/** While dragging, and after until the host reports a new level, the slider shows the dragged value, not the stale topic. */
 function Level({ hud, onChange }: { hud: Hud; onChange: (value: number) => void }) {
-  const Icon = glyph(hud)
-  const value = hud.muted ? 0 : hud.value
+  const [held, setHeld] = useState<{ value: number; released?: boolean }>()
+  useEffect(() => setHeld((h) => (h?.released ? undefined : h)), [hud.value, hud.muted])
+  const release = () => setHeld((h) => h && { ...h, released: true })
+  const value = held?.value ?? (hud.muted ? 0 : hud.value)
+  const Icon = glyph({ ...hud, value, muted: held ? false : hud.muted })
   return (
-    <div className="flex h-7 items-center gap-3">
+    <div className="flex h-7 items-center gap-3" onPointerUp={release} onKeyUp={release}>
       <Icon size={16} strokeWidth={1.5} className="shrink-0 text-foreground" />
       <Slider
-        className="min-w-0 flex-1"
+        className="mb-0 min-w-0 flex-1"
         size="compact"
         label={LABEL[hud.kind]}
         showValue={false}
         trackClassName="bg-surface-3"
         fillClassName="bg-foreground"
         value={percent(value)}
-        onChange={(v) => onChange((v as number) / 100)}
+        onChange={(v) => {
+          setHeld({ value: (v as number) / 100 })
+          onChange((v as number) / 100)
+        }}
       />
       <span className="w-7 shrink-0 text-right text-caption text-muted-foreground tabular-nums">{percent(value)}</span>
     </div>
@@ -95,17 +102,18 @@ function Controls() {
   const audio = useTopic('audio')
   const display = useTopic('display')
   const set = useSetLevel()
-  if (!audio || !display) return null
+  if (!audio) return null
   return (
-    <div className="flex size-full flex-col justify-center">
+    <div className="flex size-full flex-col justify-center gap-1">
       <Level hud={{ kind: 'volume', value: audio.volume, muted: audio.muted }} onChange={(v) => set('volume', v)} />
-      <Level hud={{ kind: 'brightness', value: display.brightness }} onChange={(v) => set('brightness', v)} />
-      {display.keyboardBacklight !== undefined && (
+      {/* Brightness reads only on a built-in display; without one the row would be a dead slider. */}
+      {display && <Level hud={{ kind: 'brightness', value: display.brightness }} onChange={(v) => set('brightness', v)} />}
+      {display?.keyboardBacklight !== undefined && (
         <Level hud={{ kind: 'keyboard', value: display.keyboardBacklight }} onChange={(v) => set('keyboard', v)} />
       )}
       <div className="flex h-7 items-center gap-3">
         <Speaker size={16} strokeWidth={1.5} className="shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate text-body text-muted-foreground">{audio.outputDevice}</span>
+        <span className="min-w-0 truncate text-caption text-muted-foreground">{audio.outputDevice}</span>
       </div>
     </div>
   )

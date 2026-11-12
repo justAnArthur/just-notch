@@ -197,3 +197,25 @@ struct ShapeTests {
         #expect(!backend.stopped)
     }
 }
+
+@MainActor private final class RecordingSink: ServiceSink {
+    var published: [String: [Data]] = [:]
+    func publish(topic: String, value: Data) { published[topic, default: []].append(value) }
+    func emit(event: String, payload: Data) {}
+}
+
+@Suite @MainActor struct StatsTests {
+    @Test func publishesFirstSampleWithinASecondAndAHalf() async throws {
+        let sink = RecordingSink()
+        let service = StatsService()
+        service.sink = sink
+        service.start(topic: "stats")
+        defer { service.stop(topic: "stats") }
+        #expect(await service.snapshot(topic: "stats") == nil)
+        try await Task.sleep(for: .milliseconds(1500))
+        let first = try #require(sink.published["stats"]?.first)
+        let state = try JSONDecoder().decode(StatsState.self, from: first)
+        #expect(state.memoryTotal > 0)
+        #expect(await service.snapshot(topic: "stats") != nil)
+    }
+}

@@ -10,7 +10,8 @@ import WebKit
 @MainActor
 final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     private static let runtime = "runtime"
-    private static let openSchemes: Set<String> = ["http", "https", "mailto"]
+    /// `x-apple.systempreferences` lets a plugin send the user to the pane that grants what it needs.
+    private static let openSchemes: Set<String> = ["http", "https", "mailto", "x-apple.systempreferences"]
 
     unowned var app: AppDelegate!
     private let plugins: PluginStore
@@ -121,7 +122,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         case "system.openUrl":
             let raw = try decode(UrlParams.self, params).url
             guard let url = URL(string: raw), Self.openSchemes.contains(url.scheme?.lowercased() ?? "") else {
-                throw ServiceError("system.openUrl allows http, https and mailto only")
+                throw ServiceError("system.openUrl allows http, https, mailto and x-apple.systempreferences only")
             }
             NSWorkspace.shared.open(url)
             return nil

@@ -1,6 +1,6 @@
 import { Button, Radio, Switch, SwitchGroup } from '@justanarthur/modo-ui'
 import { type CalendarEvent, type CalendarState, definePlugin, type PluginContext, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
-import { CalendarDays, Video } from 'lucide-react'
+import { CalendarCheck, CalendarDays, type LucideIcon, Video } from 'lucide-react'
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react'
 
 const MINUTE = 60_000
@@ -18,7 +18,7 @@ const subscribeCurrent = (cb: () => void) => {
   return () => listeners.delete(cb)
 }
 function setCurrent(next: typeof current) {
-  // The ticker runs every second: only an actual change may re-render the views.
+  // A tick can find the same event again: only an actual change may re-render the views.
   if (next?.event.id === current?.event.id && next?.event.start === current?.event.start && next?.leadMs === current?.leadMs) return
   current = next
   for (const cb of [...listeners]) cb()
@@ -152,13 +152,12 @@ function Row({ event }: { event: CalendarEvent }) {
 
 function Day({ title, events, empty }: { title: string; events: CalendarEvent[]; empty: string }) {
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <h2 className="text-caption text-muted-foreground">{title}</h2>
+    <section className="flex min-w-0 flex-1 flex-col">
+      <h2 className="flex h-5 items-center text-caption text-muted-foreground">{title}</h2>
       {events.length === 0 ? (
         <p className="flex h-9 items-center text-body text-muted-foreground">{empty}</p>
       ) : (
-        // A plain scroller: ScrollArea's content sizes to fit-content, which would push the rows past the column.
-        <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <ul className="flex flex-col">
           {events.map((e) => (
             <Row key={e.id} event={e} />
           ))}
@@ -168,12 +167,14 @@ function Day({ title, events, empty }: { title: string; events: CalendarEvent[];
   )
 }
 
-function Notice({ title, lead, action }: { title: string; lead: string; action: ReactNode }) {
+function Notice({ icon: Icon = CalendarDays, title, lead, action }: { icon?: LucideIcon; title: string; lead: string; action?: ReactNode }) {
   return (
-    <div className="flex size-full items-center justify-center gap-5">
-      <CalendarDays size={28} strokeWidth={1.25} className="shrink-0 text-muted-foreground" />
-      <div className="flex max-w-72 flex-col gap-1">
-        <span className="text-subtitle weight-semibold text-foreground">{title}</span>
+    <div className="flex size-full flex-col items-center justify-center gap-2 text-center">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-muted-foreground">
+        <Icon size={16} strokeWidth={1.5} />
+      </div>
+      <div className="flex flex-col">
+        <span className="text-body weight-medium text-foreground">{title}</span>
         <span className="text-caption text-muted-foreground">{lead}</span>
       </div>
       {action}
@@ -193,7 +194,7 @@ function Agenda() {
         title="See what's next"
         lead="Today's and tomorrow's events, with a countdown before each one starts."
         action={
-          <Button variant="primary" onClick={() => void call('calendar.requestAccess', {})}>
+          <Button variant="primary" size="compact" onClick={() => void call('calendar.requestAccess', {})}>
             Connect calendar
           </Button>
         }
@@ -205,7 +206,7 @@ function Agenda() {
         title="Calendar access is off"
         lead="Turn it on in Privacy & Security › Calendars."
         action={
-          <Button variant="secondary" onClick={() => void call('system.openUrl', { url: PRIVACY_URL })}>
+          <Button variant="secondary" size="compact" onClick={() => void call('system.openUrl', { url: PRIVACY_URL })}>
             Open System Settings
           </Button>
         }
@@ -214,8 +215,9 @@ function Agenda() {
 
   const midnight = new Date(now).setHours(24, 0, 0, 0)
   const live = calendar.upcoming.filter((e) => e.end > now)
+  if (live.length === 0) return <Notice icon={CalendarCheck} title="Nothing planned" lead="No events for the rest of today or tomorrow." />
   return (
-    <div className="flex size-full gap-8">
+    <div className="flex min-h-full gap-8">
       <Day title="Today" events={live.filter((e) => e.start < midnight)} empty="Nothing else today" />
       <Day title="Tomorrow" events={live.filter((e) => e.start >= midnight)} empty="Nothing planned" />
     </div>
@@ -252,11 +254,18 @@ function pick(state: CalendarState | undefined, now: number, leadMs: number) {
   return due.find((e) => e.start > now) ?? due[0]
 }
 
+/** The next moment the activity can change: a countdown opens, the alert is due, an event starts or its window closes. */
+function nextChange(state: CalendarState | undefined, now: number, leadMs: number) {
+  const moments = (state?.upcoming ?? []).filter((e) => !e.allDay).flatMap((e) => [e.start - leadMs, e.start - ALERT_MS, e.start, e.start + AFTER_START_MS])
+  return Math.min(...moments.filter((t) => t > now))
+}
+
 function activate(ctx: PluginContext) {
   let state: CalendarState | undefined
   let leadMs = DEFAULT_LEAD * MINUTE
   let flashOn = true
   let shown: string | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
   const alerted = new Set<string>()
 
   const readSettings = async () => {
@@ -264,8 +273,13 @@ function activate(ctx: PluginContext) {
     flashOn = (await ctx.storage.get<boolean>('flash')) ?? true
   }
 
+  // Woken only at the moments that matter; the views tick on their own while they show a countdown.
   const tick = () => {
+    clearTimeout(timer)
     const now = Date.now()
+    const next = nextChange(state, now, leadMs)
+    if (Number.isFinite(next)) timer = setTimeout(tick, next - now + 50)
+
     const event = pick(state, now, leadMs)
     if (!event) {
       if (shown) ctx.activity.hide()
@@ -297,12 +311,11 @@ function activate(ctx: PluginContext) {
     flashOn = on ?? true
   })
   void readSettings().then(tick)
-  const ticker = setInterval(tick, 1000)
   return () => {
     stopTopic()
     stopLead()
     stopFlash()
-    clearInterval(ticker)
+    clearTimeout(timer)
     ctx.activity.hide()
     setCurrent(undefined)
   }

@@ -2,7 +2,7 @@ import { Button, ContextMenu, ContextMenuContent, ContextMenuItem, FluidHover, s
 import { definePlugin, type PluginContext, usePlugin } from '@just-notch/sdk'
 import { ArrowDownToLine, Check, File, Files, Send, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { type ComponentType, type HTMLAttributes, useEffect, useState, useSyncExternalStore } from 'react'
+import { type ComponentType, type HTMLAttributes, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 // modo-ui 0.6 attaches `ContextMenu.Trigger` (Base UI's) at runtime but leaves it out of the types.
 const MenuTrigger = (ContextMenu as unknown as { Trigger: ComponentType<HTMLAttributes<HTMLDivElement>> }).Trigger
@@ -10,6 +10,7 @@ const MenuTrigger = (ContextMenu as unknown as { Trigger: ComponentType<HTMLAttr
 const KEY = 'paths'
 const THUMB_PX = 112
 const DRAG_FLASH_MS = 60_000
+const DRAG_SLOP_PX = 4
 
 interface Drag {
   phase: 'dragging' | 'added'
@@ -67,6 +68,8 @@ function Tile({ path, index, persist }: { path: string; index: number; persist: 
   const { call } = usePlugin()
   const url = useThumbnail(path)
   const name = baseName(path)
+  // The native drag starts once the pointer moves: started on press, it would swallow the click and double-click.
+  const press = useRef<{ x: number; y: number }>()
   return (
     <motion.div
       layout
@@ -81,7 +84,18 @@ function Tile({ path, index, persist }: { path: string; index: number; persist: 
             index={index}
             title={path}
             className="h-auto w-20 flex-col items-center justify-start gap-1.5 p-1.5"
-            onPointerDown={(e) => e.button === 0 && void call('files.beginDrag', { paths: [path] })}
+            onPointerDown={(e) => {
+              if (e.button === 0) press.current = { x: e.clientX, y: e.clientY }
+            }}
+            onPointerMove={(e) => {
+              const start = press.current
+              if (!start || Math.hypot(e.clientX - start.x, e.clientY - start.y) < DRAG_SLOP_PX) return
+              press.current = undefined
+              void call('files.beginDrag', { paths: [path] })
+            }}
+            onPointerUp={() => {
+              press.current = undefined
+            }}
             onDoubleClick={() => void call('files.open', { path })}
           >
             {url ? (
@@ -121,7 +135,7 @@ function Shelf() {
     <div className="flex size-full flex-col gap-2">
       <div className="flex shrink-0 items-center justify-between gap-3">
         <span className="text-caption text-muted-foreground tabular-nums">{files(paths.length)}</span>
-        <div className="flex items-center gap-1">
+        <div className="-mr-3 flex items-center gap-1">
           <Button variant="ghost" size="compact" leadingIcon={Send} onClick={() => void call('files.airdrop', { paths })}>
             AirDrop
           </Button>
@@ -208,6 +222,8 @@ function activate(ctx: PluginContext) {
   let targetOpen = false
 
   void ctx.storage.get<string[]>(KEY).then((paths) => paths?.length && shelf.set(paths))
+  // Another panel (one island per screen) changes the same shelf.
+  const stopStored = ctx.storage.subscribe<string[]>(KEY, (paths) => shelf.set(paths ?? []))
 
   const stopDragging = ctx.on('files.dragging', ({ active, count }) => {
     clearTimeout(cancel)
@@ -236,6 +252,7 @@ function activate(ctx: PluginContext) {
 
   return () => {
     clearTimeout(cancel)
+    stopStored()
     stopShelf()
     stopDragging()
     stopDropped()

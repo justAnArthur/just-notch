@@ -76,11 +76,15 @@ enum Memory {
     static var total: Double { Double(ProcessInfo.processInfo.physicalMemory) }
 }
 
-/// `stats` topic, sampled every 2 s while subscribed.
+/// `stats` topic, sampled every 2 s while subscribed. CPU and network are
+/// deltas between two samples, so the first value follows the baseline by 1 s.
 @MainActor
 public final class StatsService: NotchService {
     public let topics = ["stats"]
     public weak var sink: ServiceSink?
+
+    static let firstSample: TimeInterval = 1
+    static let interval: TimeInterval = 2
 
     private var timer: Timer?
     private var cpu: CPUTicks?
@@ -93,9 +97,11 @@ public final class StatsService: NotchService {
     public func start(topic: String) {
         guard timer == nil else { return }
         baseline()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        let timer = Timer(fire: Date(timeIntervalSinceNow: Self.firstSample), interval: Self.interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.sample() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     public func stop(topic: String) {
