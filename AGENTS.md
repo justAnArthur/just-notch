@@ -1,0 +1,33 @@
+# AGENTS.md — just-notch
+
+A modular macOS notch app. A thin Swift host owns the window and system services; everything visible is React + `@justanarthur/modo-ui` in ONE transparent WKWebView. Plugins add behavior and UI.
+
+## layout
+
+- `packages/bridge-schema` — the host ⇄ web contract (methods, topics, events, manifest). Source of truth; the Swift host mirrors it as Codable by hand. Change both in the same commit.
+- `packages/sdk` — `@just-notch/sdk`: `definePlugin`, `PluginContext`, hooks. Shared at runtime through the import map.
+- `packages/runtime` — the React app inside the web view: island shell, activity manager, plugin loader, settings page, mock host (runs in any browser).
+- `packages/cli` — `notch create | dev | build | pack` for plugins.
+- `plugins/<id>` — default plugins, written only against the public SDK.
+- `apps/macos` — Swift 6, macOS 14+, XcodeGen `project.yml`. `Packages/NotchServices` — system services as a SwiftPM package (protocol in `Service.swift`).
+
+## runtime conventions (shared by runtime, CLI and plugins)
+
+- The page is served from `notch://app/` (prod) or the Vite dev server (dev). Plugins live under `<origin>/plugins/<id>/` (same origin, so ES modules load without CORS).
+- Shared modules via import map, emitted by the runtime build to `shared/`: `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `motion`, `motion/react`, `@justanarthur/modo-ui`, `@just-notch/sdk`. Plugin builds mark exactly these external. Plugins import modo-ui from the barrel only.
+- A plugin folder: `manifest.json` (bridge-schema `PluginManifest`), `dist/index.js` (default export = `definePlugin(...)`), optional `dist/index.css` (UnoCSS with `@justanarthur/modo-ui/unocss` preset over the plugin's sources).
+- The island is always on true black: the `--island` token (runtime `tokens/island.css`) and the `.island` scope pin dark and lift the modo-ui surface ladder from it.
+
+## styling
+
+modo-ui rules apply (see its AGENTS.md / DESIGN.md in github.com/justAnArthur/modo, `ui/`): tokens only through its utilities (`bg-surface-N`, `text-<role>`, `text-muted-foreground`, `bg-hover`, `spring.*` from motion tiers), no arbitrary color/type/radius/shadow/motion values, no inline style for visuals. Arbitrary values are fine for layout geometry. Missing a step? Add a token in `tokens/*.css`.
+
+## code style
+
+Sparse: smallest correct code, trust the types, early returns, no comments except a non-obvious why. Default exports for components. `interface` over `type` for objects.
+
+## checks
+
+- `bun run check` (typecheck all workspaces)
+- `cd apps/macos/Packages/NotchServices && swift build`
+- `cd apps/macos && xcodegen && xcodebuild -scheme JustNotch -configuration Debug build`
