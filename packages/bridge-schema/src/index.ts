@@ -135,10 +135,17 @@ export interface StatsState {
   netOutBps: number
 }
 
+export interface DisplayState {
+  brightness: number // 0…1, built-in display
+  /** Keyboard backlight 0…1; absent when the Mac has none or it can't be read. */
+  keyboardBacklight?: number
+}
+
 export interface Topics {
   media: MediaState | null
   power: PowerState
   audio: AudioState
+  display: DisplayState
   calendar: CalendarState
   bluetooth: BluetoothDevice[]
   stats: StatsState
@@ -153,6 +160,7 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
   calendar: 'calendar.read',
   bluetooth: 'bluetooth.read',
   stats: 'stats.read',
+  display: 'display.control',
 }
 
 // ── Methods: JS → Swift requests ──
@@ -187,6 +195,7 @@ export interface Methods {
   'media.command': { params: MediaCommand; result: null }
   'audio.setVolume': { params: { volume: number }; result: null }
   'display.setBrightness': { params: { brightness: number }; result: null }
+  'display.setKeyboardBacklight': { params: { level: number }; result: null }
   /** While enabled the host intercepts volume / brightness keys and sends `hud` events instead of the system HUD. Needs Accessibility. */
   'hud.setEnabled': { params: { enabled: boolean }; result: { enabled: boolean } }
 
@@ -211,10 +220,18 @@ export interface Methods {
   }
 
   'plugins.setEnabled': { params: { id: string; enabled: boolean }; result: null }
+  'app.preferences': { params: Record<string, never>; result: AppPreferences }
+  'app.setPreferences': { params: Partial<AppPreferences>; result: AppPreferences }
 }
+export interface AppPreferences {
+  launchAtLogin: boolean
+  /** `notched`: only the notched (else built-in, else main) screen; `all`: every screen. */
+  screens: 'notched' | 'all'
+}
+
 export type Method = keyof Methods
 
-/** A JS → Swift message. `plugin` is the caller's id, or `runtime` for the runtime itself. */
+/** A JS → Swift message. `plugin` is the caller's id, or `runtime` for the runtime and the settings page. */
 export interface HostRequest<M extends Method = Method> {
   plugin: string
   method: M
@@ -226,6 +243,7 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'media.command': 'media.control',
   'audio.setVolume': 'audio.control',
   'display.setBrightness': 'display.control',
+  'display.setKeyboardBacklight': 'display.control',
   'hud.setEnabled': 'hud',
   'calendar.requestAccess': 'calendar.read',
   'files.thumbnail': 'files',
@@ -236,7 +254,14 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
 }
 
 /** Methods only the runtime (`plugin: 'runtime'`) may call. */
-export const RUNTIME_ONLY: Method[] = ['host.ready', 'window.setHitRegions', 'window.setFocusable', 'plugins.setEnabled']
+export const RUNTIME_ONLY: Method[] = [
+  'host.ready',
+  'window.setHitRegions',
+  'window.setFocusable',
+  'plugins.setEnabled',
+  'app.preferences',
+  'app.setPreferences',
+]
 
 // ── Events: Swift → JS ──
 
@@ -252,6 +277,8 @@ export interface Events {
   hud: { kind: 'volume' | 'brightness' | 'keyboard'; value: number; muted?: boolean }
   'bluetooth.connected': BluetoothDevice
   'power.plugged': { pluggedIn: boolean }
+  /** A `storage.set` by any web view (island or settings), so both stay in sync. Delivered to every web view. */
+  'storage.changed': { plugin: string; key: string; value: unknown }
   'plugins.changed': { plugins: InstalledPlugin[] }
 }
 export type EventName = keyof Events

@@ -2,10 +2,14 @@
   "name": "just-notch",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "plugins/*"],
+  "workspaces": [
+    "packages/*",
+    "plugins/*"
+  ],
   "scripts": {
     "check": "bun run --filter '*' check",
-    "build": "bun run --filter '@just-notch/runtime' build && bun run --filter './plugins/*' build"
+    "build": "bun run --filter '@just-notch/runtime' build && bun run --filter './plugins/*' build",
+    "notch": "bun packages/cli/src/cli.ts"
   },
   "devDependencies": {
     "typescript": "^5.9.0",
