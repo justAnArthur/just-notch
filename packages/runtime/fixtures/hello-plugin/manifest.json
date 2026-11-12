@@ -1,0 +1,10 @@
+{
+  "id": "hello-plugin",
+  "name": "Hello",
+  "version": "0.1.0",
+  "description": "Test fixture: Now Playing through useTopic, a volume HUD, charging and AirPods alerts.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": ["media.read", "media.control", "audio.read", "power.read", "bluetooth.read"],
+  "engines": { "notch": ">=0.1.0" }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "timer-plugin",
+  "name": "Timer",
+  "version": "0.1.0",
+  "description": "Test fixture: a running focus timer with a minimal view, so media and the timer split the island.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [],
+  "engines": { "notch": ">=0.1.0" }
+}

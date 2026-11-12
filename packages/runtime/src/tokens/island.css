@@ -1,0 +1,47 @@
+/*
+ * The island is always true black, the color of the hardware notch it grows
+ * out of. `.island` pins the dark scheme and restarts modo-ui's surface
+ * ladder from that black, so `bg-surface-2` inside it reads as a raised tile.
+ *
+ * modo-ui resolves its light-dark() tokens where they are declared
+ * (`:root, .light, .dark`), so the island root carries `dark` as well:
+ * `<div class="dark island">`. The doubled class out-specifies that block in
+ * any stylesheet order.
+ */
+
+:root {
+  --island: oklch(0 0 0);
+}
+
+.island.island {
+  color-scheme: dark;
+
+  --background: var(--island);
+  --surface-1: var(--island);
+  --surface-2: oklch(0.17 0 0);
+  --surface-3: oklch(0.205 0 0);
+  --surface-4: oklch(0.235 0 0);
+  --surface-5: oklch(0.264 0 0);
+  --surface-6: oklch(0.293 0 0);
+  --surface-7: oklch(0.321 0 0);
+  --surface-8: oklch(0.349 0 0);
+  --card: var(--surface-3);
+  --muted: var(--surface-2);
+
+  --shadow-1: var(--shadow-dark-1);
+  --shadow-2: var(--shadow-dark-2);
+  --shadow-3: var(--shadow-dark-3);
+  --shadow-4: var(--shadow-dark-4);
+  --shadow-5: var(--shadow-dark-5);
+  --shadow-6: var(--shadow-dark-6);
+  --shadow-7: var(--shadow-dark-7);
+  --shadow-8: var(--shadow-dark-8);
+  --shadow-2-inset: var(--shadow-dark-2);
+  --shadow-3-inset: var(--shadow-dark-3);
+}
+
+/* The panel is a transparent window over the desktop: only the island paints. */
+html[data-notch='island'],
+html[data-notch='island'] body {
+  background-color: transparent;
+}
