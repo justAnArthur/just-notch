@@ -6,6 +6,7 @@ import { log } from './host/client'
 import DevToolbar from './host/dev-toolbar'
 import { installMockHost, mock } from './host/mock'
 import { ready, useGeometry } from './host/session'
+import { createSwiftHost } from './host/swift-host'
 import Island from './island/island'
 import { syncPlugins } from './plugins/loader'
 
@@ -38,6 +39,8 @@ function App() {
 }
 
 const info = await ready()
+const host = createSwiftHost({ name: 'just-notch', version: info.version })
+if (isMock) Object.assign(window, { __notchHost: host })
 on('plugins.changed', ({ plugins }) => void syncPlugins(plugins))
 void syncPlugins(info.plugins)
 createRoot(document.getElementById('root') as HTMLElement).render(<App />)

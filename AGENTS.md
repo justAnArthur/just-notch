@@ -7,9 +7,14 @@ A modular macOS notch app. A thin Swift host owns the window and system services
 - `packages/bridge-schema` — the host ⇄ web contract (methods, topics, events, manifest). Source of truth; the Swift host mirrors it as Codable by hand. Change both in the same commit.
 - `packages/sdk` — `@just-notch/sdk`: `definePlugin`, `PluginContext`, hooks. Shared at runtime through the import map.
 - `packages/runtime` — the React app inside the web view: island shell (a sheet with two snaps: fitted to the tab, then tall), activity manager, plugin loader, the settings page (a tab of the island on its tall snap), mock host (runs in any browser).
+- `packages/runtime/src/host/swift-host.ts` — `createSwiftHost()`: the just-apps platform `Host` (`@just-apps/host-contract`, kind `swift`) over the bridge, as the runtime. The mock host backs it in a browser. Notifications, global shortcuts and deep links are stubs until the Swift host grows them.
 - `packages/cli` — `notch create | dev | build | pack | check` for plugins. At the root: `bun run notch <command> --cwd plugins/<id>` (not `bunx notch`, an unrelated npm package).
 - `plugins/<id>` — default plugins, written only against the public SDK.
 - `apps/macos` — Swift 6, macOS 14+, XcodeGen `project.yml`. `Packages/NotchServices` — system services as a SwiftPM package (protocol in `Service.swift`).
+
+## platform
+
+just-notch is `apps/notch` in the just-apps monorepo and builds only inside a just-apps checkout: the runtime depends on `@just-apps/host-contract` by path (`file:`, relative to `apps/notch`). CI checks out just-apps around this repo (secret `PLATFORM_TOKEN`).
 
 ## runtime conventions (shared by runtime, CLI and plugins)
 

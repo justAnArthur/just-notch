@@ -5,6 +5,13 @@ on:
     branches: [ main ]
   pull_request:
 
+# notch builds only inside the just-apps platform (`@just-apps/host-contract` by path), so each job checks
+# out just-apps and puts this repo at apps/notch. PLATFORM_TOKEN: a fine-grained token with read access
+# to just-apps.
+defaults:
+  run:
+    working-directory: apps/notch
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -15,6 +22,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/just-apps
+          token: ${{ secrets.PLATFORM_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          path: apps/notch
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Typecheck
@@ -31,17 +44,23 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/just-apps
+          token: ${{ secrets.PLATFORM_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          path: apps/notch
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Build the runtime and plugins
         run: bun run build
       - name: Services tests
-        working-directory: apps/macos/Packages/NotchServices
+        working-directory: apps/notch/apps/macos/Packages/NotchServices
         run: swift test
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build the app
-        working-directory: apps/macos
+        working-directory: apps/notch/apps/macos
         run: |
           xcodegen
           xcodebuild -project JustNotch.xcodeproj -scheme JustNotch -configuration Debug -derivedDataPath build build

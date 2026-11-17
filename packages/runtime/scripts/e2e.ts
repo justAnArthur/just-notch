@@ -88,6 +88,12 @@ check(await page.locator('#island').count(), 'the island element exists')
 const shared = await page.evaluate(() => [...document.querySelectorAll('script[type=importmap]')].length)
 check(shared === 1, 'one import map')
 check(await page.evaluate(() => document.documentElement.classList.contains('dark') && document.documentElement.classList.contains('island')), 'the dark island scope sits on the root')
+const platform = await page.evaluate(`(async () => {
+  const host = window.__notchHost
+  await host.store.set('e2e', { ok: true })
+  return { kind: host.kind, stored: await host.store.get('e2e'), scheme: await host.os.colorScheme() }
+})()`)
+check(JSON.stringify(platform) === JSON.stringify({ kind: 'swift', stored: { ok: true }, scheme: 'dark' }), 'the platform Host runs over the mock bridge')
 const origin = (await page.locator('#island').boundingBox())!
 const move = (x: number, y: number) => page.mouse.move(origin.x + x, origin.y + y)
 const away = () => move(360, 400)

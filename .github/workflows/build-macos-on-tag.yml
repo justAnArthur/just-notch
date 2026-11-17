@@ -3,6 +3,10 @@
 # builds Just Notch for a release tag (`just-notch@x.y.z`) and attaches the zipped app to that tag's
 # GitHub release (created by release-on-tag.yml from the same tag).
 #
+# notch builds only inside the just-apps platform (`@just-apps/host-contract` by path), so this checks
+# out just-apps and puts this repo at apps/notch. the PLATFORM_TOKEN secret is a fine-grained token
+# with read access to the just-apps repo.
+#
 # bump-version.yml dispatches this workflow for every new tag that matches `push.tags`, passing the
 # tag as the `tag` input — keep that input.
 #
@@ -31,11 +35,20 @@ jobs:
     timeout-minutes: 30
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+    defaults:
+      run:
+        working-directory: apps/notch
 
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: ${{ github.repository_owner }}/just-apps
+          token: ${{ secrets.PLATFORM_TOKEN }}
+
+      - uses: actions/checkout@v4
+        with:
           ref: ${{ env.TAG }}
+          path: apps/notch
 
       - uses: oven-sh/setup-bun@v2
 
@@ -48,7 +61,7 @@ jobs:
         run: brew install xcodegen
 
       - name: Build the app
-        working-directory: apps/macos
+        working-directory: apps/notch/apps/macos
         run: |
           xcodegen
           xcodebuild -project JustNotch.xcodeproj -scheme JustNotch -configuration Release \
@@ -65,6 +78,8 @@ jobs:
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # the release belongs to this repo, not to the just-apps checkout around it.
+          GH_REPO: ${{ github.repository }}
         run: |
           # release-on-tag.yml creates the release from the same tag, possibly after this build starts.
           for _ in $(seq 1 30); do gh release view "$TAG" > /dev/null 2>&1 && break; sleep 10; done

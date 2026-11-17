@@ -13,6 +13,7 @@
     "e2e": "bun scripts/e2e.ts"
   },
   "dependencies": {
+    "@just-apps/host-contract": "file:../../../../packages/host-contract",
     "@just-notch/bridge-schema": "workspace:*",
     "@just-notch/sdk": "workspace:*",
     "@justanarthur/modo-ui": "^2.2.0",
