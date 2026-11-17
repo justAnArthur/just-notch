@@ -1,6 +1,6 @@
 {
-  "name": "@just-notch/plugin-devices",
-  "version": "0.1.0",
+  "name": "@just-notch/plugin-recent-files",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,10 +16,10 @@
     "react": ">=18"
   },
   "devDependencies": {
-    "@justanarthur/modo-ui": "^0.6.0",
+    "@justanarthur/modo-ui": "^2.2.0",
+    "@justanarthur/modo-ui-notch": "^0.3.0",
     "@just-notch/cli": "workspace:*",
     "@types/react": "^18.3.0",
-    "motion": "^13.4.0",
     "react": "^18.3.1"
   }
 }

@@ -22,7 +22,7 @@
       },
       "dependencies": {
         "@just-notch/bridge-schema": "workspace:*",
-        "@justanarthur/modo-ui": "0.6.0",
+        "@justanarthur/modo-ui": "^2.2.0",
         "@unocss/core": "^66.12.0",
         "@unocss/preset-wind4": "^66.12.0",
         "esbuild": "^0.28.2",
@@ -38,7 +38,8 @@
       "dependencies": {
         "@just-notch/bridge-schema": "workspace:*",
         "@just-notch/sdk": "workspace:*",
-        "@justanarthur/modo-ui": "0.6.0",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
         "lucide-react": "^1.72.0",
         "motion": "^13.4.0",
         "react": "^18.3.1",
@@ -61,58 +62,62 @@
       "dependencies": {
         "@just-notch/bridge-schema": "workspace:*",
       },
+      "devDependencies": {
+        "@justanarthur/modo-ui": "^2.2.0",
+      },
       "peerDependencies": {
+        "@justanarthur/modo-ui": "^2.2.0",
         "react": ">=18",
       },
     },
     "plugins/calendar": {
       "name": "@just-notch/plugin-calendar",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@just-notch/sdk": "workspace:*",
         "lucide-react": "^1.72.0",
       },
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
         "@types/react": "^18.3.0",
-        "motion": "^13.4.0",
         "react": "^18.3.1",
       },
       "peerDependencies": {
         "react": ">=18",
       },
     },
-    "plugins/devices": {
-      "name": "@just-notch/plugin-devices",
-      "version": "0.1.0",
+    "plugins/clipboard": {
+      "name": "@just-notch/plugin-clipboard",
+      "version": "0.2.0",
       "dependencies": {
         "@just-notch/sdk": "workspace:*",
         "lucide-react": "^1.72.0",
       },
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
         "@types/react": "^18.3.0",
-        "motion": "^13.4.0",
         "react": "^18.3.1",
       },
       "peerDependencies": {
         "react": ">=18",
       },
     },
-    "plugins/hud": {
-      "name": "@just-notch/plugin-hud",
-      "version": "0.1.0",
+    "plugins/clock": {
+      "name": "@just-notch/plugin-clock",
+      "version": "0.2.0",
       "dependencies": {
         "@just-notch/sdk": "workspace:*",
         "lucide-react": "^1.72.0",
       },
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
         "@types/react": "^18.3.0",
-        "motion": "^13.4.0",
         "react": "^18.3.1",
       },
       "peerDependencies": {
@@ -121,81 +126,71 @@
     },
     "plugins/now-playing": {
       "name": "@just-notch/plugin-now-playing",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@just-notch/sdk": "workspace:*",
         "lucide-react": "^1.72.0",
       },
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
-        "motion": "^13.4.0",
-      },
-      "peerDependencies": {
-        "react": ">=18",
-      },
-    },
-    "plugins/power": {
-      "name": "@just-notch/plugin-power",
-      "version": "0.1.0",
-      "dependencies": {
-        "@just-notch/sdk": "workspace:*",
-        "lucide-react": "^1.72.0",
-      },
-      "devDependencies": {
-        "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
-        "motion": "^13.4.0",
-      },
-      "peerDependencies": {
-        "react": ">=18",
-      },
-    },
-    "plugins/shelf": {
-      "name": "@just-notch/plugin-shelf",
-      "version": "0.1.0",
-      "dependencies": {
-        "@just-notch/sdk": "workspace:*",
-        "lucide-react": "^1.72.0",
-      },
-      "devDependencies": {
-        "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
-        "motion": "^13.4.0",
-      },
-      "peerDependencies": {
-        "react": ">=18",
-      },
-    },
-    "plugins/stats": {
-      "name": "@just-notch/plugin-stats",
-      "version": "0.1.0",
-      "dependencies": {
-        "@just-notch/sdk": "workspace:*",
-        "lucide-react": "^1.72.0",
-      },
-      "devDependencies": {
-        "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
         "@types/react": "^18.3.0",
-        "motion": "^13.4.0",
         "react": "^18.3.1",
       },
       "peerDependencies": {
         "react": ">=18",
       },
     },
-    "plugins/timer": {
-      "name": "@just-notch/plugin-timer",
-      "version": "0.1.0",
+    "plugins/recent-files": {
+      "name": "@just-notch/plugin-recent-files",
+      "version": "0.2.0",
       "dependencies": {
         "@just-notch/sdk": "workspace:*",
         "lucide-react": "^1.72.0",
       },
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
-        "@justanarthur/modo-ui": "^0.6.0",
-        "motion": "^13.4.0",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@types/react": "^18.3.0",
+        "react": "^18.3.1",
+      },
+      "peerDependencies": {
+        "react": ">=18",
+      },
+    },
+    "plugins/system": {
+      "name": "@just-notch/plugin-system",
+      "version": "0.2.0",
+      "dependencies": {
+        "@just-notch/sdk": "workspace:*",
+        "lucide-react": "^1.72.0",
+      },
+      "devDependencies": {
+        "@just-notch/cli": "workspace:*",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@types/react": "^18.3.0",
+        "react": "^18.3.1",
+      },
+      "peerDependencies": {
+        "react": ">=18",
+      },
+    },
+    "plugins/weather": {
+      "name": "@just-notch/plugin-weather",
+      "version": "0.2.0",
+      "dependencies": {
+        "@just-notch/sdk": "workspace:*",
+        "lucide-react": "^1.72.0",
+      },
+      "devDependencies": {
+        "@just-notch/cli": "workspace:*",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@types/react": "^18.3.0",
+        "react": "^18.3.1",
       },
       "peerDependencies": {
         "react": ">=18",
@@ -301,49 +296,25 @@
 
     "@just-notch/plugin-calendar": ["@just-notch/plugin-calendar@workspace:plugins/calendar"],
 
-    "@just-notch/plugin-devices": ["@just-notch/plugin-devices@workspace:plugins/devices"],
+    "@just-notch/plugin-clipboard": ["@just-notch/plugin-clipboard@workspace:plugins/clipboard"],
 
-    "@just-notch/plugin-hud": ["@just-notch/plugin-hud@workspace:plugins/hud"],
+    "@just-notch/plugin-clock": ["@just-notch/plugin-clock@workspace:plugins/clock"],
 
     "@just-notch/plugin-now-playing": ["@just-notch/plugin-now-playing@workspace:plugins/now-playing"],
 
-    "@just-notch/plugin-power": ["@just-notch/plugin-power@workspace:plugins/power"],
+    "@just-notch/plugin-recent-files": ["@just-notch/plugin-recent-files@workspace:plugins/recent-files"],
 
-    "@just-notch/plugin-shelf": ["@just-notch/plugin-shelf@workspace:plugins/shelf"],
+    "@just-notch/plugin-system": ["@just-notch/plugin-system@workspace:plugins/system"],
 
-    "@just-notch/plugin-stats": ["@just-notch/plugin-stats@workspace:plugins/stats"],
-
-    "@just-notch/plugin-timer": ["@just-notch/plugin-timer@workspace:plugins/timer"],
+    "@just-notch/plugin-weather": ["@just-notch/plugin-weather@workspace:plugins/weather"],
 
     "@just-notch/runtime": ["@just-notch/runtime@workspace:packages/runtime"],
 
     "@just-notch/sdk": ["@just-notch/sdk@workspace:packages/sdk"],
 
-    "@justanarthur/modo-ui": ["@justanarthur/modo-ui@0.6.0", "", { "dependencies": { "@base-ui/react": "1.4.1", "@fontsource-variable/inter": "^5.3.0", "class-variance-authority": "^0.7.1", "cn": "^0.3.0", "date-fns": "^4.4.0", "lucide-react": "^1.47.0", "motion": "^13.4.0", "pdfjs-dist": "^5.7.284", "react-day-picker": "^10.0.2", "sugar-high": "^2.5.1" }, "peerDependencies": { "react": ">=18", "react-dom": ">=18" } }, "sha512-bt3fOjfOnrE8ccETf+2T3lHIiT58S6gYnRMF8Yw5BGsg65TWdI9Kxtyn3cOdY48UVfwHQH6oQ6s3Qd7RHDmfwQ=="],
+    "@justanarthur/modo-ui": ["@justanarthur/modo-ui@2.2.0", "", { "dependencies": { "@base-ui/react": "1.4.1", "@fontsource-variable/inter": "^5.3.0", "class-variance-authority": "^0.7.1", "cn": "^0.3.0", "date-fns": "^4.4.0", "lucide-react": "^1.47.0", "marked": "^18.0.14", "motion": "^13.4.0", "react-day-picker": "^10.0.2", "sugar-high": "^2.5.1" }, "peerDependencies": { "@justanarthur/modo": ">=1", "react": ">=18", "react-dom": ">=18", "unocss": ">=66" }, "optionalPeers": ["@justanarthur/modo", "unocss"] }, "sha512-d9SM5wsx/rE1Vt5ZZS9hump4Wd+zc8usTAg4RoI/wZHjvmFrOmL5uyGdGMBVpTal6DWNvEH5nxhjsu1C412UGg=="],
 
-    "@napi-rs/canvas": ["@napi-rs/canvas@0.1.100", "", { "optionalDependencies": { "@napi-rs/canvas-android-arm64": "0.1.100", "@napi-rs/canvas-darwin-arm64": "0.1.100", "@napi-rs/canvas-darwin-x64": "0.1.100", "@napi-rs/canvas-linux-arm-gnueabihf": "0.1.100", "@napi-rs/canvas-linux-arm64-gnu": "0.1.100", "@napi-rs/canvas-linux-arm64-musl": "0.1.100", "@napi-rs/canvas-linux-riscv64-gnu": "0.1.100", "@napi-rs/canvas-linux-x64-gnu": "0.1.100", "@napi-rs/canvas-linux-x64-musl": "0.1.100", "@napi-rs/canvas-win32-arm64-msvc": "0.1.100", "@napi-rs/canvas-win32-x64-msvc": "0.1.100" } }, "sha512-xglYA6q3XO5P3BNJYxVZ1IV7DLVjp1Py6nwag88YntrS+3vKHyYcMqXVS4ZztJmwz2uGvz1FWhI/4LgbR5uQDA=="],
-
-    "@napi-rs/canvas-android-arm64": ["@napi-rs/canvas-android-arm64@0.1.100", "", { "os": "android", "cpu": "arm64" }, "sha512-hjhCKhntPv9+t4ckHymdx0phYNcVW+GKQR6Lzw2zE+pOVjOplSmtx9nNNknTjbEDLcuLZqA1y8ufKg1XfgftzQ=="],
-
-    "@napi-rs/canvas-darwin-arm64": ["@napi-rs/canvas-darwin-arm64@0.1.100", "", { "os": "darwin", "cpu": "arm64" }, "sha512-2PcswRaC7Ly645DGt88///zuFDhJxJYdKAs1uU3mfk1atYkXufgcgLfBpk6Tm12nCQBaNt1wpybuPZ4qOhTo8A=="],
-
-    "@napi-rs/canvas-darwin-x64": ["@napi-rs/canvas-darwin-x64@0.1.100", "", { "os": "darwin", "cpu": "x64" }, "sha512-ePNZtj7pNIva/siZMg+HmbeozkIjqUIYdoymH8HaA3qK7LfzFN4WMBM8G6HQ9ZC+H3+Dnn5pqtiXpgLykaPOhw=="],
-
-    "@napi-rs/canvas-linux-arm-gnueabihf": ["@napi-rs/canvas-linux-arm-gnueabihf@0.1.100", "", { "os": "linux", "cpu": "arm" }, "sha512-d5cDB48oWFGU8/XPhUOFAlySgb/VAu7D+s8fi55K1Pcfg8aPplHWqMgibhVLU8ky7Pyg/fuiVLz4Nf3JrSTuUA=="],
-
-    "@napi-rs/canvas-linux-arm64-gnu": ["@napi-rs/canvas-linux-arm64-gnu@0.1.100", "", { "os": "linux", "cpu": "arm64" }, "sha512-rDxgxRu69RvDlX/bh9o22DxLsGr8EqsNgotL9+RwQE1S0b0cqeatqsw6aW45mukm0B42DIAaAacKaYQ8cqS1nw=="],
-
-    "@napi-rs/canvas-linux-arm64-musl": ["@napi-rs/canvas-linux-arm64-musl@0.1.100", "", { "os": "linux", "cpu": "arm64" }, "sha512-K3mDW66N+xT2/V439u1alFANiBUjdEx2gLiNYnCmUsva5jZMxWTjafBYwTzYK+EMFMHrUoabuU+T1BIP5CgbYQ=="],
-
-    "@napi-rs/canvas-linux-riscv64-gnu": ["@napi-rs/canvas-linux-riscv64-gnu@0.1.100", "", { "os": "linux", "cpu": "none" }, "sha512-mooqUBTIsccZpnoQC4NgrC1v6C1vof39etLNMnBwCY+p0gajWJvAHLGQ6g/gGyS5YrpDW+GefSN4+Cvcr08UWw=="],
-
-    "@napi-rs/canvas-linux-x64-gnu": ["@napi-rs/canvas-linux-x64-gnu@0.1.100", "", { "os": "linux", "cpu": "x64" }, "sha512-1eCvkDCazm7FFhsT7DfGOdSaHgZVK3bt/dSBl5EWHOWmnz+I7j8tPseJqqD81NF+MH21jKUK4wQSDjN0mdhnTg=="],
-
-    "@napi-rs/canvas-linux-x64-musl": ["@napi-rs/canvas-linux-x64-musl@0.1.100", "", { "os": "linux", "cpu": "x64" }, "sha512-20arT6lnI19S68qNlii73TSEDbECNgzMz2EpldC1V3mZFuRkeujXkcebRk0LRJe9SEUAooYiLokfMViY8IX7yA=="],
-
-    "@napi-rs/canvas-win32-arm64-msvc": ["@napi-rs/canvas-win32-arm64-msvc@0.1.100", "", { "os": "win32", "cpu": "arm64" }, "sha512-DZFFT1wIAg37LJw37yhMRFfjATd3vTQzjZ1Yki8u2vhO6Hi5VE6BVaGQ1aaDu7xb4iMErz+9EOwjpS7xcxFeBw=="],
-
-    "@napi-rs/canvas-win32-x64-msvc": ["@napi-rs/canvas-win32-x64-msvc@0.1.100", "", { "os": "win32", "cpu": "x64" }, "sha512-MyT1j3mHC2+Lu4pBi9mKyMJhtP6U7k7EldY7sj/uS5gJA65gTXt8MefJQXLJo5d/vZbuWmfxzkEUNc/urV3pHA=="],
+    "@justanarthur/modo-ui-notch": ["@justanarthur/modo-ui-notch@0.3.0", "", { "dependencies": { "lucide-react": "^1.47.0", "motion": "^13.4.0" }, "peerDependencies": { "@justanarthur/modo-ui": "^2.1.0", "react": ">=18", "react-dom": ">=18" } }, "sha512-mYY2+AdePzREiDufPi24N1cowozFjxA1MitsjNROgMc8jPi6eEnMeSerEzI4SDmLpLcSh7OLJjs36R8RytCihg=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.6", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || 2.0.0-beta.2", "@emnapi/runtime": "^1.7.1 || 2.0.0-beta.2" } }, "sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw=="],
 
@@ -587,6 +558,8 @@
 
     "magic-string": ["magic-string@1.4.5", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w=="],
 
+    "marked": ["marked@18.2.1", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-ii4bxCTCqqwpT86XZWgJNs+ZnAIZksmLGYMViWA7PDIXYIeNo1x6cDdX3JOip9NM/cI6p8z57FxliACboTruMA=="],
+
     "mdn-data": ["mdn-data@2.27.1", "", {}, "sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ=="],
 
     "motion": ["motion@13.5.1", "", { "dependencies": { "framer-motion": "13.5.1", "tslib": "^2.4.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" }, "optionalPeers": ["react", "react-dom"] }, "sha512-eV9SUem6KnzEa9+eT+dVBeDlhy5TTdn09YWR1WhUsKoZCJPw/n4TcYhjbxq2Gy5PTwDr//4H3r5vxkcZnNnO1w=="],
@@ -612,8 +585,6 @@
     "package-manager-detector": ["package-manager-detector@1.9.0", "", {}, "sha512-zAMfbta9nPA8AKkA4WdmNAT8R8s6Dk0/xwPsqNnRidMFcLo1YkLuPDTgs2f64XdzS8vbLNnoJ+uUIkgbz7oRHA=="],
 
     "pathe": ["pathe@2.0.3", "", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
-
-    "pdfjs-dist": ["pdfjs-dist@5.7.284", "", { "optionalDependencies": { "@napi-rs/canvas": "^0.1.100" } }, "sha512-h4EdYQczmGhbOlqc3PPZwxevn7ApdWPbovAuWXOB/DjIyigSnwfy2oze7c6mRcSr9XgLp3eN3EeL4DyySTPMFw=="],
 
     "perfect-debounce": ["perfect-debounce@2.1.0", "", {}, "sha512-LjgdTytVFXeUgtHZr9WYViYSM/g8MkcTPYDlPa3cDqMirHjKiSZPYd6DoL7pK8AJQr+uWkQvCjHNdiMqsrJs+g=="],
 

@@ -1,0 +1,14 @@
+{
+  "id": "clipboard",
+  "name": "Clipboard",
+  "version": "0.2.0",
+  "description": "What you copied, kept and searchable.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "clipboard"
+  ],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

@@ -6,9 +6,10 @@
  */
 
 import type { Events, EventName, Method, Methods, Topic, Topics } from '@just-notch/bridge-schema'
-import { type ComponentType, createContext, createElement, type ReactNode, useContext, useEffect, useState } from 'react'
+import { type ComponentType, createContext, createElement, type ReactNode, useContext, useEffect, useState, useSyncExternalStore } from 'react'
 
 export type * from '@just-notch/bridge-schema'
+export { SelectRow, type SelectRowProps, SwitchRow, type SwitchRowProps } from './settings'
 
 export type Unsubscribe = () => void
 
@@ -160,4 +161,31 @@ export function useMediaPosition(state: Topics['media'] | undefined, everyMs = 5
   if (!state) return 0
   const elapsed = state.playing ? ((now - state.updatedAt) / 1000) * state.rate : 0
   return Math.min(state.durationS, state.positionS + elapsed)
+}
+
+export interface Signal<T> {
+  get(): T
+  /** Notifies only when the value changes (`Object.is`). */
+  set(value: T): void
+  /** The value, re-rendering on change: how an activity's views read what `activate` keeps. */
+  use(): T
+}
+
+/** A value `activate` writes and the plugin's views read. */
+export function signal<T>(initial: T): Signal<T> {
+  let value = initial
+  const listeners = new Set<() => void>()
+  const subscribe = (cb: () => void) => {
+    listeners.add(cb)
+    return () => void listeners.delete(cb)
+  }
+  return {
+    get: () => value,
+    set(next) {
+      if (Object.is(next, value)) return
+      value = next
+      for (const cb of [...listeners]) cb()
+    },
+    use: () => useSyncExternalStore(subscribe, () => value),
+  }
 }

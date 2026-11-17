@@ -11,6 +11,7 @@ export const SHARED_MODULES = {
   motion: 'motion.js',
   'motion/react': 'motion-react.js',
   '@justanarthur/modo-ui': 'modo-ui.js',
+  '@justanarthur/modo-ui-notch': 'modo-ui-notch.js',
   '@just-notch/sdk': 'sdk.js',
 } as const
 

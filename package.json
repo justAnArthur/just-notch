@@ -19,6 +19,6 @@
     "@types/react-dom": "^18.3.0"
   },
   "properties": {
-    "gitCommitScopeRelatedNames": "just-notch,app,macos,host,services,runtime,island,sdk,cli,bridge-schema,plugins,now-playing,power,shelf,timer,calendar,hud,devices,stats"
+    "gitCommitScopeRelatedNames": "just-notch,app,macos,host,services,runtime,island,sdk,cli,bridge-schema,plugins,now-playing,calendar,weather,clock,system,clipboard,recent-files"
   }
 }

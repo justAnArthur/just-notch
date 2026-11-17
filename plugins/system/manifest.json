@@ -1,0 +1,15 @@
+{
+  "id": "system",
+  "name": "System",
+  "version": "0.2.0",
+  "description": "CPU, memory, battery, disk and the busiest processes.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "stats.read",
+    "power.read"
+  ],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

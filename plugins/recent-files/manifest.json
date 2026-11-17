@@ -1,0 +1,15 @@
+{
+  "id": "recent-files",
+  "name": "Recent files",
+  "version": "0.2.0",
+  "description": "The newest downloads and screenshots, ready to open or drag out.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "files.recent",
+    "files"
+  ],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

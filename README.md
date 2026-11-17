@@ -2,7 +2,7 @@
 
 A modular Dynamic Island for the MacBook notch. A thin native Swift host owns the window and the system services; everything you see is React + [`@justanarthur/modo-ui`](https://github.com/justAnArthur/modo/tree/main/ui) in one transparent web view; plugins add the rest.
 
-Default plugins: Now Playing, Power, Shelf, Timer, Calendar, Controls (volume / brightness HUD), Devices, System.
+Default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard and Recent files.
 
 ## install
 

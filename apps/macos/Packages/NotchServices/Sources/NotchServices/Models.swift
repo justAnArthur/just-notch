@@ -158,6 +158,7 @@ public struct ActiveDownload: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
     public var received: Double
+    public var total: Double?
     public var rate: Double
     public var from: String?
 }

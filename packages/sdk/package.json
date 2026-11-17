@@ -13,6 +13,10 @@
     "@just-notch/bridge-schema": "workspace:*"
   },
   "peerDependencies": {
+    "@justanarthur/modo-ui": "^2.2.0",
     "react": ">=18"
+  },
+  "devDependencies": {
+    "@justanarthur/modo-ui": "^2.2.0"
   }
 }

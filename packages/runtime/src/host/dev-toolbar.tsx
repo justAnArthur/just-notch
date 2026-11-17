@@ -17,6 +17,7 @@ const ACTIONS: { label: string; run: () => void }[] = [
   { label: 'File drag', run: mock.fileDrag },
   { label: 'Event in 8 min', run: () => mock.eventSoon(8) },
   { label: 'Play / pause', run: () => void mock.togglePlay() },
+  { label: 'Next track', run: mock.nextTrack },
   { label: 'Stop media', run: mock.stopMedia },
   { label: 'Start media', run: mock.startMedia },
 ]

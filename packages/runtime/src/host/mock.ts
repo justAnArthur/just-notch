@@ -381,6 +381,7 @@ export const mock = {
     publish('calendar', { ...values.calendar, upcoming: [event, ...values.calendar.upcoming].sort((a, b) => a.start - b.start) })
   },
   togglePlay: () => handlers['media.command']({ command: 'toggle' }, 'runtime'),
+  nextTrack: () => setTrack(track + 1),
   stopMedia: () => publish('media', null),
   startMedia: () => setTrack(track),
   /** A screen `w` points wide, as when the panel moves to a smaller display. */

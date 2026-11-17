@@ -1,11 +1,15 @@
 {
   "id": "now-playing",
   "name": "Now Playing",
-  "version": "0.1.0",
-  "description": "Artwork and a live equalizer beside the notch, with a scrubber and playback controls when expanded.",
+  "version": "0.2.0",
+  "description": "What plays in Music, Spotify or a browser, beside the notch and in the open island.",
   "entry": "dist/index.js",
   "style": "dist/index.css",
-  "permissions": ["media.read", "media.control"],
+  "permissions": [
+    "media.read",
+    "media.control",
+    "audio.read"
+  ],
   "engines": {
     "notch": "^0.1.0"
   }

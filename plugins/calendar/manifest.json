@@ -1,8 +1,8 @@
 {
   "id": "calendar",
   "name": "Calendar",
-  "version": "0.1.0",
-  "description": "Today and tomorrow at a glance, a countdown before each event and a Join button for meetings.",
+  "version": "0.2.0",
+  "description": "Today and tomorrow, and a countdown to the next event.",
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [

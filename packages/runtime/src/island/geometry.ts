@@ -16,7 +16,8 @@ export interface Box {
   height: number
 }
 
-const EXPANDED = { w: 640, h: 200 }
+/** The open panel the notch kit's widgets are laid out for. */
+const EXPANDED = { w: 720, h: 240 }
 /** Room for one compact slot beside the notch: about as wide as the notch is tall. */
 export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
 
@@ -58,7 +59,7 @@ export function shapeFor(state: IslandState, g: ScreenGeometry): Shape {
   if (state === 'idle') return { w: notch.w, h: notch.h, radius: 10, shoulder: 6 }
   if (state === 'compact' || state === 'split') return { w: notch.w + 2 * slot, h: notch.h, radius: 13, shoulder: 8 }
   if (state === 'flash') return { w: notch.w + 2 * (slot + 64), h: notch.h + 48, radius: 24, shoulder: 10 }
-  return { w: Math.min(EXPANDED.w, panel.w - 48), h: Math.min(EXPANDED.h, panel.h - 24), radius: 32, shoulder: 14 }
+  return { w: Math.min(EXPANDED.w, panel.w - 28), h: Math.min(EXPANDED.h, panel.h - 24), radius: 32, shoulder: 14 }
 }
 
 /** The detached bubble of `split`: a circle as tall as the compact island, its center `x` from the island's center. */

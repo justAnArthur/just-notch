@@ -101,7 +101,10 @@ public final class RecentFilesService: NotchService {
                     let rate = partial[path].map { max(bytes - $0.bytes, 0) / max(now.timeIntervalSince($0.at), 0.001) } ?? 0
                     partial[path] = (bytes, now)
                     seen.insert(path)
-                    downloads.append(ActiveDownload(id: path, name: url.deletingPathExtension().lastPathComponent, received: bytes, rate: rate.rounded(), from: Self.origin(of: url)))
+                    downloads.append(ActiveDownload(
+                        id: path, name: url.deletingPathExtension().lastPathComponent, received: bytes,
+                        total: Self.expectedSize(of: url), rate: rate.rounded(), from: Self.origin(of: url)
+                    ))
                     continue
                 }
                 guard values.isDirectory != true || values.isPackage == true else { continue }
@@ -152,6 +155,13 @@ public final class RecentFilesService: NotchService {
     private static func size(of folder: URL) -> Int {
         let items = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.fileSizeKey])
         return (items?.allObjects as? [URL] ?? []).reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+    }
+
+    /// Safari's `.download` bundle records the expected size in its Info.plist; other browsers don't say.
+    static func expectedSize(of url: URL) -> Double? {
+        guard let info = NSDictionary(contentsOf: url.appendingPathComponent("Info.plist")),
+              let total = info["DownloadEntryProgressTotalToLoad"] as? NSNumber, total.doubleValue > 0 else { return nil }
+        return total.doubleValue
     }
 
     static func isScreenCapture(_ url: URL) -> Bool {

@@ -242,6 +242,8 @@ export interface ActiveDownload {
   id: string
   name: string
   received: number // bytes
+  /** Expected size in bytes, when the browser records it (Safari). */
+  total?: number
   /** Bytes per second over the last sample. */
   rate: number
   from?: string

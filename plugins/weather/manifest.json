@@ -1,0 +1,14 @@
+{
+  "id": "weather",
+  "name": "Weather",
+  "version": "0.2.0",
+  "description": "The temperature now, the next hours and rain on its way.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "weather.read"
+  ],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

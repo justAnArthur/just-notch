@@ -1,0 +1,12 @@
+{
+  "id": "clock",
+  "name": "Clock",
+  "version": "0.2.0",
+  "description": "The time, world clocks and a Pomodoro cycle.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}

@@ -14,7 +14,8 @@ A modular macOS notch app. A thin Swift host owns the window and system services
 ## runtime conventions (shared by runtime, CLI and plugins)
 
 - The page is served from `notch://app/` (prod) or the Vite dev server (dev). Plugins live under `<origin>/plugins/<id>/` (same origin, so ES modules load without CORS).
-- Shared modules via import map, emitted by the runtime build to `shared/`: `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `motion`, `motion/react`, `@justanarthur/modo-ui`, `@just-notch/sdk`. Plugin builds mark exactly these external. Plugins import modo-ui from the barrel only.
+- Shared modules via import map, emitted by the runtime build to `shared/`: `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `motion`, `motion/react`, `@justanarthur/modo-ui`, `@justanarthur/modo-ui-notch`, `@just-notch/sdk`. Plugin builds mark exactly these external. Plugins import modo-ui and the kit from their barrels only.
+- Plugin UI comes from the notch kit (`@justanarthur/modo-ui-notch`): a plugin maps host topics onto a kit block and its parts (`.Leading` / `.Trailing` / `.Minimal` / flash). New visuals go into the kit in the modo repo, not into a plugin.
 - A plugin folder: `manifest.json` (bridge-schema `PluginManifest`), `dist/index.js` (default export = `definePlugin(...)`), optional `dist/index.css` (UnoCSS with `@justanarthur/modo-ui/unocss` preset over the plugin's sources).
 - The island is always on true black: the `--island` token (runtime `tokens/island.css`) and the `.island` scope pin dark and lift the modo-ui surface ladder from it.
 

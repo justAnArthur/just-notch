@@ -7,6 +7,7 @@ export const SHARED_MODULES = [
   'motion',
   'motion/react',
   '@justanarthur/modo-ui',
+  '@justanarthur/modo-ui-notch',
   '@just-notch/sdk',
 ] as const
 
@@ -26,10 +27,10 @@ export function classifyImport(specifier: string): ImportRule {
   const pkg = packageName(specifier)
   if (!SHARED_PACKAGES.has(pkg)) return { kind: 'bundle' }
 
-  if (pkg === '@justanarthur/modo-ui')
+  if (pkg === '@justanarthur/modo-ui' || pkg === '@justanarthur/modo-ui-notch')
     return {
       kind: 'error',
-      message: `"${specifier}": import modo-ui from the barrel "@justanarthur/modo-ui"; its subpaths are not shared with plugins`,
+      message: `"${specifier}": import from the barrel "${pkg}"; its subpaths are not shared with plugins`,
     }
 
   return {

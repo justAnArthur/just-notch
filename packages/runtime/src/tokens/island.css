@@ -12,6 +12,8 @@
 
 :root {
   --island: oklch(0 0 0);
+  /* The notch kit's name for the same black. */
+  --ink: var(--island);
 }
 
 .island.island {
