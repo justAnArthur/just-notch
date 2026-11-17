@@ -104,9 +104,19 @@ public final class RecentFilesService: NotchService {
         panel.canCreateDirectories = true
         panel.prompt = "Watch"
         panel.message = source == .downloads ? "Choose the folder to watch for downloads." : "Choose the folder to watch for screenshots."
+        // The app is an agent behind a non-activating island, so macOS may refuse to activate it:
+        // the panel must not hide when the app is inactive, and must sit above the island
+        // (main menu + 3) on the screen the pointer is on.
+        panel.hidesOnDeactivate = false
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 4)
+        if let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) {
+            let size = panel.frame.size
+            panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.midY - size.height / 2))
+        }
         NSApp.activate()
         return await withCheckedContinuation { continuation in
             panel.begin { continuation.resume(returning: $0 == .OK ? panel.url : nil) }
+            panel.orderFrontRegardless()
         }
     }
 
