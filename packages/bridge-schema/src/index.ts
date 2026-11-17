@@ -319,6 +319,8 @@ export interface Methods {
   'window.setFocusable': { params: { focusable: boolean }; result: null }
   /** Opens the island on its settings page (the tall snap). */
   'window.openSettings': { params: Record<string, never>; result: null }
+  /** The page took the current trackpad gesture as a swipe: the host holds back the rest of it (and its momentum) until the fingers touch down again. */
+  'window.endGesture': { params: Record<string, never>; result: null }
   /** Trackpad haptic feedback (Force Touch trackpads; a no-op elsewhere). `alignment` for snapping, `levelChange` for steps. */
   'window.haptic': { params: { pattern: 'generic' | 'alignment' | 'levelChange' }; result: null }
 
@@ -423,6 +425,7 @@ export const RUNTIME_ONLY: Method[] = [
   'host.ready',
   'window.setHitRegions',
   'window.setFocusable',
+  'window.endGesture',
   'plugins.setEnabled',
   'app.preferences',
   'app.setPreferences',

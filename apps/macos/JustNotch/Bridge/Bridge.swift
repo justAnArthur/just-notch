@@ -92,6 +92,10 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             app.openSettings()
             return nil
 
+        case "window.endGesture":
+            app.panel(for: webView)?.webView.endGesture()
+            return nil
+
         case "window.haptic":
             let pattern: NSHapticFeedbackManager.FeedbackPattern = switch try decode(HapticParams.self, params).pattern {
             case .alignment: .alignment

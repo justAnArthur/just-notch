@@ -6,6 +6,24 @@ final class NotchWebView: WKWebView {
     weak var controller: PanelController?
     private(set) var lastMouseDown: NSEvent?
     private var trackingArea: NSTrackingArea?
+    /// Set when the page commits a swipe: the rest of that finger gesture and its momentum never reach it.
+    private var swallowUntil: Date?
+
+    /// `window.endGesture`: the page took this gesture as a swipe. Fingers touching down again (or a mouse
+    /// wheel, or a stuck state after 2 s) hand wheel events back to it.
+    func endGesture() {
+        swallowUntil = Date().addingTimeInterval(2)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        if let until = swallowUntil {
+            let touchedDown = event.phase.contains(.began) || event.phase.contains(.mayBegin)
+            let mouseWheel = event.phase.isEmpty && event.momentumPhase.isEmpty
+            guard touchedDown || mouseWheel || Date() > until else { return }
+            swallowUntil = nil
+        }
+        super.scrollWheel(with: event)
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 

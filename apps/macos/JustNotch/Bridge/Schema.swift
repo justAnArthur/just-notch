@@ -132,6 +132,7 @@ enum Schema {
         "host.ready",
         "window.setHitRegions",
         "window.setFocusable",
+        "window.endGesture",
         "plugins.setEnabled",
         "app.preferences",
         "app.setPreferences",

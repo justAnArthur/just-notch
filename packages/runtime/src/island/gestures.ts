@@ -6,6 +6,8 @@ const QUIET_MS = 160
 const LOCK_PX = 8
 /** Travel along the axis that commits a swipe. */
 export const COMMIT_PX = 40
+/** With the host holding back a committed gesture, wheel events this long after the commit are a new touch. */
+const SETTLE_MS = 120
 
 /** Which way the fingers moved. */
 export type Swipe = 'up' | 'down' | 'left' | 'right'
@@ -29,16 +31,21 @@ export interface Gesture {
   floor: number
   /** The committed swipe: only a push the same way can start the next gesture without a quiet gap. */
   swipe?: Swipe
+  committedAt?: number
 }
 
 const directionOf = (s: Sample): Swipe => (Math.abs(s.x) > Math.abs(s.y) ? (s.x > 0 ? 'right' : 'left') : s.y > 0 ? 'down' : 'up')
 
 /**
- * Whether `s` starts a new gesture: after a quiet gap, or a fresh push the same way once a committed swipe's
- * momentum has faded. Fingers turning back within one gesture never start another, so one swipe moves one tab.
+ * Whether `s` starts a new gesture: after a quiet gap, or a new touch after a commit.
+ *
+ * In the app the host knows the fingers' phases and holds back the rest of a committed gesture (`native`), so
+ * anything arriving once that took effect is a new touch: fast swipes in a row each count, one swipe never
+ * counts twice. A browser has no phases: there a fresh push the same way once the momentum faded counts.
  */
-export function isFresh(g: Gesture | undefined, s: Sample): boolean {
+export function isFresh(g: Gesture | undefined, s: Sample, native = false): boolean {
   if (!g || s.t - g.last > QUIET_MS) return true
+  if (native && g.owner === 'committed') return s.t - (g.committedAt ?? s.t) > SETTLE_MS
   const size = Math.hypot(s.x, s.y)
   const sameWay = g.owner !== 'committed' || directionOf(s) === g.swipe
   return g.owner !== 'tracking' && sameWay && g.floor < g.peak / 4 && size > g.floor * 3 && size > 6
@@ -47,7 +54,7 @@ export function isFresh(g: Gesture | undefined, s: Sample): boolean {
 /** Marks `g` committed to `swipe` at sample `s`: the rest of the gesture and its momentum belong to it. */
 export function commit(g: Gesture, s: Sample, swipe: Swipe) {
   const size = Math.hypot(s.x, s.y)
-  Object.assign(g, { owner: 'committed', peak: size, floor: size, swipe })
+  Object.assign(g, { owner: 'committed', peak: size, floor: size, swipe, committedAt: s.t })
 }
 
 /** `g` continued by `s` (`g` undefined: a new gesture). */
@@ -110,9 +117,11 @@ function stripFor(target: Element): HTMLElement | null {
  * under the pointer that can still scroll that way keeps the gesture; the overflowing tab strip takes any
  * wheel and scrolls sideways. `onSwipe` reads current state itself, so the listener is installed once.
  */
-export function useSwipes(root: RefObject<HTMLElement | null>, onSwipe: (swipe: Swipe) => void) {
+export function useSwipes(root: RefObject<HTMLElement | null>, onSwipe: (swipe: Swipe) => void, endGesture?: () => void) {
   const handler = useRef(onSwipe)
   handler.current = onSwipe
+  const end = useRef(endGesture)
+  end.current = endGesture
 
   useEffect(() => {
     const el = root.current
@@ -123,7 +132,7 @@ export function useSwipes(root: RefObject<HTMLElement | null>, onSwipe: (swipe: 
     const onWheel = (event: WheelEvent) => {
       if (!(event.target instanceof Element)) return
       const sample = sampleOf(event)
-      const fresh = isFresh(gesture, sample)
+      const fresh = isFresh(gesture, sample, end.current !== undefined)
       const g = track(fresh ? undefined : gesture, sample)
       gesture = g
       if (fresh) {
@@ -145,6 +154,7 @@ export function useSwipes(root: RefObject<HTMLElement | null>, onSwipe: (swipe: 
       const swipe = swipeOf(g)
       if (!swipe) return
       commit(g, sample, swipe)
+      end.current?.()
       handler.current(swipe)
     }
 

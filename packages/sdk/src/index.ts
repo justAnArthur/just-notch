@@ -23,6 +23,13 @@ export const PRIORITY_ORDER: Priority[] = ['alert', 'hud', 'media', 'timer', 'ca
 /** What the island shows, from the smallest presentation up. */
 export type IslandState = 'idle' | 'compact' | 'split' | 'expanded' | 'flash'
 
+/**
+ * How tall the open island is: `fit` hugs a widget's content (up to 240 pt), `tall` is the sheet the user pulls
+ * down to (about 560 pt). A widget shows more on `tall` (more rows, a longer forecast, details), not the same
+ * content stretched.
+ */
+export type Sheet = 'fit' | 'tall'
+
 /** A long-lived activity (Now Playing, a running timer). */
 export interface ActivitySpec {
   priority: Exclude<Priority, 'alert' | 'hud'>
@@ -73,6 +80,8 @@ export interface PluginContext {
   readonly storage: PluginStorage
   /** The island's current presentation, for views that adapt to it. */
   readonly island: { get(): IslandState; subscribe(cb: (state: IslandState) => void): Unsubscribe }
+  /** The open island's snap. */
+  readonly sheet: { get(): Sheet; subscribe(cb: (sheet: Sheet) => void): Unsubscribe }
 }
 
 /** What the runtime passes an icon: lucide-react icons take these as they are. */
@@ -126,6 +135,14 @@ export function useIslandState(): IslandState {
   const [state, setState] = useState(island.get)
   useEffect(() => island.subscribe(setState), [island])
   return state
+}
+
+/** The open island's snap, for a widget that lays out more on `tall`. */
+export function useSheet(): Sheet {
+  const { sheet } = usePlugin()
+  const [value, setValue] = useState(sheet.get)
+  useEffect(() => sheet.subscribe(setValue), [sheet])
+  return value
 }
 
 /** Persisted per-plugin state: `[value, set]`, `fallback` until storage answers. */

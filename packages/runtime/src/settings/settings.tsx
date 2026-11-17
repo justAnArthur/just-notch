@@ -70,24 +70,28 @@ export default function Settings() {
       ]
     : []
 
+  // The kit's sidebar pads its labels 16 px in from its edge: pulled out by as much, its text lines up with the
+  // island's title and tabs (INSET), the row highlights reaching into the margin as they do in a list.
   return (
-    <SettingsWindow
-      name="Just Notch"
-      className="size-full"
-      preferences={preferences}
-      onPreferencesChange={setPreferences}
-      plugins={plugins}
-      enabled={Object.fromEntries(installed.map((p) => [p.manifest.id, p.enabled]))}
-      onEnabledChange={(next) => {
-        for (const { manifest, enabled } of installed)
-          if (next[manifest.id] !== enabled) void call('runtime', 'plugins.setEnabled', { id: manifest.id, enabled: next[manifest.id] })
-      }}
-      permissions={PERMISSIONS.map(({ id, label, description }) => ({ id, label, description, granted: granted[id] }))}
-      onOpenPermission={(id) => {
-        const pane = PERMISSIONS.find((p) => p.id === id)?.pane
-        if (pane) void call('runtime', 'system.openUrl', { url: PRIVACY + pane })
-      }}
-      about={about}
-    />
+    <div className="-mx-4 h-full">
+      <SettingsWindow
+        name="Just Notch"
+        className="size-full"
+        preferences={preferences}
+        onPreferencesChange={setPreferences}
+        plugins={plugins}
+        enabled={Object.fromEntries(installed.map((p) => [p.manifest.id, p.enabled]))}
+        onEnabledChange={(next) => {
+          for (const { manifest, enabled } of installed)
+            if (next[manifest.id] !== enabled) void call('runtime', 'plugins.setEnabled', { id: manifest.id, enabled: next[manifest.id] })
+        }}
+        permissions={PERMISSIONS.map(({ id, label, description }) => ({ id, label, description, granted: granted[id] }))}
+        onOpenPermission={(id) => {
+          const pane = PERMISSIONS.find((p) => p.id === id)?.pane
+          if (pane) void call('runtime', 'system.openUrl', { url: PRIVACY + pane })
+        }}
+        about={about}
+      />
+    </div>
   )
 }

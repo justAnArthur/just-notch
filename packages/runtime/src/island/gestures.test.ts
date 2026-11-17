@@ -48,3 +48,28 @@ describe('swipes', () => {
     expect(run([...stroke(0, 8, -12, 0), ...slowing, ...stroke(224, 10, 12, 0)])).toEqual(['left'])
   })
 })
+
+describe('swipes in the app (the host ends committed gestures)', () => {
+  function runNative(samples: Sample[]) {
+    let g: Gesture | undefined
+    const swipes: string[] = []
+    for (const s of samples) {
+      g = track(isFresh(g, s, true) ? undefined : g, s)
+      const swipe = swipeOf(g)
+      if (swipe) {
+        swipes.push(swipe)
+        commit(g, s, swipe)
+      }
+    }
+    return swipes
+  }
+
+  test('one fast swipe with uneven speed counts once (the host holds back its tail)', () => {
+    const uneven = [30, 8, 2, 25, 40, 5].map((x, i) => ({ t: i * 16, x: -x, y: 0 }))
+    expect(runNative(uneven)).toEqual(['left'])
+  })
+
+  test('fast swipes in a row each count, either way', () => {
+    expect(runNative([...stroke(0, 6, 12, 0), ...stroke(200, 6, 12, 0), ...stroke(400, 6, -12, 0)])).toEqual(['right', 'right', 'left'])
+  })
+})

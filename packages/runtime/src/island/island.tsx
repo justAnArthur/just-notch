@@ -121,7 +121,11 @@ const haptic = (pattern: 'generic' | 'alignment') => void call('runtime', 'windo
  * Swipe down opens the island and then pulls it to the tall snap, swipe up steps back the same way; sideways,
  * the open island changes tab and a split one swaps its activities. Each committed swipe taps the trackpad.
  */
+const endGesture = () => void call('runtime', 'window.endGesture', {}).catch(() => {})
+
 function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: React.MutableRefObject<TabStep | null>) {
+  // In the app the host ends a committed gesture natively; the mock host has no trackpad phases.
+  const native = document.documentElement.dataset.notch !== 'mock'
   useSwipes(root, (swipe: Swipe) => {
     const state = getState()
     const { island } = present(state)
@@ -141,7 +145,7 @@ function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: Rea
     if (island !== 'split') return
     dispatch({ type: 'swap' })
     haptic('alignment')
-  })
+  }, native ? endGesture : undefined)
 }
 
 function GooFilter({ id }: { id: string }) {

@@ -38,6 +38,8 @@ export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
 export const INSET = 20
 /** An icon tab's width (w-7.5): a compact control's height plus the icon's breathing room. */
 export const TAB_W = 30
+/** The tab row's inset (px-3): a tab's 14 px glyph sits centered in its 30 px button, so the first glyph lands on INSET like the title and the content. */
+export const STRIP_INSET = INSET - (TAB_W - 14) / 2
 /** Kept free on each side of the notch. */
 const NOTCH_GAP = 8
 /** The settings button (size-7) and its gap, at the far right of the header. */
@@ -57,12 +59,12 @@ export interface StripLayout {
 /** Tabs flow from the left wing into the right one, balanced, each wing filling from its outer edge. */
 export function stripLayout(count: number, w: number, g: ScreenGeometry): StripLayout {
   const side = (w - g.notch.w) / 2
-  const left = side - INSET - NOTCH_GAP
+  const left = side - STRIP_INSET - NOTCH_GAP
   const leftCap = Math.floor(left / TAB_W)
   const rightCap = Math.floor((left - GEAR_W) / TAB_W)
   const overflow = count > leftCap + rightCap
   const before = overflow ? leftCap : Math.min(leftCap, Math.max(Math.ceil(count / 2), count - rightCap))
-  const hole = { start: left, end: side + g.notch.w + NOTCH_GAP - INSET }
+  const hole = { start: left, end: side + g.notch.w + NOTCH_GAP - STRIP_INSET }
   return { before, overflow, hole, spacer: hole.end - before * TAB_W }
 }
 

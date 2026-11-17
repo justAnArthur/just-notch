@@ -1,4 +1,4 @@
-import type { IslandState, Unsubscribe } from '@just-notch/sdk'
+import type { IslandState, Sheet, Unsubscribe } from '@just-notch/sdk'
 import { useSyncExternalStore } from 'react'
 import { type ActivityAction, type ActivityState, FLASH_MS, initialState, present, reduce } from './reducer'
 
@@ -55,6 +55,19 @@ export function useActivityState(): ActivityState {
 }
 
 export const getIslandState = (): IslandState => present(state).island
+
+export const getSheet = (): Sheet => (state.snap === 1 ? 'tall' : 'fit')
+
+/** Notifies when the open island changes snap. */
+export function subscribeSheet(cb: (sheet: Sheet) => void): Unsubscribe {
+  let last = getSheet()
+  return subscribe(() => {
+    const sheet = getSheet()
+    if (sheet === last) return
+    last = sheet
+    cb(sheet)
+  })
+}
 
 /** Notifies only when the presentation changes, not on every activity update. */
 export function subscribeIsland(cb: (island: IslandState) => void): Unsubscribe {

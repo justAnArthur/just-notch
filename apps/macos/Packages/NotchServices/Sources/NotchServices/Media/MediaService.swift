@@ -146,8 +146,12 @@ public final class MediaService: NotchService {
         }
 
         // Players send updates without artwork for the same track (play/pause, a seek, before the art
-        // loads): only a different track may clear it, or the artwork blinks out on every update.
-        let track = [raw.title, raw.artist, raw.album].joined(separator: "\u{1F}")
+        // loads): only a different track may clear it, or the artwork blinks out on every update. A track
+        // is its app and title: browsers fill in the artist and album a moment later.
+        let track = [raw.bundleId ?? "", raw.title].joined(separator: "\u{1F}")
+        if raw.artwork != nil || (raw.artworkCleared == true && artworkUrl != nil) {
+            mediaLog.debug("artwork \(raw.artwork != nil ? "new" : "absent", privacy: .public) for \(raw.title, privacy: .public) (\(track == self.artworkTrack ? "same" : "new", privacy: .public) track)")
+        }
         if let artwork = raw.artwork {
             artworkTrack = track
             if artwork != artworkData {

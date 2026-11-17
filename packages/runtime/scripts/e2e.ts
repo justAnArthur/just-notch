@@ -268,7 +268,7 @@ check((await page.locator('#island > svg path').first().boundingBox())!.height <
 const haptics = (await mock(page, 'haptics')) as string[]
 check(haptics.includes('generic') && haptics.includes('alignment'), `committed swipes tap the trackpad (${[...new Set(haptics)].join(', ')})`)
 
-await mock(page, 'resize(500)')
+await mock(page, 'resize(460)')
 await settle(page)
 const strip = page.locator('#island [data-tab-strip]')
 const overflow = await strip.evaluate((el) => ({ scrolls: el.scrollWidth > el.clientWidth, left: el.scrollLeft, fade: el.getAttribute('data-fade') }))

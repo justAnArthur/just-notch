@@ -114,7 +114,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
   return (
     <div className="absolute inset-0 flex flex-col">
       <SizeProvider size="compact">
-        <div className="flex shrink-0 items-center px-5" style={{ height: geometry.notch.h }}>
+        <div className="flex shrink-0 items-center px-3" style={{ height: geometry.notch.h }}>
           {tabs.length > 0 ? (
             <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => select(tabs[i]?.id)} onHover={setHovered} />
           ) : (

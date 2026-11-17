@@ -251,8 +251,8 @@ struct ShapeTests {
         return NSBitmapImageRep(data: image.tiffRepresentation!)!.representation(using: .png, properties: [:])!
     }()
 
-    private func raw(_ title: String, artwork: Data? = nil) -> RawNowPlaying {
-        RawNowPlaying(title: title, artist: "A", album: "B", durationS: 100, positionS: 1, rate: 1, playing: true,
+    private func raw(_ title: String, album: String = "B", artwork: Data? = nil) -> RawNowPlaying {
+        RawNowPlaying(title: title, artist: "A", album: album, durationS: 100, positionS: 1, rate: 1, playing: true,
                       timestamp: 0, bundleId: nil, artwork: artwork, artworkCleared: artwork == nil)
     }
 
@@ -273,6 +273,9 @@ struct ShapeTests {
         backend.onChange?(raw("One", artwork: Self.png))
         #expect(try lastArtwork(sink) != nil)
         backend.onChange?(raw("One"))
+        #expect(try lastArtwork(sink) != nil)
+        // A browser filling in the album later is the same track.
+        backend.onChange?(raw("One", album: "Later"))
         #expect(try lastArtwork(sink) != nil)
         backend.onChange?(raw("Two"))
         #expect(try lastArtwork(sink) == nil)

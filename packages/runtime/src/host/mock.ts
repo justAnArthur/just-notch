@@ -225,6 +225,7 @@ const handlers: Handlers = {
     hitRegions.focusable = focusable
     return null
   },
+  'window.endGesture': () => null,
   'window.haptic': ({ pattern }) => {
     haptics.push(pattern)
     return null

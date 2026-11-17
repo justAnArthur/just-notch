@@ -1,6 +1,6 @@
 import { type InstalledPlugin, METHOD_PERMISSION, type Method, RUNTIME_ONLY, TOPIC_PERMISSION } from '@just-notch/bridge-schema'
 import type { PluginContext, Unsubscribe } from '@just-notch/sdk'
-import { dispatch, getIslandState, subscribeIsland } from '../activity/store'
+import { dispatch, getIslandState, getSheet, subscribeIsland, subscribeSheet } from '../activity/store'
 import { on } from '../host/bus'
 import { call, log } from '../host/client'
 import { subscribeTopic } from '../host/topics'
@@ -62,6 +62,7 @@ export function createPluginContext({ manifest }: InstalledPlugin, live = true):
       subscribe: (key, cb) => own(on('storage.changed', (change) => change.plugin === id && change.key === key && cb((change.value ?? undefined) as never))),
     },
     island: { get: getIslandState, subscribe: (cb) => own(subscribeIsland(cb)) },
+    sheet: { get: getSheet, subscribe: (cb) => own(subscribeSheet(cb)) },
   }
 
   return {
