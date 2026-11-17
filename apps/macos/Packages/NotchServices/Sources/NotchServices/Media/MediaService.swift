@@ -24,6 +24,8 @@ public final class MediaService: NotchService {
     private var known = false
     private var artworkData: Data?
     private var artworkUrl: String?
+    /// The track the current artwork belongs to.
+    private var artworkTrack: String?
     private var latest = Latest<MediaState?>()
 
     private static let idleTimeout: TimeInterval = 60
@@ -139,13 +141,21 @@ public final class MediaService: NotchService {
         guard let raw else {
             artworkData = nil
             artworkUrl = nil
+            artworkTrack = nil
             return publish(nil)
         }
 
-        if let artwork = raw.artwork, artwork != artworkData {
-            artworkData = artwork
-            artworkUrl = artworkDataURL(artwork)
-        } else if raw.artworkCleared == true {
+        // Players send updates without artwork for the same track (play/pause, a seek, before the art
+        // loads): only a different track may clear it, or the artwork blinks out on every update.
+        let track = [raw.title, raw.artist, raw.album].joined(separator: "\u{1F}")
+        if let artwork = raw.artwork {
+            artworkTrack = track
+            if artwork != artworkData {
+                artworkData = artwork
+                artworkUrl = artworkDataURL(artwork)
+            }
+        } else if raw.artworkCleared == true, track != artworkTrack {
+            artworkTrack = nil
             artworkData = nil
             artworkUrl = nil
         }

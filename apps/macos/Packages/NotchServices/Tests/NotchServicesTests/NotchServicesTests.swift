@@ -219,3 +219,41 @@ struct ShapeTests {
         #expect(await service.snapshot(topic: "stats") != nil)
     }
 }
+
+@Suite @MainActor struct MediaArtworkTests {
+    private static let png: Data = {
+        let image = NSImage(size: NSSize(width: 4, height: 4))
+        image.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 0, width: 4, height: 4).fill()
+        image.unlockFocus()
+        return NSBitmapImageRep(data: image.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+    }()
+
+    private func raw(_ title: String, artwork: Data? = nil) -> RawNowPlaying {
+        RawNowPlaying(title: title, artist: "A", album: "B", durationS: 100, positionS: 1, rate: 1, playing: true,
+                      timestamp: 0, bundleId: nil, artwork: artwork, artworkCleared: artwork == nil)
+    }
+
+    private func lastArtwork(_ sink: RecordingSink) throws -> String? {
+        try JSONDecoder().decode(MediaState?.self, from: try #require(sink.published["media"]?.last))?.artworkUrl
+    }
+
+    @Test func keepsArtworkAcrossUpdatesOfTheSameTrack() async throws {
+        let backend = FakeBackend()
+        let sink = RecordingSink()
+        let service = MediaService { _ in backend }
+        service.sink = sink
+        service.start(topic: "media")
+        defer { service.stop(topic: "media") }
+        // The service picks its backend on a task.
+        for _ in 0..<100 where backend.onChange == nil { await Task.yield() }
+
+        backend.onChange?(raw("One", artwork: Self.png))
+        #expect(try lastArtwork(sink) != nil)
+        backend.onChange?(raw("One"))
+        #expect(try lastArtwork(sink) != nil)
+        backend.onChange?(raw("Two"))
+        #expect(try lastArtwork(sink) == nil)
+    }
+}
