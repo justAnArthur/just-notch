@@ -1,6 +1,6 @@
 {
   "name": "just-notch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A modular Dynamic Island for the MacBook notch: a native Swift host, a React + modo-ui island, plugins for everything else.",
   "private": true,
   "type": "module",
