@@ -15,6 +15,7 @@ describe('classifyImport', () => {
       'motion',
       'motion/react',
       '@justanarthur/modo-ui',
+      '@justanarthur/modo-ui-notch',
       '@just-notch/sdk',
     ])
   })

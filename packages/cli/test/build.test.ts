@@ -38,7 +38,7 @@ describe('buildPlugin', () => {
       `import Button from '@justanarthur/modo-ui/components/button'
        export default { widget: { title: 'x', view: Button } }`,
     )
-    await expect(buildPlugin(root)).rejects.toThrow('import modo-ui from the barrel "@justanarthur/modo-ui"')
+    await expect(buildPlugin(root)).rejects.toThrow('import from the barrel "@justanarthur/modo-ui"')
   })
 
   test('fails without a default export', async () => {
