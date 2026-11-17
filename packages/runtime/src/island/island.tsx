@@ -130,7 +130,7 @@ const nativeGestures: NativeGestures = {
   touches: () => touches,
 }
 
-function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: React.MutableRefObject<TabStep | null>) {
+function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: React.RefObject<TabStep | null>) {
   // In the app the host ends a committed gesture natively; the mock host has no trackpad phases.
   const native = document.documentElement.dataset.notch !== 'mock'
   useSwipes(root, (swipe: Swipe) => {

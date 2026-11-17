@@ -1,7 +1,7 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
 import { Button, SizeProvider } from '@justanarthur/modo-ui'
 import { Puzzle, Settings as SettingsIcon } from 'lucide-react'
-import { type MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { type ActivityEntry, SETTINGS_TAB, type Snap } from '../activity/reducer'
 import { dispatch, useActivityState } from '../activity/store'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
@@ -22,13 +22,13 @@ interface ExpandedProps {
   shape: Shape
   geometry: ScreenGeometry
   /** Set while mounted, for the swipe gestures. */
-  step: MutableRefObject<TabStep | null>
+  step: RefObject<TabStep | null>
   /** The content's own height at the first snap, for the island to fit it. */
   onFit: (height: number) => void
 }
 
 /** Reports `ref`'s height as it changes. */
-function useHeight(ref: React.RefObject<HTMLElement | null>, onHeight: (height: number) => void, active: boolean) {
+function useHeight(ref: RefObject<HTMLElement | null>, onHeight: (height: number) => void, active: boolean) {
   const report = useRef(onHeight)
   report.current = onHeight
   useLayoutEffect(() => {

@@ -106,11 +106,11 @@ export async function createPlugin(id: string, parent: string): Promise<string> 
     type: 'module',
     scripts: { build: 'notch build', dev: 'notch dev', check: 'notch check' },
     dependencies: { '@just-notch/sdk': repo ? 'workspace:*' : range },
-    peerDependencies: { react: '>=18' },
+    peerDependencies: { react: '>=19' },
     devDependencies: {
       '@justanarthur/modo-ui': '^2.2.0',
       '@just-notch/cli': repo ? 'workspace:*' : range,
-      ...(repo ? {} : { typescript: '^5.9.0', '@types/react': '^18.3.0' }),
+      ...(repo ? {} : { typescript: '^5.9.0', '@types/react': '^19.2.0' }),
     },
   }
 
