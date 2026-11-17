@@ -295,6 +295,13 @@ const handlers: Handlers = {
     publish('clipboard', { ...values.clipboard, ignoredApps: apps })
     return null
   },
+  'apps.list': () =>
+    [
+      { bundleId: 'com.1password.1password', name: '1Password' },
+      { bundleId: 'com.figma.Desktop', name: 'Figma' },
+      { bundleId: 'com.apple.Safari', name: 'Safari' },
+      { bundleId: 'com.apple.Terminal', name: 'Terminal' },
+    ].map((app, i) => ({ ...app, icon: artwork(i + 7) })),
   'recentFiles.clear': ({ source }) => {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
     return null

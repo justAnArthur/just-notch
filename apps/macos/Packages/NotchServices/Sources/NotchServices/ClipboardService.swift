@@ -8,7 +8,7 @@ import CryptoKit
 @MainActor
 public final class ClipboardService: NotchService {
     public let topics = ["clipboard"]
-    public let methods = ["clipboard.copy", "clipboard.delete", "clipboard.pin", "clipboard.clear", "clipboard.setPaused", "clipboard.setIgnoredApps"]
+    public let methods = ["clipboard.copy", "clipboard.delete", "clipboard.pin", "clipboard.clear", "clipboard.setPaused", "clipboard.setIgnoredApps", "apps.list"]
     public weak var sink: ServiceSink?
 
     static let interval: TimeInterval = 0.5
@@ -75,6 +75,8 @@ public final class ClipboardService: NotchService {
         case "clipboard.setIgnoredApps":
             let apps = try decode(AppsParams.self, params).apps
             change { $0.ignoredApps = apps }
+        case "apps.list":
+            return await InstalledApps.list().json()
         default:
             throw ServiceError("unknown method \(method)")
         }

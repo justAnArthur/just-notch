@@ -146,6 +146,12 @@ public struct ClipboardState: Codable, Equatable, Sendable {
     public var ignoredApps: [String]
 }
 
+public struct AppInfo: Codable, Equatable, Sendable {
+    public var bundleId: String
+    public var name: String
+    public var icon: String?
+}
+
 public struct RecentFile: Codable, Equatable, Sendable {
     public enum Source: String, Codable, Sendable { case downloads, screenshots }
     public var id: String

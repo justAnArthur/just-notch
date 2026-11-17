@@ -62,6 +62,7 @@ struct ShapeTests {
         let clip = Clip(id: "1", kind: .text, content: "x", copiedAt: 1, pinned: false)
         #expect(try keys(clip) == ["id", "kind", "content", "copiedAt", "pinned"])
         #expect(try keys(ClipboardState(clips: [], paused: false, ignoredApps: [])) == ["clips", "paused", "ignoredApps"])
+        #expect(try keys(AppInfo(bundleId: "a", name: "A", icon: "data:")) == ["bundleId", "name", "icon"])
     }
 
     @Test func recentFiles() throws {
@@ -318,5 +319,25 @@ struct NewServiceTests {
         let top = ProcessTimes.top(5, from: old, to: new)
         #expect(top.map(\.name) == ["a", "b"])
         #expect(top.first?.cpu == 0.5)
+    }
+}
+
+@Suite @MainActor struct InstalledAppsTests {
+    private func entry(_ id: String, _ name: String, _ path: String = "/x") -> InstalledApps.Entry {
+        .init(app: AppInfo(bundleId: id, name: name), url: URL(fileURLWithPath: path))
+    }
+
+    @Test func mergesByBundleIdAndSortsByName() {
+        let merged = InstalledApps.merge([entry("b", "Zed", "/running"), entry("a", "arc"), entry("b", "Zed", "/Applications"), entry("c", "Bear 2"), entry("d", "Bear 10")])
+        #expect(merged.map(\.app.bundleId) == ["a", "c", "d", "b"])
+        #expect(merged.last?.url.path == "/running")
+    }
+
+    @Test func listsInstalledAppsWithIcons() async {
+        let apps = await InstalledApps.list()
+        let safari = apps.first { $0.bundleId == "com.apple.Safari" }
+        #expect(safari?.name == "Safari")
+        #expect(safari?.icon?.hasPrefix("data:image/png;base64,") == true)
+        #expect(Set(apps.map(\.bundleId)).count == apps.count)
     }
 }

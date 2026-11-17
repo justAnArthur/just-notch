@@ -118,6 +118,7 @@ enum Schema {
         "clipboard.clear": .clipboard,
         "clipboard.setPaused": .clipboard,
         "clipboard.setIgnoredApps": .clipboard,
+        "apps.list": .clipboard,
         "recentFiles.clear": .filesRecent,
         "files.thumbnail": .files,
         "files.airdrop": .files,

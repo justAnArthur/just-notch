@@ -1,8 +1,8 @@
 import { type ClipboardClip, ClipboardHistory } from '@justanarthur/modo-ui-notch'
-import { Button, Input, List } from '@justanarthur/modo-ui'
-import { type Clip, definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
+import { Button, Combobox, List } from '@justanarthur/modo-ui'
+import { type AppInfo, type Clip, definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { ClipboardList, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const FLASH = 'flashOnCopy'
 
@@ -45,36 +45,57 @@ function Copied() {
   return clip ? <ClipboardHistory.Copied clip={clip} onPin={(c) => void call('clipboard.pin', { id: c.id, pinned: true })} /> : null
 }
 
+function AppLabel({ app }: { app: AppInfo }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      {app.icon && <img src={app.icon} alt="" className="size-4 shrink-0" />}
+      <span className="truncate">{app.name}</span>
+    </span>
+  )
+}
+
 function IgnoredApps() {
   const { call } = usePlugin()
   const ignored = useTopic('clipboard')?.ignoredApps ?? []
-  const [draft, setDraft] = useState('')
-  const set = (apps: string[]) => void call('clipboard.setIgnoredApps', { apps })
-  const add = () => {
-    const id = draft.trim()
-    if (!id || ignored.includes(id)) return
-    set([...ignored, id])
-    setDraft('')
+  const [apps, setApps] = useState<AppInfo[]>([])
+  const [query, setQuery] = useState('')
+  useEffect(() => {
+    call('apps.list', {}).then(setApps, () => {})
+  }, [call])
+
+  const set = (next: string[]) => void call('clipboard.setIgnoredApps', { apps: next })
+  const byId = new Map(apps.map((app) => [app.bundleId, app]))
+  const items = apps.filter((app) => !ignored.includes(app.bundleId)).map((app) => ({ value: app.bundleId, label: <AppLabel app={app} />, textValue: app.name }))
+  const add = (id: string) => {
+    setQuery('')
+    if (id && !ignored.includes(id)) set([...ignored, id])
   }
+
   return (
     <List.Section title="Never record from" aside={`${ignored.length} apps`}>
-      {ignored.map((app) => (
-        <List.Row key={app} label={app}>
-          <Button variant="ghost" size="icon" aria-label={`Remove ${app}`} onClick={() => set(ignored.filter((a) => a !== app))}>
+      {ignored.map((id) => (
+        <List.Row key={id} label={<AppLabel app={byId.get(id) ?? { bundleId: id, name: id }} />}>
+          <Button variant="ghost" size="icon" aria-label={`Remove ${byId.get(id)?.name ?? id}`} onClick={() => set(ignored.filter((a) => a !== id))}>
             <X />
           </Button>
         </List.Row>
       ))}
-      <List.Row label="Add an app" description="Its bundle id, such as com.1password.1password. Concealed copies are always skipped.">
-        <Input
-          aria-label="Bundle id"
-          value={draft}
-          placeholder="com.example.app"
-          className="w-56"
-          onValueChange={setDraft}
-          onKeyDown={(event) => event.key === 'Enter' && add()}
-          onBlur={add}
-        />
+      <List.Row label="Add an app" description="Concealed copies, such as passwords, are always skipped.">
+        <Combobox items={items} value="" onValueChange={add} query={query} onQueryChange={setQuery}>
+          <Combobox.Input aria-label="App" placeholder="Search apps…" className="w-56" />
+          <Combobox.Content>
+            <Combobox.Empty>No app matches.</Combobox.Empty>
+            <Combobox.List>
+              {(item) =>
+                typeof item !== 'string' && (
+                  <Combobox.Item key={item.value} value={item.value}>
+                    {item.label}
+                  </Combobox.Item>
+                )
+              }
+            </Combobox.List>
+          </Combobox.Content>
+        </Combobox>
       </List.Row>
     </List.Section>
   )

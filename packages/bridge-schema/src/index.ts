@@ -228,6 +228,14 @@ export interface ClipboardState {
   ignoredApps: string[]
 }
 
+/** An app the user can pick, e.g. to ignore its copies. */
+export interface AppInfo {
+  bundleId: string
+  name: string
+  /** Small `data:` PNG of the app's icon. */
+  icon?: string
+}
+
 export interface RecentFile {
   /** Also the absolute path. */
   id: string
@@ -350,6 +358,8 @@ export interface Methods {
   'clipboard.clear': { params: Record<string, never>; result: null }
   'clipboard.setPaused': { params: { paused: boolean }; result: null }
   'clipboard.setIgnoredApps': { params: { apps: string[] }; result: null }
+  /** Running regular apps and those in the Applications folders, one per bundle id, sorted by name. */
+  'apps.list': { params: Record<string, never>; result: AppInfo[] }
 
   /** Hides a source's current files from `recentFiles`; nothing is deleted. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
@@ -412,6 +422,7 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'clipboard.clear': 'clipboard',
   'clipboard.setPaused': 'clipboard',
   'clipboard.setIgnoredApps': 'clipboard',
+  'apps.list': 'clipboard',
   'recentFiles.clear': 'files.recent',
   'files.thumbnail': 'files',
   'files.airdrop': 'files',
