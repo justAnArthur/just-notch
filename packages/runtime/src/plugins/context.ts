@@ -54,11 +54,12 @@ export function createPluginContext({ manifest }: InstalledPlugin, live = true):
       dismiss: (key) => live && dispatch({ type: 'dismiss', plugin: id, key }),
     },
     storage: {
-      get: (key) => call(id, 'storage.get', { key }) as Promise<never>,
+      // The host answers `null` for a key never set (and for a stored null): both read as unset.
+      get: async (key) => ((await call(id, 'storage.get', { key })) ?? undefined) as never,
       set: async (key, value) => {
         await call(id, 'storage.set', { key, value })
       },
-      subscribe: (key, cb) => own(on('storage.changed', (change) => change.plugin === id && change.key === key && cb(change.value as never))),
+      subscribe: (key, cb) => own(on('storage.changed', (change) => change.plugin === id && change.key === key && cb((change.value ?? undefined) as never))),
     },
     island: { get: getIslandState, subscribe: (cb) => own(subscribeIsland(cb)) },
   }

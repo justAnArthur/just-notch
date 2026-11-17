@@ -16,7 +16,7 @@ class Boundary extends Component<BoundaryProps, { failed: boolean }> {
   }
 
   componentDidCatch(error: unknown) {
-    log('error', `plugin ${this.props.plugin} view crashed: ${error instanceof Error ? error.stack ?? error.message : error}`)
+    log('error', `plugin ${this.props.plugin} view crashed: ${error instanceof Error ? `${error.message}\n${error.stack}` : error}`)
   }
 
   render() {

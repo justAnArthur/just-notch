@@ -302,7 +302,7 @@ const handlers: Handlers = {
   },
   'storage.get': ({ key }, plugin) => {
     const raw = localStorage.getItem(storageKey(plugin, key))
-    return raw === null ? undefined : JSON.parse(raw)
+    return raw === null ? null : JSON.parse(raw)
   },
   'storage.set': ({ key, value }, plugin) => {
     localStorage.setItem(storageKey(plugin, key), JSON.stringify(value))
