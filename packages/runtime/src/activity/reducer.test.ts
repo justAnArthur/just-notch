@@ -1,6 +1,6 @@
 import type { ActivitySpec, FlashSpec } from '@just-notch/sdk'
 import { describe, expect, test } from 'vitest'
-import { type ActivityAction, initialState, present, reduce } from './reducer'
+import { type ActivityAction, initialState, present, reduce, SETTINGS_TAB } from './reducer'
 
 const View = () => null
 const activity = (priority: ActivitySpec['priority'], minimal = false): ActivitySpec => ({
@@ -180,5 +180,22 @@ describe('expansion', () => {
     expect(reduce(initialState, { type: 'collapse' })).toBe(initialState)
     expect(reduce(initialState, { type: 'hide', plugin: 'x' })).toBe(initialState)
     expect(reduce(initialState, { type: 'flashEnd', id: 7 })).toBe(initialState)
+  })
+})
+
+describe('sheet', () => {
+  test('tabs open on their own snap: settings tall, the rest fitted', () => {
+    let state = reduce(initialState, { type: 'expand', tab: SETTINGS_TAB })
+    expect(state).toMatchObject({ expanded: true, tab: SETTINGS_TAB, snap: 1 })
+    state = reduce(state, { type: 'tab', tab: 'widget:clock' })
+    expect(state.snap).toBe(0)
+    state = reduce(state, { type: 'snap', snap: 1 })
+    expect(state.snap).toBe(1)
+    state = reduce(reduce(state, { type: 'collapse' }), { type: 'expand' })
+    expect(state).toMatchObject({ expanded: true, tab: 'widget:clock', snap: 0 })
+  })
+
+  test('a snap needs the island open', () => {
+    expect(reduce(initialState, { type: 'snap', snap: 1 })).toBe(initialState)
   })
 })

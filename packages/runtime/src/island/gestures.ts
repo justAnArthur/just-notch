@@ -27,13 +27,27 @@ export interface Gesture {
   /** Event sizes since the start or the commit: a push after the momentum died down starts a new gesture. */
   peak: number
   floor: number
+  /** The committed swipe: only a push the same way can start the next gesture without a quiet gap. */
+  swipe?: Swipe
 }
 
-/** Whether `s` starts a new gesture: after a quiet gap, or a fresh push once a finished one's momentum has faded. */
+const directionOf = (s: Sample): Swipe => (Math.abs(s.x) > Math.abs(s.y) ? (s.x > 0 ? 'right' : 'left') : s.y > 0 ? 'down' : 'up')
+
+/**
+ * Whether `s` starts a new gesture: after a quiet gap, or a fresh push the same way once a committed swipe's
+ * momentum has faded. Fingers turning back within one gesture never start another, so one swipe moves one tab.
+ */
 export function isFresh(g: Gesture | undefined, s: Sample): boolean {
   if (!g || s.t - g.last > QUIET_MS) return true
   const size = Math.hypot(s.x, s.y)
-  return g.owner !== 'tracking' && g.floor < g.peak / 4 && size > g.floor * 3 && size > 6
+  const sameWay = g.owner !== 'committed' || directionOf(s) === g.swipe
+  return g.owner !== 'tracking' && sameWay && g.floor < g.peak / 4 && size > g.floor * 3 && size > 6
+}
+
+/** Marks `g` committed to `swipe` at sample `s`: the rest of the gesture and its momentum belong to it. */
+export function commit(g: Gesture, s: Sample, swipe: Swipe) {
+  const size = Math.hypot(s.x, s.y)
+  Object.assign(g, { owner: 'committed', peak: size, floor: size, swipe })
 }
 
 /** `g` continued by `s` (`g` undefined: a new gesture). */
@@ -130,8 +144,7 @@ export function useSwipes(root: RefObject<HTMLElement | null>, onSwipe: (swipe: 
       }
       const swipe = swipeOf(g)
       if (!swipe) return
-      const size = Math.hypot(sample.x, sample.y)
-      Object.assign(g, { owner: 'committed', peak: size, floor: size })
+      commit(g, sample, swipe)
       handler.current(swipe)
     }
 

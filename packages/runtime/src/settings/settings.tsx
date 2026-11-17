@@ -1,10 +1,10 @@
-import type { AppPreferences, HostInfo, Methods } from '@just-notch/bridge-schema'
+import type { AppPreferences, Methods } from '@just-notch/bridge-schema'
 import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
 import { useEffect, useState } from 'react'
-import { on } from '../host/bus'
 import { call } from '../host/client'
+import { useHostInfo, useInstalled } from '../host/session'
 import { subscribeTopic } from '../host/topics'
-import { syncPlugins, usePlugins } from '../plugins/loader'
+import { usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
 
 type SystemPermission = Methods['permissions.status']['params']['permission']
@@ -40,17 +40,16 @@ function useGranted() {
   return granted
 }
 
-/** The settings window: the kit's General, Plugins, Permissions and About, and each plugin's own page. */
-export default function Settings({ info }: { info: HostInfo }) {
-  const [installed, setInstalled] = useState(info.plugins)
+/**
+ * The settings page inside the open island, on its tall snap: the kit's General, Plugins, Permissions and
+ * About, and each running plugin's own page. A disabled plugin isn't loaded, so it lists without a page.
+ */
+export default function Settings() {
+  const info = useHostInfo()
+  const installed = useInstalled()
+  const loaded = usePlugins()
   const [preferences, setPreferences] = usePreferences()
   const granted = useGranted()
-  const loaded = usePlugins()
-
-  useEffect(() => {
-    void syncPlugins(installed, false)
-  }, [installed])
-  useEffect(() => on('plugins.changed', ({ plugins }) => setInstalled(plugins)), [])
 
   const plugins = installed.map(({ manifest }) => {
     const definition = loaded.find((p) => p.installed.manifest.id === manifest.id)?.definition
@@ -63,16 +62,18 @@ export default function Settings({ info }: { info: HostInfo }) {
     }
   })
 
-  const about = [
-    { label: 'Version', value: info.version },
-    { label: 'Mode', value: info.devMode ? `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` : 'Release' },
-    { label: 'Screen', value: `${info.geometry.panel.w} × ${info.geometry.panel.h} panel, ${info.geometry.hasNotch ? 'hardware notch' : 'virtual notch'}` },
-  ]
+  const about = info
+    ? [
+        { label: 'Version', value: info.version },
+        { label: 'Mode', value: info.devMode ? `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` : 'Release' },
+        { label: 'Screen', value: info.geometry.hasNotch ? 'Hardware notch' : 'Virtual notch' },
+      ]
+    : []
 
   return (
     <SettingsWindow
       name="Just Notch"
-      className="h-screen"
+      className="size-full"
       preferences={preferences}
       onPreferencesChange={setPreferences}
       plugins={plugins}

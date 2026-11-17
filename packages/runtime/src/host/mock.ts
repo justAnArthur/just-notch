@@ -23,7 +23,7 @@ import {
  * run in a normal browser. Installed only when `window.webkit` is absent.
  */
 
-const PANEL = { w: 720, h: 320 }
+const PANEL = { w: 720, h: 620 }
 const NOTCH = { w: 185, h: 32 }
 
 const geometry: ScreenGeometry = {
@@ -230,7 +230,7 @@ const handlers: Handlers = {
     return null
   },
   'window.openSettings': () => {
-    window.open('/settings.html', 'notch-settings')
+    emit({ type: 'settings.open', payload: {} })
     return null
   },
   subscribe: ({ topic }) => {

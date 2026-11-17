@@ -33,7 +33,8 @@ final class NotchPanel: NSPanel {
 }
 
 enum ScreenLayout {
-    static let panelSize = NSSize(width: 720, height: 320)
+    /// Room for the island's tall sheet (560) below the notch; the panel is transparent and lets clicks through outside the island.
+    static let panelSize = NSSize(width: 720, height: 620)
     static let virtualNotchWidth = 200.0
     static let virtualNotchHeight = 32.0
 

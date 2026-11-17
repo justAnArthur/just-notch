@@ -1,11 +1,12 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
 import { Button, SizeProvider } from '@justanarthur/modo-ui'
-import { Puzzle, Settings } from 'lucide-react'
-import { type MutableRefObject, useEffect, useRef, useState } from 'react'
-import type { ActivityEntry } from '../activity/reducer'
-import { call } from '../host/client'
+import { Puzzle, Settings as SettingsIcon } from 'lucide-react'
+import { type MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type ActivityEntry, SETTINGS_TAB, type Snap } from '../activity/reducer'
+import { dispatch, useActivityState } from '../activity/store'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
+import Settings from '../settings/settings'
 import { useEdgeFade } from './edge-fade'
 import { type Shape, stripLayout } from './geometry'
 import TabStrip, { type Tab } from './tabs'
@@ -22,6 +23,22 @@ interface ExpandedProps {
   geometry: ScreenGeometry
   /** Set while mounted, for the swipe gestures. */
   step: MutableRefObject<TabStep | null>
+  /** The content's own height at the first snap, for the island to fit it. */
+  onFit: (height: number) => void
+}
+
+/** Reports `ref`'s height as it changes. */
+function useHeight(ref: React.RefObject<HTMLElement | null>, onHeight: (height: number) => void, active: boolean) {
+  const report = useRef(onHeight)
+  report.current = onHeight
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !active) return
+    report.current(el.getBoundingClientRect().height)
+    const observer = new ResizeObserver(([entry]) => entry && report.current(entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref, active])
 }
 
 /** The primary activity's view, then every other plugin's widget. */
@@ -48,25 +65,32 @@ function tabsOf(primary: ActivityEntry | undefined, plugins: LoadedPlugin[]): Ta
 
 /**
  * The open island: icon tabs in both wings around the notch and settings at the far right, the tab's title
- * (or the hovered tab's, as a preview), and its view in a fixed area that scrolls when the view is taller.
+ * (or the hovered tab's, as a preview), and its view. On the first snap the island fits the view (it scrolls
+ * past the snap's cap); on the tall snap the view fills it. Settings is a page of its own, on the tall snap.
  */
-export default function Expanded({ primary, shape, geometry, step }: ExpandedProps) {
+export default function Expanded({ primary, shape, geometry, step, onFit }: ExpandedProps) {
   const plugins = usePlugins()
-  const [selected, setSelected] = useState<string>()
+  const { tab: selected, snap } = useActivityState()
   const [hovered, setHovered] = useState<number | null>(null)
   const content = useRef<HTMLDivElement>(null)
+  const measure = useRef<HTMLDivElement>(null)
 
   const tabs = tabsOf(primary, plugins)
-  const index = Math.max(0, tabs.findIndex((t) => t.id === selected))
+  const settings = selected === SETTINGS_TAB
+  const found = tabs.findIndex((t) => t.id === selected)
+  const index = settings ? -1 : Math.max(0, found)
   const tab = tabs[index]
-  const title = tabs[hovered ?? index]?.label ?? tab?.label
+  const title = (hovered !== null ? tabs[hovered]?.label : undefined) ?? (settings ? 'Settings' : tab?.label)
   const layout = stripLayout(tabs.length, shape.w, geometry)
-  useEdgeFade(content, 'y', tab?.id)
+  const fills: boolean = settings || (snap as Snap) === 1
+  useEdgeFade(content, 'y', settings ? SETTINGS_TAB : tab?.id)
+  useHeight(measure, onFit, !fills)
 
+  const select = (id: string | undefined) => id && dispatch({ type: 'tab', tab: id })
   const move: TabStep = (delta) => {
-    const next = tabs[index + delta]
+    const next = settings ? (delta < 0 ? tabs.at(-1) : undefined) : tabs[index + delta]
     if (!next) return false
-    setSelected(next.id)
+    select(next.id)
     return true
   }
   useEffect(() => {
@@ -92,7 +116,7 @@ export default function Expanded({ primary, shape, geometry, step }: ExpandedPro
       <SizeProvider size="compact">
         <div className="flex shrink-0 items-center px-5" style={{ height: geometry.notch.h }}>
           {tabs.length > 0 ? (
-            <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => setSelected(tabs[i]?.id)} onHover={setHovered} />
+            <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => select(tabs[i]?.id)} onHover={setHovered} />
           ) : (
             <div className="flex-1" />
           )}
@@ -101,14 +125,17 @@ export default function Expanded({ primary, shape, geometry, step }: ExpandedPro
               variant="ghost"
               size="icon-compact"
               aria-label="Settings"
-              onClick={() => void call('runtime', 'window.openSettings', {}).catch(() => {})}
+              aria-pressed={settings}
+              className={settings ? 'text-foreground' : undefined}
+              onClick={() => (settings ? select(tabs[0]?.id) : select(SETTINGS_TAB))}
             >
-              <Settings size={14} strokeWidth={1.5} />
+              <SettingsIcon size={14} strokeWidth={settings ? 2 : 1.5} />
             </Button>
           </div>
         </div>
       </SizeProvider>
-      <div className="flex min-h-0 flex-1 flex-col pb-3">
+      {/* The bottom inset matches the sides' (INSET), so the content sits evenly in the outline. */}
+      <div className="flex min-h-0 flex-1 flex-col pb-5">
         <div className="flex h-6 shrink-0 items-end px-5">
           <span data-island-title className="truncate text-caption weight-medium text-muted-foreground">
             {title}
@@ -117,13 +144,17 @@ export default function Expanded({ primary, shape, geometry, step }: ExpandedPro
         <div
           ref={content}
           data-island-content
-          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-1 scrollbar-hide"
+          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pt-2 scrollbar-hide"
         >
-          {tab ? (
-            <PluginView key={tab.id} plugin={tab.plugin} view={tab.view} />
-          ) : (
-            <div className="flex size-full items-center justify-center text-caption text-muted-foreground">Nothing here yet</div>
-          )}
+          <div ref={measure} className={fills ? 'h-full' : undefined}>
+            {settings ? (
+              <Settings />
+            ) : tab ? (
+              <PluginView key={tab.id} plugin={tab.plugin} view={tab.view} />
+            ) : (
+              <div className="flex h-24 items-center justify-center text-caption text-muted-foreground">Nothing here yet</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

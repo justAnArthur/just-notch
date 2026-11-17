@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { COMMIT_PX, type Gesture, isFresh, type Sample, swipeOf, track } from './gestures'
+import { COMMIT_PX, commit, type Gesture, isFresh, type Sample, swipeOf, track } from './gestures'
 
 /** Feeds samples through the recognizer the way the hook does, collecting committed swipes. */
 function run(samples: Sample[]) {
@@ -10,8 +10,7 @@ function run(samples: Sample[]) {
     const swipe = swipeOf(g)
     if (swipe) {
       swipes.push(swipe)
-      const size = Math.hypot(s.x, s.y)
-      Object.assign(g, { owner: 'committed', peak: size, floor: size })
+      commit(g, s, swipe)
     }
   }
   return swipes
@@ -42,5 +41,10 @@ describe('swipes', () => {
   test('a fresh push after the momentum faded starts a new gesture without a gap', () => {
     const momentum = Array.from({ length: 12 }, (_, i) => ({ t: 128 + i * 16, x: -12 * 0.7 ** i, y: 0 }))
     expect(run([...stroke(0, 8, -12, 0), ...momentum, ...stroke(320, 8, -12, 0)])).toEqual(['left', 'left'])
+  })
+
+  test('fingers turning back within one gesture move one tab, not two', () => {
+    const slowing = Array.from({ length: 6 }, (_, i) => ({ t: 128 + i * 16, x: -12 * 0.6 ** i, y: 0 }))
+    expect(run([...stroke(0, 8, -12, 0), ...slowing, ...stroke(224, 10, 12, 0)])).toEqual(['left'])
   })
 })

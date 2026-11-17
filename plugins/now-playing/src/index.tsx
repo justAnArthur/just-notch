@@ -1,9 +1,11 @@
 import { NowPlaying, type NowPlayingOutput, type NowPlayingTrack } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
-import { definePlugin, type MediaState, type PluginContext, SwitchRow, useMediaPosition, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
+import { definePlugin, type MediaState, type PluginContext, signal, SwitchRow, useMediaPosition, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
 import { Music } from 'lucide-react'
 
 const PAUSED_MS = 30_000
+/** A new track's artwork often lands a moment after its title: the last picture stays up this long. */
+const ARTWORK_GRACE_MS = 3000
 const ANNOUNCE = 'announceTracks'
 
 const APPS: Record<string, string> = {
@@ -43,14 +45,21 @@ function outputKind(device: string): NowPlayingOutput {
 
 const trackId = (m: MediaState) => [m.title, m.artist, m.album].join('|')
 
-/** The host's media state as the kit's track; the host keeps artwork across a track's updates, so none means none. */
-function toTrack(media: MediaState, position: number, output?: string): NowPlayingTrack {
+/**
+ * The media state `activate` keeps, so a view mounting (the wings after every collapse, the tab on every open)
+ * starts with the track instead of an empty first render. `artless` is set once a track went the grace period
+ * without artwork; until then the kit keeps the last picture up (`artwork: undefined`).
+ */
+const now = signal<{ media: MediaState | null; artless: boolean }>({ media: null, artless: false })
+
+/** The host's media state as the kit's track; the host keeps artwork across a track's updates. */
+function toTrack(media: MediaState, artless: boolean, position: number, output?: string): NowPlayingTrack {
   return {
     id: trackId(media),
     title: media.title || 'Unknown title',
     artist: media.artist || undefined,
     album: media.album || undefined,
-    artwork: media.artworkUrl ?? null,
+    artwork: media.artworkUrl ?? (artless ? null : undefined),
     source: appName(media.sourceApp),
     output,
     outputKind: output ? outputKind(output) : undefined,
@@ -60,10 +69,10 @@ function toTrack(media: MediaState, position: number, output?: string): NowPlayi
 }
 
 function useTrack() {
-  const media = useTopic('media')
+  const { media, artless } = now.use()
   const output = useTopic('audio')?.outputDevice
-  const position = useMediaPosition(media)
-  return { media, track: media ? toTrack(media, position, output) : null }
+  const position = useMediaPosition(media ?? undefined)
+  return { media, track: media ? toTrack(media, artless, position, output) : null }
 }
 
 function Player() {
@@ -120,6 +129,7 @@ function activate(ctx: PluginContext) {
   let shown = false
   let hideTimer: ReturnType<typeof setTimeout> | undefined
   let lastTrack: string | undefined
+  let graceTimer: ReturnType<typeof setTimeout> | undefined
 
   const show = () => {
     clearTimeout(hideTimer)
@@ -146,11 +156,22 @@ function activate(ctx: PluginContext) {
   const stop = ctx.subscribe('media', (media) => {
     if (!media) {
       lastTrack = undefined
+      clearTimeout(graceTimer)
+      now.set({ media: null, artless: false })
       return hide()
     }
     const track = trackId(media)
     const changed = lastTrack !== undefined && track !== lastTrack
+    const fresh = track !== lastTrack
     lastTrack = track
+    if (fresh) {
+      clearTimeout(graceTimer)
+      graceTimer = setTimeout(() => {
+        const current = now.get()
+        if (current.media && trackId(current.media) === track) now.set({ ...current, artless: true })
+      }, ARTWORK_GRACE_MS)
+    }
+    now.set({ media, artless: fresh ? false : now.get().artless })
     if (media.playing) show()
     else if (shown && !hideTimer) hideTimer = setTimeout(hide, PAUSED_MS)
     if (changed && media.playing) void announce()
@@ -158,6 +179,7 @@ function activate(ctx: PluginContext) {
 
   return () => {
     stop()
+    clearTimeout(graceTimer)
     hide()
   }
 }

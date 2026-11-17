@@ -15,8 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var bridge = Bridge(plugins: plugins, events: events)
 
     private var panels: [String: PanelController] = [:]
-    private var settingsWindow: NSWindow?
-    private(set) var settingsWebView: WKWebView?
     private var statusItem: NSStatusItem?
     private var launchAtLoginItem: NSMenuItem?
     private var monitors: [Any] = []
@@ -29,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var origin: String { devServer?.absoluteString ?? SchemeHandler.origin }
 
     var webViews: [WKWebView] {
-        panels.values.map(\.webView) + [settingsWebView].compactMap { $0 }
+        panels.values.map(\.webView)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -147,24 +145,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: settings
 
+    /// Settings live in the island: the panel under the pointer (else the first) opens on its settings page.
     @objc func openSettings() {
-        if settingsWindow == nil {
-            let frame = NSRect(x: 0, y: 0, width: 760, height: 520)
-            let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                                  backing: .buffered, defer: false)
-            window.title = "Just Notch Settings"
-            window.isReleasedWhenClosed = false
-            window.minSize = NSSize(width: 640, height: 440)
-            let webView = WebViews.make(WKWebView.self, frame: frame, bridge: bridge, scheme: scheme, lifecycle: lifecycle)
-            window.contentView = webView
-            window.center()
-            WebViews.load(webView, page: "settings.html", devServer: devServer)
-            settingsWindow = window
-            settingsWebView = webView
-        }
-        // The cooperative `activate()` is declined when opened from the non-activating panel.
+        let mouse = NSEvent.mouseLocation
+        let target = panels.values.first { $0.panel.screen?.frame.contains(mouse) == true } ?? panels.values.first
+        guard let target else { return }
+        // Text fields on the page need the app active; the panel itself never activates it.
         NSApp.activate(ignoringOtherApps: true)
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        events.send("settings.open", payload: Data("{}".utf8), to: [target.webView])
     }
 
     // MARK: status item

@@ -15,7 +15,6 @@ if [ -d "$RUNTIME" ]; then
 else
   echo "warning: $RUNTIME is missing, bundling a placeholder page"
   cp "$SRCROOT/scripts/placeholder.html" "$DEST/index.html"
-  cp "$SRCROOT/scripts/placeholder.html" "$DEST/settings.html"
 fi
 
 for plugin in "$ROOT"/plugins/*/; do

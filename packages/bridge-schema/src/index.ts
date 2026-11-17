@@ -317,6 +317,7 @@ export interface Methods {
   'window.setHitRegions': { params: { rects: Rect[] }; result: null }
   /** Lets the panel become key so text fields can take focus; the runtime sets it while expanded. */
   'window.setFocusable': { params: { focusable: boolean }; result: null }
+  /** Opens the island on its settings page (the tall snap). */
   'window.openSettings': { params: Record<string, never>; result: null }
   /** Trackpad haptic feedback (Force Touch trackpads; a no-op elsewhere). `alignment` for snapping, `levelChange` for steps. */
   'window.haptic': { params: { pattern: 'generic' | 'alignment' | 'levelChange' }; result: null }
@@ -444,6 +445,8 @@ export interface Events {
   /** A `storage.set` by any web view (island or settings), so both stay in sync. Delivered to every web view. */
   'storage.changed': { plugin: string; key: string; value: unknown }
   'plugins.changed': { plugins: InstalledPlugin[] }
+  /** The app menu's Settings…, or `window.openSettings`: the island opens on its settings page. */
+  'settings.open': Record<string, never>
 }
 export type EventName = keyof Events
 

@@ -28,11 +28,11 @@ NOTCH_DEV_URL=http://localhost:5174 build/Build/Products/Debug/JustNotch.app/Con
 open --env NOTCH_DEV_URL=http://localhost:5174 build/Build/Products/Debug/JustNotch.app
 ```
 
-The panel loads `<dev>/index.html`, settings `<dev>/settings.html`, `HostInfo.devMode` is true and plugin `baseUrl`s become `<dev>/plugins/<id>/`. Debug builds make the web views inspectable: Safari → Develop → <this Mac> → Just Notch.
+The panel loads `<dev>/index.html` (settings is a page of the island), `HostInfo.devMode` is true and plugin `baseUrl`s become `<dev>/plugins/<id>/`. Debug builds make the web views inspectable: Safari → Develop → <this Mac> → Just Notch.
 
 ## where things live
 
-- `JustNotch/App` — app delegate (panels per screen, pointer monitors, settings window, status item, launch at login), main menu.
+- `JustNotch/App` — app delegate (panels per screen, pointer monitors, Settings… opening the island on its settings page, status item, launch at login), main menu.
 - `JustNotch/Window` — `NotchPanel` and the screen layout (notch rect, virtual notch), `NotchWebView` (hit testing, file drops), `PanelController` (hit regions, hover, drags).
 - `JustNotch/Bridge` — the `host` message handler (permissions, routing, subscriptions), the per-frame event dispatcher, per-plugin storage.
 - `JustNotch/Web` — the `notch://app/` scheme handler and web view setup.

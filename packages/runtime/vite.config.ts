@@ -8,7 +8,7 @@ export default defineConfig({
   build: {
     target: 'safari17',
     rolldownOptions: {
-      input: { index: resolve(import.meta.dirname, 'index.html'), settings: resolve(import.meta.dirname, 'settings.html') },
+      input: { index: resolve(import.meta.dirname, 'index.html') },
     },
   },
 })

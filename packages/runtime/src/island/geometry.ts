@@ -16,8 +16,21 @@ export interface Box {
   height: number
 }
 
-/** The open panel the notch kit's widgets are laid out for. */
+/** The open panel the notch kit's widgets are laid out for; its first snap fits the content up to `h`. */
 const EXPANDED = { w: 720, h: 240 }
+/** The tall snap, for settings and any tab pulled down. */
+const SHEET_H = 560
+/** The least the first snap shrinks to. */
+const FIT_MIN = 140
+/** The open island's height around its content: the tab row (the notch's height), the title (h-6), the gap above the content (pt-2) and the bottom inset (pb-5, as the sides). */
+export const chromeHeight = (g: ScreenGeometry) => g.notch.h + 24 + 8 + 20
+
+/** How tall the open island is: on the first snap it fits `content`, on the second it is the tall sheet. */
+export interface Sheet {
+  snap: 0 | 1
+  /** The content's own height; unknown until measured. */
+  content?: number
+}
 /** Room for one compact slot beside the notch: about as wide as the notch is tall. */
 export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
 
@@ -53,13 +66,16 @@ export function stripLayout(count: number, w: number, g: ScreenGeometry): StripL
   return { before, overflow, hole, spacer: hole.end - before * TAB_W }
 }
 
-export function shapeFor(state: IslandState, g: ScreenGeometry): Shape {
+export function shapeFor(state: IslandState, g: ScreenGeometry, sheet: Sheet = { snap: 0 }): Shape {
   const { notch, panel } = g
   const slot = slotWidth(g)
   if (state === 'idle') return { w: notch.w, h: notch.h, radius: 10, shoulder: 6 }
   if (state === 'compact' || state === 'split') return { w: notch.w + 2 * slot, h: notch.h, radius: 13, shoulder: 8 }
   if (state === 'flash') return { w: notch.w + 2 * (slot + 64), h: notch.h + 48, radius: 24, shoulder: 10 }
-  return { w: Math.min(EXPANDED.w, panel.w - 28), h: Math.min(EXPANDED.h, panel.h - 24), radius: 32, shoulder: 14 }
+  const room = panel.h - 24
+  const fit = sheet.content === undefined ? EXPANDED.h : Math.max(FIT_MIN, Math.min(EXPANDED.h, Math.ceil(sheet.content + chromeHeight(g))))
+  const h = sheet.snap === 1 ? Math.min(SHEET_H, room) : Math.min(fit, room)
+  return { w: Math.min(EXPANDED.w, panel.w - 28), h, radius: 32, shoulder: 14 }
 }
 
 /** The detached bubble of `split`: a circle as tall as the compact island, its center `x` from the island's center. */

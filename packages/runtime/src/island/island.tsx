@@ -2,7 +2,7 @@ import type { Rect, ScreenGeometry } from '@just-notch/bridge-schema'
 import type { IslandState } from '@just-notch/sdk'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'motion/react'
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { present } from '../activity/reducer'
+import { present, SETTINGS_TAB } from '../activity/reducer'
 import { dispatch, getState, holdFlash, useActivityState } from '../activity/store'
 import { on } from '../host/bus'
 import { call } from '../host/client'
@@ -118,15 +118,23 @@ function useClickToExpand(island: IslandState) {
 const haptic = (pattern: 'generic' | 'alignment') => void call('runtime', 'window.haptic', { pattern }).catch(() => {})
 
 /**
- * Swipe down opens the island, swipe up closes it; sideways, the open island changes tab and a split one
- * swaps its activities. Each committed swipe taps the trackpad.
+ * Swipe down opens the island and then pulls it to the tall snap, swipe up steps back the same way; sideways,
+ * the open island changes tab and a split one swaps its activities. Each committed swipe taps the trackpad.
  */
 function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: React.MutableRefObject<TabStep | null>) {
   useSwipes(root, (swipe: Swipe) => {
-    const { island } = present(getState())
-    if (swipe === 'down' || swipe === 'up') {
-      if ((swipe === 'down') === (island === 'expanded')) return
-      dispatch({ type: swipe === 'down' ? 'expand' : 'collapse' })
+    const state = getState()
+    const { island } = present(state)
+    const open = island === 'expanded'
+    if (swipe === 'down') {
+      if (open && state.snap === 1) return
+      dispatch(open ? { type: 'snap', snap: 1 } : { type: 'expand' })
+      return haptic('generic')
+    }
+    if (swipe === 'up') {
+      if (!open) return
+      // Settings lives on the tall snap: up from it closes the island.
+      dispatch(state.snap === 1 && state.tab !== SETTINGS_TAB ? { type: 'snap', snap: 0 } : { type: 'collapse' })
       return haptic('generic')
     }
     if (island === 'expanded' && step.current?.(swipe === 'left' ? 1 : -1)) return haptic('alignment')
@@ -184,7 +192,8 @@ function Slot({ plugin, view, box }: { plugin: string; view?: React.ComponentTyp
  * of state animates without layout.
  */
 export default function Island({ geometry }: { geometry: ScreenGeometry }) {
-  const presentation = present(useActivityState())
+  const activity = useActivityState()
+  const presentation = present(activity)
   const { island, primary, secondary, flash } = presentation
   const reduced = useReduceMotion()
   const gooId = useId()
@@ -194,8 +203,11 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   useIslandSwipes(root, step)
   const click = useClickToExpand(island)
   useEffect(() => (root.current ? trackPopups(root.current) : undefined), [])
+  useEffect(() => on('settings.open', () => dispatch({ type: 'expand', tab: SETTINGS_TAB })), [])
+  const { snap } = activity
+  const [fit, setFit] = useState<number>()
 
-  const shape = shapeFor(island, geometry)
+  const shape = shapeFor(island, geometry, { snap, content: fit })
   const split = island === 'split'
   const bubble = bubbleFor(shape, geometry, split)
   const cx = centerX(geometry)
@@ -274,7 +286,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   if (island === 'expanded') {
     content = (
       <Layer key="expanded" box={box} origin={origin} reduced={reduced}>
-        <Expanded primary={primary} shape={shape} geometry={geometry} step={step} />
+        <Expanded primary={primary} shape={shape} geometry={geometry} step={step} onFit={setFit} />
       </Layer>
     )
   } else if (island === 'flash' && flash) {

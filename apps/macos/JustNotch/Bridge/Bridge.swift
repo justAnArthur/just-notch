@@ -157,9 +157,9 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         }
     }
 
-    /// The runtime and the settings page are trusted; a plugin needs its manifest's permissions.
+    /// The runtime (which renders the settings page too) is trusted; a plugin needs its manifest's permissions.
     private func authorize(plugin: String, method: String, params: Data, from webView: WKWebView) throws {
-        if plugin == Self.runtime || webView === app.settingsWebView { return }
+        if plugin == Self.runtime { return }
         guard let manifest = plugins.manifest(plugin) else { throw ServiceError("unknown plugin \(plugin)") }
         if Schema.runtimeOnly.contains(method) { throw ServiceError("\(method) is reserved for the runtime") }
 

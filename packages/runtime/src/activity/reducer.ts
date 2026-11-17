@@ -2,6 +2,12 @@ import { type ActivitySpec, type FlashSpec, type IslandState, PRIORITY_ORDER, ty
 
 export const FLASH_MS = 2000
 
+/** The open island's snap points: 0 fits the tab's content, 1 is the tall sheet. */
+export type Snap = 0 | 1
+/** The settings page's tab id; it opens on the tall snap, every other tab on the first. */
+export const SETTINGS_TAB = 'settings'
+export const defaultSnap = (tab: string | null): Snap => (tab === SETTINGS_TAB ? 1 : 0)
+
 export interface ActivityEntry {
   plugin: string
   spec: ActivitySpec
@@ -24,6 +30,9 @@ export interface ActivityState {
   expanded: boolean
   /** The activity the user swapped into the island over the ranking; kept until the set of activities changes. */
   promoted: string | null
+  /** While expanded: how tall the sheet is, and the tab it shows (`null`: the first one). */
+  snap: Snap
+  tab: string | null
 }
 
 export type ActivityAction =
@@ -33,12 +42,16 @@ export type ActivityAction =
   | { type: 'flashEnd'; id: number }
   | { type: 'dismiss'; plugin: string; key?: string }
   | { type: 'remove'; plugin: string }
-  | { type: 'expand' }
+  /** Opens the island, on `tab` (and its default snap) when given. */
+  | { type: 'expand'; tab?: string }
   | { type: 'collapse' }
+  | { type: 'snap'; snap: Snap }
+  /** Selects a tab, at its default snap. */
+  | { type: 'tab'; tab: string }
   /** Swaps the primary activity and the bubble of a split island. */
   | { type: 'swap' }
 
-export const initialState: ActivityState = { seq: 0, activities: [], flash: null, queue: [], expanded: false, promoted: null }
+export const initialState: ActivityState = { seq: 0, activities: [], flash: null, queue: [], expanded: false, promoted: null, snap: 0, tab: null }
 
 const rankOf = (priority: Priority) => PRIORITY_ORDER.indexOf(priority)
 
@@ -96,9 +109,14 @@ export function reduce(state: ActivityState, action: ActivityAction): ActivitySt
       return state.flash?.plugin === action.plugin ? advance(kept) : kept
     }
     case 'expand':
-      return state.expanded ? state : { ...state, expanded: true }
+      if (action.tab !== undefined) return { ...state, expanded: true, tab: action.tab, snap: defaultSnap(action.tab) }
+      return state.expanded ? state : { ...state, expanded: true, snap: defaultSnap(state.tab) }
     case 'collapse':
       return state.expanded ? { ...state, expanded: false } : state
+    case 'snap':
+      return state.expanded && state.snap !== action.snap ? { ...state, snap: action.snap } : state
+    case 'tab':
+      return state.tab === action.tab ? state : { ...state, tab: action.tab, snap: defaultSnap(action.tab) }
     case 'swap': {
       const { primary, secondary } = present(state)
       // The primary becomes the bubble, so it needs a minimal view of its own.
