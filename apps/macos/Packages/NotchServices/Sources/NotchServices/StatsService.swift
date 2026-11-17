@@ -74,27 +74,97 @@ enum Memory {
     }
 
     static var total: Double { Double(ProcessInfo.processInfo.physicalMemory) }
+
+    static func pressure() -> StatsState.Pressure {
+        var level: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        guard sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, nil, 0) == 0 else { return .normal }
+        return switch level {
+        case 4: .critical
+        case 2: .warning
+        default: .normal
+        }
+    }
 }
 
-/// `stats` topic, sampled every 2 s while subscribed. CPU and network are
-/// deltas between two samples, so the first value follows the baseline by 1 s.
+enum Disk {
+    /// Startup volume; available counts purgeable space, as Finder shows it.
+    static func read() -> (free: Double, total: Double) {
+        let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey])
+        return (Double(values?.volumeAvailableCapacityForImportantUsage ?? 0), Double(values?.volumeTotalCapacity ?? 0))
+    }
+}
+
+/// CPU time per process. Processes of other users can't be read and are skipped.
+struct ProcessTimes {
+    struct Entry { var name: String; var cpuNs: Double; var memory: Double }
+
+    var entries: [Int32: Entry] = [:]
+    var at = Date()
+
+    private static let nsPerTick: Double = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return Double(info.numer) / Double(info.denom)
+    }()
+
+    static func read() -> ProcessTimes {
+        let capacity = Int(proc_listallpids(nil, 0)) + 32
+        var pids = [Int32](repeating: 0, count: capacity)
+        let count = Int(proc_listallpids(&pids, Int32(capacity * MemoryLayout<Int32>.size)))
+        var times = ProcessTimes()
+        var info = proc_taskinfo()
+        let infoSize = Int32(MemoryLayout<proc_taskinfo>.size)
+        var name = [CChar](repeating: 0, count: 256)
+        for pid in pids.prefix(max(count, 0)) where pid > 0 {
+            guard proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, infoSize) == infoSize else { continue }
+            guard proc_name(pid, &name, UInt32(name.count)) > 0 else { continue }
+            let ticks = Double(info.pti_total_user + info.pti_total_system)
+            times.entries[pid] = Entry(name: String(cString: name), cpuNs: ticks * nsPerTick, memory: Double(info.pti_resident_size))
+        }
+        return times
+    }
+
+    /// The busiest processes between two reads, as shares of all cores.
+    static func top(_ limit: Int, from old: ProcessTimes, to new: ProcessTimes) -> [ProcessSample] {
+        let budget = max(new.at.timeIntervalSince(old.at), 0.001) * 1e9 * Double(ProcessInfo.processInfo.activeProcessorCount)
+        return new.entries.compactMap { pid, entry -> ProcessSample? in
+            guard let before = old.entries[pid] else { return nil }
+            let cpu = max(entry.cpuNs - before.cpuNs, 0) / budget
+            return ProcessSample(pid: pid, name: entry.name, cpu: (cpu * 1000).rounded() / 1000, memory: entry.memory)
+        }
+        .sorted { $0.cpu != $1.cpu ? $0.cpu > $1.cpu : $0.memory > $1.memory }
+        .prefix(limit)
+        .map { $0 }
+    }
+}
+
+/// `stats` and `processes` topics, sampled every 2 s while either is subscribed.
+/// CPU, network and per-process CPU are deltas between two samples, so the
+/// first value follows the baseline by 1 s.
 @MainActor
 public final class StatsService: NotchService {
-    public let topics = ["stats"]
+    public let topics = ["stats", "processes"]
     public weak var sink: ServiceSink?
 
     static let firstSample: TimeInterval = 1
     static let interval: TimeInterval = 2
+    static let topProcesses = 8
 
+    private var active: Set<String> = []
     private var timer: Timer?
     private var cpu: CPUTicks?
     private var net: [String: NetCounters] = [:]
+    private var processes: ProcessTimes?
     private var sampledAt = Date()
     private var latest = Latest<StatsState>()
+    private var latestProcesses = Latest<[ProcessSample]>()
 
     public init() {}
 
     public func start(topic: String) {
+        active.insert(topic)
+        if topic == "processes" { processes = ProcessTimes.read() }
         guard timer == nil else { return }
         baseline()
         let timer = Timer(fire: Date(timeIntervalSinceNow: Self.firstSample), interval: Self.interval, repeats: true) { [weak self] _ in
@@ -105,13 +175,20 @@ public final class StatsService: NotchService {
     }
 
     public func stop(topic: String) {
+        active.remove(topic)
+        if topic == "processes" {
+            processes = nil
+            latestProcesses.reset()
+        } else {
+            latest.reset()
+        }
+        guard active.isEmpty else { return }
         timer?.invalidate()
         timer = nil
-        latest.reset()
     }
 
     public func snapshot(topic: String) async -> Data? {
-        latest.value?.json()
+        topic == "processes" ? latestProcesses.value?.json() : latest.value?.json()
     }
 
     private func baseline() {
@@ -121,6 +198,11 @@ public final class StatsService: NotchService {
     }
 
     private func sample() {
+        if active.contains("stats") { sampleStats() }
+        if active.contains("processes") { sampleProcesses() }
+    }
+
+    private func sampleStats() {
         let previousCPU = cpu
         let previousNet = net
         let elapsed = Date().timeIntervalSince(sampledAt)
@@ -129,14 +211,28 @@ public final class StatsService: NotchService {
         let usage = if let previousCPU, let cpu { CPUTicks.usage(from: previousCPU, to: cpu) } else { 0.0 }
         let moved = NetCounters.delta(from: previousNet, to: net)
         let seconds = max(elapsed, 0.001)
+        let disk = Disk.read()
         let state = StatsState(
             cpu: (usage * 1000).rounded() / 1000,
             memoryUsed: Memory.used(),
             memoryTotal: Memory.total,
+            memoryPressure: Memory.pressure(),
             netInBps: (moved.bytesIn / seconds).rounded(),
-            netOutBps: (moved.bytesOut / seconds).rounded()
+            netOutBps: (moved.bytesOut / seconds).rounded(),
+            diskFree: disk.free,
+            diskTotal: disk.total,
+            uptimeS: ProcessInfo.processInfo.systemUptime.rounded()
         )
         guard latest.update(state), let data = state.json() else { return }
         sink?.publish(topic: "stats", value: data)
+    }
+
+    private func sampleProcesses() {
+        let now = ProcessTimes.read()
+        defer { processes = now }
+        guard let processes else { return }
+        let top = ProcessTimes.top(Self.topProcesses, from: processes, to: now)
+        guard latestProcesses.update(top), let data = top.json() else { return }
+        sink?.publish(topic: "processes", value: data)
     }
 }

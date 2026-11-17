@@ -33,6 +33,9 @@ export type Permission =
   | 'files'
   | 'bluetooth.read'
   | 'stats.read'
+  | 'weather.read'
+  | 'clipboard'
+  | 'files.recent'
 
 /** `manifest.json` at a plugin's root. */
 export interface PluginManifest {
@@ -131,8 +134,125 @@ export interface StatsState {
   cpu: number // 0…1
   memoryUsed: number // bytes
   memoryTotal: number
+  memoryPressure: 'normal' | 'warning' | 'critical'
   netInBps: number
   netOutBps: number
+  /** Startup volume, bytes; free counts purgeable space as Finder does. */
+  diskFree: number
+  diskTotal: number
+  uptimeS: number
+}
+
+/** The busiest processes by CPU, sampled while `processes` is subscribed. */
+export interface ProcessSample {
+  pid: number
+  name: string
+  /** Share of all cores, 0…1. */
+  cpu: number
+  /** Resident memory, bytes. */
+  memory: number
+}
+
+// Weather: Open-Meteo, metric units (°C, km/h); conditions are WMO weather codes.
+
+export interface WeatherNow {
+  time: number
+  temperature: number
+  apparent: number
+  code: number
+  isDay: boolean
+  wind: number
+  humidity: number // %
+  uv: number
+}
+
+export interface WeatherHour {
+  time: number
+  temperature: number
+  code: number
+  isDay: boolean
+  precipitation: number // probability, %
+}
+
+export interface WeatherDay {
+  /** Local midnight of the day. */
+  date: number
+  code: number
+  high: number
+  low: number
+  precipitation: number // probability, %
+}
+
+export type WeatherLocation = { mode: 'auto' } | { mode: 'city'; city: string }
+
+export interface WeatherState {
+  /** Location Services; `granted` regardless when the location is a city. */
+  access: 'granted' | 'denied' | 'undetermined'
+  /** `offline` / `error` keep the last forecast. */
+  status: 'ready' | 'loading' | 'error' | 'offline'
+  setting: WeatherLocation
+  /** City name of the forecast's place. */
+  location?: string
+  current?: WeatherNow
+  /** The next 24 hours, from the current one. */
+  hours: WeatherHour[]
+  /** 7 days, today first. */
+  days: WeatherDay[]
+  updatedAt?: number
+}
+
+export type ClipKind = 'text' | 'link' | 'image' | 'color' | 'file'
+
+export interface Clip {
+  id: string
+  kind: ClipKind
+  /** Text, URL, `#rrggbb`, or the file path; an image's dimensions (`1280×720`). */
+  content: string
+  /** File name, or a byte size for images. */
+  detail?: string
+  /** `data:` URL thumbnail of an image or file. */
+  preview?: string
+  /** Name of the app it was copied in. */
+  app?: string
+  copiedAt: number
+  pinned: boolean
+}
+
+export interface ClipboardState {
+  /** Newest first, pinned clips included. */
+  clips: Clip[]
+  paused: boolean
+  /** Bundle ids whose copies are never recorded. */
+  ignoredApps: string[]
+}
+
+export interface RecentFile {
+  /** Also the absolute path. */
+  id: string
+  name: string
+  size: number // bytes
+  addedAt: number
+  source: 'downloads' | 'screenshots'
+  /** Host the file was downloaded from. */
+  from?: string
+}
+
+/** A download still being written (`.download`, `.crdownload`, `.part`). */
+export interface ActiveDownload {
+  id: string
+  name: string
+  received: number // bytes
+  /** Bytes per second over the last sample. */
+  rate: number
+  from?: string
+}
+
+export interface RecentFilesState {
+  /** The Downloads and screenshot folders are privacy-protected; `denied` until the user allows them. */
+  access: 'granted' | 'denied'
+  /** Newest first, per source at most 20, after the source's last `recentFiles.clear`. */
+  files: RecentFile[]
+  downloads: ActiveDownload[]
 }
 
 export interface DisplayState {
@@ -149,6 +269,10 @@ export interface Topics {
   calendar: CalendarState
   bluetooth: BluetoothDevice[]
   stats: StatsState
+  processes: ProcessSample[]
+  weather: WeatherState
+  clipboard: ClipboardState
+  recentFiles: RecentFilesState
 }
 export type Topic = keyof Topics
 
@@ -160,7 +284,11 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
   calendar: 'calendar.read',
   bluetooth: 'bluetooth.read',
   stats: 'stats.read',
+  processes: 'stats.read',
   display: 'display.control',
+  weather: 'weather.read',
+  clipboard: 'clipboard',
+  recentFiles: 'files.recent',
 }
 
 // ── Methods: JS → Swift requests ──
@@ -203,6 +331,22 @@ export interface Methods {
 
   'calendar.requestAccess': { params: Record<string, never>; result: { granted: boolean } }
 
+  'weather.requestAccess': { params: Record<string, never>; result: { granted: boolean } }
+  'weather.setLocation': { params: WeatherLocation; result: null }
+  'weather.refresh': { params: Record<string, never>; result: null }
+
+  /** Puts a clip back on the pasteboard. */
+  'clipboard.copy': { params: { id: string }; result: null }
+  'clipboard.delete': { params: { id: string }; result: null }
+  'clipboard.pin': { params: { id: string; pinned: boolean }; result: null }
+  /** Drops every clip but the pinned ones. */
+  'clipboard.clear': { params: Record<string, never>; result: null }
+  'clipboard.setPaused': { params: { paused: boolean }; result: null }
+  'clipboard.setIgnoredApps': { params: { apps: string[] }; result: null }
+
+  /** Hides a source's current files from `recentFiles`; nothing is deleted. */
+  'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
+
   /** QuickLook thumbnail as a `data:` URL. */
   'files.thumbnail': { params: { path: string; size: number }; result: { url: string } }
   'files.airdrop': { params: { paths: string[] }; result: null }
@@ -210,6 +354,10 @@ export interface Methods {
   'files.open': { params: { path: string }; result: null }
   /** Call from a `pointerdown`: the host starts a native drag of these files out of the panel. */
   'files.beginDrag': { params: { paths: string[] }; result: null }
+  /** Puts the files on the pasteboard, as Finder's Copy does. */
+  'files.copy': { params: { paths: string[] }; result: null }
+  /** Moves the file to the Trash. */
+  'files.trash': { params: { path: string }; result: null }
 
   /** Per-plugin JSON storage persisted by the host. */
   'storage.get': { params: { key: string }; result: unknown }
@@ -217,7 +365,7 @@ export interface Methods {
 
   'system.openUrl': { params: { url: string }; result: null }
   'permissions.status': {
-    params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' }
+    params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' }
     result: { granted: boolean }
   }
 
@@ -248,11 +396,23 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'display.setKeyboardBacklight': 'display.control',
   'hud.setEnabled': 'hud',
   'calendar.requestAccess': 'calendar.read',
+  'weather.requestAccess': 'weather.read',
+  'weather.setLocation': 'weather.read',
+  'weather.refresh': 'weather.read',
+  'clipboard.copy': 'clipboard',
+  'clipboard.delete': 'clipboard',
+  'clipboard.pin': 'clipboard',
+  'clipboard.clear': 'clipboard',
+  'clipboard.setPaused': 'clipboard',
+  'clipboard.setIgnoredApps': 'clipboard',
+  'recentFiles.clear': 'files.recent',
   'files.thumbnail': 'files',
   'files.airdrop': 'files',
   'files.reveal': 'files',
   'files.open': 'files',
   'files.beginDrag': 'files',
+  'files.copy': 'files',
+  'files.trash': 'files',
 }
 
 /** Methods only the runtime (`plugin: 'runtime'`) may call. */

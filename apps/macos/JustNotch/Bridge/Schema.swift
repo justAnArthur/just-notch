@@ -30,6 +30,9 @@ enum Permission: String, Codable {
     case files
     case bluetoothRead = "bluetooth.read"
     case statsRead = "stats.read"
+    case weatherRead = "weather.read"
+    case clipboard
+    case filesRecent = "files.recent"
 }
 
 struct PluginManifest: Codable, Equatable {
@@ -92,7 +95,11 @@ enum Schema {
         "calendar": .calendarRead,
         "bluetooth": .bluetoothRead,
         "stats": .statsRead,
+        "processes": .statsRead,
         "display": .displayControl,
+        "weather": .weatherRead,
+        "clipboard": .clipboard,
+        "recentFiles": .filesRecent,
     ]
 
     static let methodPermission: [String: Permission] = [
@@ -102,11 +109,23 @@ enum Schema {
         "display.setKeyboardBacklight": .displayControl,
         "hud.setEnabled": .hud,
         "calendar.requestAccess": .calendarRead,
+        "weather.requestAccess": .weatherRead,
+        "weather.setLocation": .weatherRead,
+        "weather.refresh": .weatherRead,
+        "clipboard.copy": .clipboard,
+        "clipboard.delete": .clipboard,
+        "clipboard.pin": .clipboard,
+        "clipboard.clear": .clipboard,
+        "clipboard.setPaused": .clipboard,
+        "clipboard.setIgnoredApps": .clipboard,
+        "recentFiles.clear": .filesRecent,
         "files.thumbnail": .files,
         "files.airdrop": .files,
         "files.reveal": .files,
         "files.open": .files,
         "files.beginDrag": .files,
+        "files.copy": .files,
+        "files.trash": .files,
     ]
 
     static let runtimeOnly: Set<String> = [

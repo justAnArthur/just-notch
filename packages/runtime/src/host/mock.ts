@@ -1,6 +1,7 @@
 import {
   type AppPreferences,
   type BluetoothDevice,
+  type Clip,
   type HostEvent,
   type HostInfo,
   type HostRequest,
@@ -47,6 +48,10 @@ function artwork(seed: number) {
 
 let track = 0
 const hour = 3_600_000
+const day = 24 * hour
+const midnight = new Date().setHours(0, 0, 0, 0)
+const thisHour = new Date().setMinutes(0, 0, 0)
+const WEATHER_CODES = [0, 1, 2, 3, 61, 3, 2, 1]
 const values: Topics = {
   media: {
     playing: true,
@@ -71,7 +76,55 @@ const values: Topics = {
     { id: 'kb', name: 'Magic Keyboard', kind: 'keyboard', connected: true, batteryPercent: 64 },
     { id: 'airpods', name: 'AirPods Pro', kind: 'headphones', connected: false },
   ],
-  stats: { cpu: 0.18, memoryUsed: 9.2e9, memoryTotal: 16e9, netInBps: 120_000, netOutBps: 24_000 },
+  stats: {
+    cpu: 0.18,
+    memoryUsed: 9.2e9,
+    memoryTotal: 16e9,
+    memoryPressure: 'normal',
+    netInBps: 120_000,
+    netOutBps: 24_000,
+    diskFree: 212e9,
+    diskTotal: 494e9,
+    uptimeS: 3 * 86_400 + 4 * 3_600,
+  },
+  processes: [
+    { pid: 812, name: 'Safari', cpu: 0.09, memory: 1.4e9 },
+    { pid: 640, name: 'WindowServer', cpu: 0.05, memory: 6.1e8 },
+    { pid: 1204, name: 'Xcode', cpu: 0.03, memory: 2.2e9 },
+  ],
+  weather: {
+    access: 'granted',
+    status: 'ready',
+    setting: { mode: 'auto' },
+    location: 'Bratislava',
+    current: { time: Date.now(), temperature: 7, apparent: 4, code: 2, isDay: true, wind: 14, humidity: 71, uv: 1 },
+    hours: Array.from({ length: 24 }, (_, i) => {
+      const time = thisHour + i * hour
+      const h = new Date(time).getHours()
+      return { time, temperature: 7 - Math.abs(14 - h) / 3, code: WEATHER_CODES[i % WEATHER_CODES.length], isDay: h >= 7 && h < 17, precipitation: i > 3 && i < 7 ? 60 : 10 }
+    }),
+    days: Array.from({ length: 7 }, (_, i) => ({ date: midnight + i * day, code: WEATHER_CODES[(i * 3) % WEATHER_CODES.length], high: 9 - (i % 3), low: 2 - (i % 2), precipitation: (i * 23) % 80 })),
+    updatedAt: Date.now(),
+  },
+  clipboard: {
+    paused: false,
+    ignoredApps: ['com.1password.1password'],
+    clips: [
+      { id: 'c1', kind: 'link', content: 'https://justanarthur.github.io/modo/notch/', app: 'Safari', copiedAt: Date.now() - 60_000, pinned: false },
+      { id: 'c2', kind: 'text', content: 'bun run notch build --cwd plugins/weather', app: 'Terminal', copiedAt: Date.now() - 8 * 60_000, pinned: true },
+      { id: 'c3', kind: 'color', content: '#f97316', app: 'Figma', copiedAt: Date.now() - 30 * 60_000, pinned: false },
+      { id: 'c4', kind: 'image', content: '1280×720', detail: '412 KB', preview: artwork(4), app: 'Preview', copiedAt: Date.now() - 2 * hour, pinned: false },
+    ],
+  },
+  recentFiles: {
+    access: 'granted',
+    files: [
+      { id: '/Users/me/Downloads/invoice-2026-11.pdf', name: 'invoice-2026-11.pdf', size: 184_000, addedAt: Date.now() - 5 * 60_000, source: 'downloads', from: 'mail.example.com' },
+      { id: '/Users/me/Desktop/Screenshot 2026-11-17 at 10.12.04.png', name: 'Screenshot 2026-11-17 at 10.12.04.png', size: 1_240_000, addedAt: Date.now() - 20 * 60_000, source: 'screenshots' },
+      { id: '/Users/me/Downloads/modo-kit.zip', name: 'modo-kit.zip', size: 8_400_000, addedAt: Date.now() - 3 * hour, source: 'downloads', from: 'github.com' },
+    ],
+    downloads: [],
+  },
 }
 
 const subscribed = new Set<Topic>()
@@ -103,6 +156,11 @@ function broadcast(event: HostEvent) {
 function publish<T extends Topic>(topic: T, value: Topics[T]) {
   values[topic] = value
   if (subscribed.has(topic)) emit({ type: 'topic', payload: { topic, value } as HostEvent['payload'] } as HostEvent)
+}
+
+function setClips(clips: Clip[]) {
+  publish('clipboard', { ...values.clipboard, clips })
+  return null
 }
 
 function mediaNow(): MediaState | null {
@@ -207,11 +265,41 @@ const handlers: Handlers = {
   },
   'hud.setEnabled': ({ enabled }) => ({ enabled }),
   'calendar.requestAccess': () => ({ granted: true }),
+  'weather.requestAccess': () => ({ granted: true }),
+  'weather.setLocation': (setting) => {
+    publish('weather', { ...values.weather, setting, location: setting.mode === 'city' ? setting.city : 'Bratislava' })
+    return null
+  },
+  'weather.refresh': () => {
+    publish('weather', { ...values.weather, updatedAt: Date.now() })
+    return null
+  },
+  'clipboard.copy': () => null,
+  'clipboard.delete': ({ id }) => setClips(values.clipboard.clips.filter((c) => c.id !== id)),
+  'clipboard.pin': ({ id, pinned }) => setClips(values.clipboard.clips.map((c) => (c.id === id ? { ...c, pinned } : c))),
+  'clipboard.clear': () => setClips(values.clipboard.clips.filter((c) => c.pinned)),
+  'clipboard.setPaused': ({ paused }) => {
+    publish('clipboard', { ...values.clipboard, paused })
+    return null
+  },
+  'clipboard.setIgnoredApps': ({ apps }) => {
+    publish('clipboard', { ...values.clipboard, ignoredApps: apps })
+    return null
+  },
+  'recentFiles.clear': ({ source }) => {
+    publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
+    return null
+  },
   'files.thumbnail': ({ path }) => ({ url: artwork(path.length) }),
   'files.airdrop': () => null,
   'files.reveal': () => null,
   'files.open': () => null,
   'files.beginDrag': () => null,
+  'files.copy': () => null,
+  'files.trash': ({ path }) => {
+    publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.id !== path) })
+    return null
+  },
   'storage.get': ({ key }, plugin) => {
     const raw = localStorage.getItem(storageKey(plugin, key))
     return raw === null ? undefined : JSON.parse(raw)

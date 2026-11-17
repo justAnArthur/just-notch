@@ -39,11 +39,16 @@ targets:
         NSCalendarsFullAccessUsageDescription: Just Notch shows your upcoming events in the notch.
         NSAppleEventsUsageDescription: Just Notch controls media playback in your music apps.
         NSBluetoothAlwaysUsageDescription: Just Notch shows your Bluetooth devices and their battery.
+        NSLocationUsageDescription: Just Notch shows the weather where you are.
+        NSLocationWhenInUseUsageDescription: Just Notch shows the weather where you are.
+        NSDownloadsFolderUsageDescription: Just Notch shows your recent downloads.
+        NSDesktopFolderUsageDescription: Just Notch shows your recent screenshots.
     entitlements:
       path: JustNotch/JustNotch.entitlements
       properties:
         com.apple.security.automation.apple-events: true
         com.apple.security.personal-information.calendars: true
+        com.apple.security.personal-information.location: true
     settings:
       base:
         PRODUCT_NAME: JustNotch

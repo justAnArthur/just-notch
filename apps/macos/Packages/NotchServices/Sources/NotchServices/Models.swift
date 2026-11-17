@@ -58,11 +58,115 @@ public struct BluetoothDevice: Codable, Equatable, Sendable {
 }
 
 public struct StatsState: Codable, Equatable, Sendable {
+    public enum Pressure: String, Codable, Sendable { case normal, warning, critical }
     public var cpu: Double
     public var memoryUsed: Double
     public var memoryTotal: Double
+    public var memoryPressure: Pressure
     public var netInBps: Double
     public var netOutBps: Double
+    public var diskFree: Double
+    public var diskTotal: Double
+    public var uptimeS: Double
+}
+
+public struct ProcessSample: Codable, Equatable, Sendable {
+    public var pid: Int32
+    public var name: String
+    public var cpu: Double
+    public var memory: Double
+}
+
+public struct WeatherNow: Codable, Equatable, Sendable {
+    public var time: Double
+    public var temperature: Double
+    public var apparent: Double
+    public var code: Int
+    public var isDay: Bool
+    public var wind: Double
+    public var humidity: Double
+    public var uv: Double
+}
+
+public struct WeatherHour: Codable, Equatable, Sendable {
+    public var time: Double
+    public var temperature: Double
+    public var code: Int
+    public var isDay: Bool
+    public var precipitation: Double
+}
+
+public struct WeatherDay: Codable, Equatable, Sendable {
+    public var date: Double
+    public var code: Int
+    public var high: Double
+    public var low: Double
+    public var precipitation: Double
+}
+
+/// `{ mode: 'auto' } | { mode: 'city'; city: string }`.
+public struct WeatherLocation: Codable, Equatable, Sendable {
+    public enum Mode: String, Codable, Sendable { case auto, city }
+    public var mode: Mode
+    public var city: String?
+
+    public static let auto = WeatherLocation(mode: .auto)
+}
+
+public struct WeatherState: Codable, Equatable, Sendable {
+    public enum Access: String, Codable, Sendable { case granted, denied, undetermined }
+    public enum Status: String, Codable, Sendable { case ready, loading, error, offline }
+    public var access: Access
+    public var status: Status
+    public var setting: WeatherLocation
+    public var location: String?
+    public var current: WeatherNow?
+    public var hours: [WeatherHour]
+    public var days: [WeatherDay]
+    public var updatedAt: Double?
+}
+
+public struct Clip: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable { case text, link, image, color, file }
+    public var id: String
+    public var kind: Kind
+    public var content: String
+    public var detail: String?
+    public var preview: String?
+    public var app: String?
+    public var copiedAt: Double
+    public var pinned: Bool
+}
+
+public struct ClipboardState: Codable, Equatable, Sendable {
+    public var clips: [Clip]
+    public var paused: Bool
+    public var ignoredApps: [String]
+}
+
+public struct RecentFile: Codable, Equatable, Sendable {
+    public enum Source: String, Codable, Sendable { case downloads, screenshots }
+    public var id: String
+    public var name: String
+    public var size: Double
+    public var addedAt: Double
+    public var source: Source
+    public var from: String?
+}
+
+public struct ActiveDownload: Codable, Equatable, Sendable {
+    public var id: String
+    public var name: String
+    public var received: Double
+    public var rate: Double
+    public var from: String?
+}
+
+public struct RecentFilesState: Codable, Equatable, Sendable {
+    public enum Access: String, Codable, Sendable { case granted, denied }
+    public var access: Access
+    public var files: [RecentFile]
+    public var downloads: [ActiveDownload]
 }
 
 public struct DisplayState: Codable, Equatable, Sendable {
@@ -116,6 +220,11 @@ struct ThumbnailParams: Decodable { var path: String; var size: Double }
 struct URLResult: Encodable { var url: String }
 struct PathsParams: Decodable { var paths: [String] }
 struct PathParams: Decodable { var path: String }
+struct IdParams: Decodable { var id: String }
+struct PinParams: Decodable { var id: String; var pinned: Bool }
+struct PausedParams: Decodable { var paused: Bool }
+struct AppsParams: Decodable { var apps: [String] }
+struct SourceParams: Decodable { var source: RecentFile.Source }
 
 func decode<T: Decodable>(_ type: T.Type, _ params: Data) throws -> T {
     do { return try JSONDecoder().decode(type, from: params) } catch { throw ServiceError("invalid params: \(error)") }

@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import CoreBluetooth
+import CoreLocation
 import EventKit
 import NotchServices
 import WebKit
@@ -229,6 +230,8 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             return EKEventStore.authorizationStatus(for: .event) == .fullAccess
         case "bluetooth":
             return CBManager.authorization == .allowedAlways
+        case "location":
+            return [.authorizedAlways, .authorized].contains(CLLocationManager().authorizationStatus)
         case "automation":
             // Music is the usual automation target (media control); there is no app-independent check.
             let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.Music")

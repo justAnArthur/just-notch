@@ -35,6 +35,14 @@
 	<string>Just Notch shows your Bluetooth devices and their battery.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Just Notch shows your upcoming events in the notch.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Just Notch shows your recent screenshots.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Just Notch shows your recent downloads.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Just Notch shows the weather where you are.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Just Notch shows the weather where you are.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

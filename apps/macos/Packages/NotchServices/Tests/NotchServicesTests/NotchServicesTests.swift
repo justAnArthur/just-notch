@@ -46,7 +46,28 @@ struct ShapeTests {
     }
 
     @Test func stats() throws {
-        #expect(try keys(StatsState(cpu: 0, memoryUsed: 0, memoryTotal: 0, netInBps: 0, netOutBps: 0)) == ["cpu", "memoryUsed", "memoryTotal", "netInBps", "netOutBps"])
+        let state = StatsState(cpu: 0, memoryUsed: 0, memoryTotal: 0, memoryPressure: .normal, netInBps: 0, netOutBps: 0, diskFree: 0, diskTotal: 0, uptimeS: 0)
+        #expect(try keys(state) == ["cpu", "memoryUsed", "memoryTotal", "memoryPressure", "netInBps", "netOutBps", "diskFree", "diskTotal", "uptimeS"])
+        #expect(try keys(ProcessSample(pid: 1, name: "x", cpu: 0, memory: 0)) == ["pid", "name", "cpu", "memory"])
+    }
+
+    @Test func weather() throws {
+        let state = WeatherState(access: .granted, status: .ready, setting: .auto, hours: [], days: [])
+        #expect(try keys(state) == ["access", "status", "setting", "hours", "days"])
+        #expect(try keys(WeatherLocation.auto) == ["mode"])
+        #expect(try keys(WeatherLocation(mode: .city, city: "Oslo")) == ["mode", "city"])
+    }
+
+    @Test func clipboard() throws {
+        let clip = Clip(id: "1", kind: .text, content: "x", copiedAt: 1, pinned: false)
+        #expect(try keys(clip) == ["id", "kind", "content", "copiedAt", "pinned"])
+        #expect(try keys(ClipboardState(clips: [], paused: false, ignoredApps: [])) == ["clips", "paused", "ignoredApps"])
+    }
+
+    @Test func recentFiles() throws {
+        let file = RecentFile(id: "/a", name: "a", size: 1, addedAt: 1, source: .downloads, from: "example.com")
+        #expect(try keys(file) == ["id", "name", "size", "addedAt", "source", "from"])
+        #expect(try keys(RecentFilesState(access: .granted, files: [], downloads: [])) == ["access", "files", "downloads"])
     }
 
     @Test func display() throws {
@@ -255,5 +276,43 @@ struct ShapeTests {
         #expect(try lastArtwork(sink) != nil)
         backend.onChange?(raw("Two"))
         #expect(try lastArtwork(sink) == nil)
+    }
+}
+
+@Suite("New services") @MainActor
+struct NewServiceTests {
+    @Test func openMeteoParse() throws {
+        let json = """
+        {"current":{"time":1700000000,"temperature_2m":7.5,"apparent_temperature":4.1,"weather_code":2,"is_day":1,"wind_speed_10m":14,"relative_humidity_2m":71,"uv_index":1.2},
+         "hourly":{"time":[1699995600,1699999200,1700002800],"temperature_2m":[6,7,null],"weather_code":[1,2,3],"precipitation_probability":[0,10,20],"is_day":[1,1,0]},
+         "daily":{"time":[1699920000],"weather_code":[61],"temperature_2m_max":[9],"temperature_2m_min":[2],"precipitation_probability_max":[80]}}
+        """
+        let forecast = try WeatherService.parse(Data(json.utf8), now: 1_700_000_000)
+        #expect(forecast.current.time == 1_700_000_000_000)
+        #expect(forecast.current.isDay)
+        // 1699995600 is the hour before; the null-temperature hour is dropped.
+        #expect(forecast.hours.map(\.time) == [1_699_999_200_000])
+        #expect(forecast.days.first?.code == 61)
+    }
+
+    @Test func clipKinds() {
+        #expect(ClipboardService.kind(of: "#FF8800") == .color)
+        #expect(ClipboardService.kind(of: " https://example.com/a?b \n") == .link)
+        #expect(ClipboardService.kind(of: "see https://example.com") == .text)
+        #expect(ClipboardService.kind(of: "file:///tmp/x") == .text)
+        #expect(ClipboardService.hex(NSColor(srgbRed: 1, green: 0.5, blue: 0, alpha: 1)) == "#ff8000")
+    }
+
+    @Test func busiestProcesses() {
+        var old = ProcessTimes()
+        old.at = Date(timeIntervalSince1970: 0)
+        old.entries = [1: .init(name: "a", cpuNs: 0, memory: 10), 2: .init(name: "b", cpuNs: 0, memory: 20), 3: .init(name: "gone", cpuNs: 0, memory: 0)]
+        var new = ProcessTimes()
+        new.at = Date(timeIntervalSince1970: 1)
+        let cores = Double(ProcessInfo.processInfo.activeProcessorCount)
+        new.entries = [1: .init(name: "a", cpuNs: 1e9 * cores / 2, memory: 10), 2: .init(name: "b", cpuNs: 1e9 * cores / 4, memory: 20), 4: .init(name: "new", cpuNs: 5e9, memory: 0)]
+        let top = ProcessTimes.top(5, from: old, to: new)
+        #expect(top.map(\.name) == ["a", "b"])
+        #expect(top.first?.cpu == 0.5)
     }
 }

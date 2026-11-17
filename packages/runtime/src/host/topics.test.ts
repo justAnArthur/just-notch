@@ -18,7 +18,7 @@ describe('topics', () => {
     await flush()
     dispatch([{ type: 'topic', payload: { topic: 'stats', value: null as never } }])
     expect(seen).toEqual([])
-    const sample = { cpu: 0.1, memoryUsed: 1, memoryTotal: 2, netInBps: 0, netOutBps: 0 }
+    const sample = { cpu: 0.1, memoryUsed: 1, memoryTotal: 2, memoryPressure: 'normal' as const, netInBps: 0, netOutBps: 0, diskFree: 1, diskTotal: 2, uptimeS: 3 }
     dispatch([{ type: 'topic', payload: { topic: 'stats', value: sample } }])
     expect(seen).toEqual([sample])
   })

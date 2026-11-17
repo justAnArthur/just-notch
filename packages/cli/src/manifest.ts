@@ -13,6 +13,9 @@ export const PERMISSIONS = [
   'files',
   'bluetooth.read',
   'stats.read',
+  'weather.read',
+  'clipboard',
+  'files.recent',
 ] as const satisfies readonly Permission[]
 
 const exhaustive: [Exclude<Permission, (typeof PERMISSIONS)[number]>] extends [never] ? true : never = true

@@ -11,6 +11,9 @@ public enum ServiceRegistry {
             BluetoothService(),
             StatsService(),
             FilesService(),
+            WeatherService(),
+            ClipboardService(),
+            RecentFilesService(),
         ]
     }
 }

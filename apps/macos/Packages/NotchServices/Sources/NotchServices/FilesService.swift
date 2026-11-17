@@ -1,10 +1,10 @@
 import AppKit
 import QuickLookThumbnailing
 
-/// `files.thumbnail`, `files.airdrop`, `files.reveal`, `files.open`.
+/// `files.thumbnail`, `files.airdrop`, `files.reveal`, `files.open`, `files.copy`, `files.trash`.
 @MainActor
 public final class FilesService: NotchService {
-    public let methods = ["files.thumbnail", "files.airdrop", "files.reveal", "files.open"]
+    public let methods = ["files.thumbnail", "files.airdrop", "files.reveal", "files.open", "files.copy", "files.trash"]
     public weak var sink: ServiceSink?
 
     public init() {}
@@ -22,6 +22,14 @@ public final class FilesService: NotchService {
             return nil
         case "files.open":
             guard NSWorkspace.shared.open(try existing(try decode(PathParams.self, params).path)) else { throw ServiceError("no app opens this file") }
+            return nil
+        case "files.copy":
+            let urls = try decode(PathsParams.self, params).paths.map(existing)
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.writeObjects(urls as [NSURL]) else { throw ServiceError("couldn't copy the files") }
+            return nil
+        case "files.trash":
+            try FileManager.default.trashItem(at: try existing(try decode(PathParams.self, params).path), resultingItemURL: nil)
             return nil
         default:
             throw ServiceError("unknown method \(method)")
