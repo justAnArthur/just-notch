@@ -37,9 +37,12 @@ public final class SystemService: NSObject, NotchService, UNUserNotificationCent
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .notDetermined:
-            guard try await center.requestAuthorization(options: [.alert, .sound]) else { throw ServiceError("notifications are off for Just Notch") }
+            // macOS may answer the first request with an error while it still shows the prompt; once the user
+            // allows, the next send goes through.
+            let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+            guard granted else { throw ServiceError("allow notifications for Just Notch, then try again") }
         case .denied:
-            throw ServiceError("notifications are off for Just Notch")
+            throw ServiceError("notifications are off for Just Notch in System Settings")
         default:
             break
         }
