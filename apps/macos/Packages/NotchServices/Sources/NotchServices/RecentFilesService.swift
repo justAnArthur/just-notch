@@ -1,8 +1,8 @@
-import Foundation
+import AppKit
 
 /// `recentFiles` topic: the newest files in Downloads and the screenshot folder
-/// (`com.apple.screencapture location`, Desktop by default), plus downloads still
-/// being written. Folders are watched with vnode sources while subscribed; an
+/// (`com.apple.screencapture location`, Desktop by default), or the folders the
+/// user chose instead, plus downloads still being written. Folders are watched with vnode sources while subscribed; an
 /// active download adds a 1 s rescan so its progress moves.
 ///
 /// Every touch of the folders runs off the main thread: they are privacy-protected,
@@ -10,12 +10,13 @@ import Foundation
 @MainActor
 public final class RecentFilesService: NotchService {
     public let topics = ["recentFiles"]
-    public let methods = ["recentFiles.clear"]
+    public let methods = ["recentFiles.clear", "recentFiles.chooseFolder", "recentFiles.resetFolder", "recentFiles.cancelDownload"]
     public weak var sink: ServiceSink?
 
     nonisolated static let perSource = 20
     nonisolated static let partialExtensions: Set<String> = ["download", "crdownload", "part"]
     private static func clearedKey(_ source: RecentFile.Source) -> String { "recentFiles.clearedAt.\(source.rawValue)" }
+    nonisolated static func folderKey(_ source: RecentFile.Source) -> String { "recentFiles.folder.\(source.rawValue)" }
 
     typealias Partial = [String: (bytes: Double, at: Date)]
 
@@ -28,10 +29,12 @@ public final class RecentFilesService: NotchService {
     private var generation = 0
     private var scanning = false
     private var rescan = false
+    private var subscribed = false
 
     public init() {}
 
     public func start(topic: String) {
+        subscribed = true
         generation += 1
         let current = generation
         let folders = Set(Self.folders.map(\.url))
@@ -50,6 +53,7 @@ public final class RecentFilesService: NotchService {
     }
 
     public func stop(topic: String) {
+        subscribed = false
         generation += 1
         watchers.forEach { $0.cancel() }
         watchers = []
@@ -66,20 +70,82 @@ public final class RecentFilesService: NotchService {
     }
 
     public func handle(method: String, params: Data) async throws -> Data? {
-        guard method == "recentFiles.clear" else { throw ServiceError("unknown method \(method)") }
-        UserDefaults.standard.set(nowMs(), forKey: Self.clearedKey(try decode(SourceParams.self, params).source))
-        if progressTimer != nil || !watchers.isEmpty { scan() }
+        switch method {
+        case "recentFiles.clear":
+            UserDefaults.standard.set(nowMs(), forKey: Self.clearedKey(try decode(SourceParams.self, params).source))
+            if subscribed { scan() }
+        case "recentFiles.chooseFolder":
+            let source = try decode(SourceParams.self, params).source
+            guard let url = await chooseFolder(source) else { return jsonNull }
+            UserDefaults.standard.set(url.path, forKey: Self.folderKey(source))
+            restart()
+            return RecentFolder(path: url.path, custom: true).json()
+        case "recentFiles.resetFolder":
+            UserDefaults.standard.removeObject(forKey: Self.folderKey(try decode(SourceParams.self, params).source))
+            restart()
+        case "recentFiles.cancelDownload":
+            let url = URL(fileURLWithPath: try decode(IdParams.self, params).id)
+            let downloads = Self.folder(.downloads)
+            try await Task.detached {
+                guard Self.isPartial(url, in: downloads) else { throw ServiceError("no download under way at \(url.path)") }
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            }.value
+            if subscribed { scan() }
+        default:
+            throw ServiceError("unknown method \(method)")
+        }
         return nil
+    }
+
+    private func chooseFolder(_ source: RecentFile.Source) async -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Watch"
+        panel.message = source == .downloads ? "Choose the folder to watch for downloads." : "Choose the folder to watch for screenshots."
+        NSApp.activate()
+        return await withCheckedContinuation { continuation in
+            panel.begin { continuation.resume(returning: $0 == .OK ? panel.url : nil) }
+        }
+    }
+
+    /// Watchers and the last state belong to the old folders: start over.
+    private func restart() {
+        guard subscribed else { return }
+        stop(topic: "recentFiles")
+        start(topic: "recentFiles")
     }
 
     // MARK: scanning
 
     nonisolated static var folders: [(url: URL, source: RecentFile.Source)] {
+        [(folder(.downloads), .downloads), (folder(.screenshots), .screenshots)]
+    }
+
+    /// The user's choice, else the system's folder.
+    nonisolated static func folder(_ source: RecentFile.Source) -> URL {
+        folder(source, custom: UserDefaults.standard.string(forKey: folderKey(source)))
+    }
+
+    nonisolated static func folder(_ source: RecentFile.Source, custom: String?) -> URL {
+        if let custom { return URL(fileURLWithPath: custom, isDirectory: true).standardizedFileURL }
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? home.appendingPathComponent("Downloads")
-        let configured = UserDefaults(suiteName: "com.apple.screencapture")?.string(forKey: "location")
-        let screenshots = configured.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? home.appendingPathComponent("Desktop")
-        return [(downloads.standardizedFileURL, .downloads), (screenshots.standardizedFileURL, .screenshots)]
+        switch source {
+        case .downloads:
+            let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? home.appendingPathComponent("Downloads")
+            return downloads.standardizedFileURL
+        case .screenshots:
+            let configured = UserDefaults(suiteName: "com.apple.screencapture")?.string(forKey: "location")
+            let screenshots = configured.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? home.appendingPathComponent("Desktop")
+            return screenshots.standardizedFileURL
+        }
+    }
+
+    /// A partial download directly in the downloads folder: the only thing `recentFiles.cancelDownload` may trash.
+    nonisolated static func isPartial(_ url: URL, in downloads: URL) -> Bool {
+        partialExtensions.contains(url.pathExtension.lowercased())
+            && url.standardizedFileURL.deletingLastPathComponent().path == downloads.standardizedFileURL.path
     }
 
     /// Bursts of folder events (a download renaming itself, Finder's metadata) collapse into one scan.
@@ -165,10 +231,15 @@ public final class RecentFilesService: NotchService {
                 .sorted { $0.addedAt > $1.addedAt }
                 .prefix(perSource)
         }
+        let defaults = UserDefaults.standard
         let state = RecentFilesState(
             access: denied ? .denied : .granted,
             files: recent.sorted { $0.addedAt > $1.addedAt },
-            downloads: downloads.sorted { $0.name < $1.name }
+            downloads: downloads.sorted { $0.name < $1.name },
+            folders: .init(
+                downloads: RecentFolder(path: folders[0].url.path, custom: defaults.string(forKey: folderKey(.downloads)) != nil),
+                screenshots: RecentFolder(path: folders[1].url.path, custom: defaults.string(forKey: folderKey(.screenshots)) != nil)
+            )
         )
         return (state, partial)
     }

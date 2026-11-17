@@ -259,12 +259,21 @@ export interface ActiveDownload {
   from?: string
 }
 
+export interface RecentFolder {
+  path: string
+  /** Chosen with `recentFiles.chooseFolder`; otherwise the system's (Downloads, or the Screenshot app's folder). */
+  custom: boolean
+}
+
 export interface RecentFilesState {
   /** The Downloads and screenshot folders are privacy-protected; `denied` until the user allows them. */
   access: 'granted' | 'denied'
   /** Newest first, per source at most 20, after the source's last `recentFiles.clear`. */
   files: RecentFile[]
+  /** Downloads still being written, in the downloads folder. */
   downloads: ActiveDownload[]
+  /** The folder each source watches. */
+  folders: Record<RecentFile['source'], RecentFolder>
 }
 
 export interface DisplayState {
@@ -363,6 +372,12 @@ export interface Methods {
 
   /** Hides a source's current files from `recentFiles`; nothing is deleted. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
+  /** Asks the user for a folder to watch for the source, then rescans; `null` when they cancel. */
+  'recentFiles.chooseFolder': { params: { source: RecentFile['source'] }; result: RecentFolder | null }
+  /** Watches the system's folder for the source again. */
+  'recentFiles.resetFolder': { params: { source: RecentFile['source'] }; result: null }
+  /** Moves a download under way (its partial file) to the Trash. */
+  'recentFiles.cancelDownload': { params: { id: string }; result: null }
 
   /** QuickLook thumbnail as a `data:` URL. */
   'files.thumbnail': { params: { path: string; size: number }; result: { url: string } }
@@ -424,6 +439,9 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'clipboard.setIgnoredApps': 'clipboard',
   'apps.list': 'clipboard',
   'recentFiles.clear': 'files.recent',
+  'recentFiles.chooseFolder': 'files.recent',
+  'recentFiles.resetFolder': 'files.recent',
+  'recentFiles.cancelDownload': 'files.recent',
   'files.thumbnail': 'files',
   'files.airdrop': 'files',
   'files.reveal': 'files',

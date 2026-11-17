@@ -68,7 +68,11 @@ struct ShapeTests {
     @Test func recentFiles() throws {
         let file = RecentFile(id: "/a", name: "a", size: 1, addedAt: 1, source: .downloads, from: "example.com")
         #expect(try keys(file) == ["id", "name", "size", "addedAt", "source", "from"])
-        #expect(try keys(RecentFilesState(access: .granted, files: [], downloads: [])) == ["access", "files", "downloads"])
+        let folder = RecentFolder(path: "/a", custom: false)
+        let state = RecentFilesState(access: .granted, files: [], downloads: [], folders: .init(downloads: folder, screenshots: folder))
+        #expect(try keys(state) == ["access", "files", "downloads", "folders"])
+        #expect(try keys(state.folders) == ["downloads", "screenshots"])
+        #expect(try keys(folder) == ["path", "custom"])
     }
 
     @Test func display() throws {
@@ -339,5 +343,24 @@ struct NewServiceTests {
         #expect(safari?.name == "Safari")
         #expect(safari?.icon?.hasPrefix("data:image/png;base64,") == true)
         #expect(Set(apps.map(\.bundleId)).count == apps.count)
+    }
+}
+
+@Suite struct RecentFilesTests {
+    @Test func chosenFolderOverridesTheSystems() {
+        #expect(RecentFilesService.folder(.downloads, custom: nil).lastPathComponent == "Downloads")
+        #expect(RecentFilesService.folder(.downloads, custom: "/tmp/inbox/../watched").path == "/tmp/watched")
+        #expect(RecentFilesService.folder(.screenshots, custom: "/Volumes/Shots").path == "/Volumes/Shots")
+    }
+
+    @Test func cancelsOnlyPartialDownloadsInTheFolder() {
+        let downloads = URL(fileURLWithPath: "/Users/me/Downloads", isDirectory: true)
+        #expect(RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/a.zip.crdownload"), in: downloads))
+        #expect(RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/b.dmg.download"), in: downloads))
+        #expect(RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/c.PART"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/a.zip"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Documents/a.part"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/x/a.part"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/../a.part"), in: downloads))
     }
 }

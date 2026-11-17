@@ -132,8 +132,10 @@ const values: Topics = {
       { id: '/Users/me/Downloads/modo-kit.zip', name: 'modo-kit.zip', size: 8_400_000, addedAt: Date.now() - 3 * hour, source: 'downloads', from: 'github.com' },
     ],
     downloads: [],
+    folders: { downloads: { path: '/Users/me/Downloads', custom: false }, screenshots: { path: '/Users/me/Desktop', custom: false } },
   },
 }
+const DEFAULT_FOLDERS = values.recentFiles.folders
 
 const subscribed = new Set<Topic>()
 /** Topics whose next subscription is answered with `null`, as the real host does before its first sample. */
@@ -306,6 +308,19 @@ const handlers: Handlers = {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
     return null
   },
+  'recentFiles.chooseFolder': ({ source }) => {
+    const folder = { path: `/Users/me/Documents/${source === 'downloads' ? 'Inbox' : 'Captures'}`, custom: true }
+    publish('recentFiles', { ...values.recentFiles, folders: { ...values.recentFiles.folders, [source]: folder } })
+    return folder
+  },
+  'recentFiles.resetFolder': ({ source }) => {
+    publish('recentFiles', { ...values.recentFiles, folders: { ...values.recentFiles.folders, [source]: DEFAULT_FOLDERS[source] } })
+    return null
+  },
+  'recentFiles.cancelDownload': ({ id }) => {
+    publish('recentFiles', { ...values.recentFiles, downloads: values.recentFiles.downloads.filter((d) => d.id !== id) })
+    return null
+  },
   'files.thumbnail': ({ path }) => ({ url: artwork(path.length) }),
   'files.airdrop': () => null,
   'files.reveal': () => null,
@@ -395,6 +410,11 @@ export const mock = {
     const start = Date.now() + minutes * 60_000
     const event = { id: `soon-${start}`, title: 'Sync with Alex', start, end: start + 30 * 60_000, allDay: false, calendarColor: '#22c55e', meetingUrl: 'https://meet.example.com/sync' }
     publish('calendar', { ...values.calendar, upcoming: [event, ...values.calendar.upcoming].sort((a, b) => a.start - b.start) })
+  },
+  /** A download under way in Downloads, as Safari writes one. */
+  download() {
+    const download = { id: '/Users/me/Downloads/notch-1.0.dmg.download', name: 'notch-1.0.dmg', received: 12e6, total: 48e6, rate: 2.4e6, from: 'github.com' }
+    publish('recentFiles', { ...values.recentFiles, downloads: [download] })
   },
   togglePlay: () => handlers['media.command']({ command: 'toggle' }, 'runtime'),
   nextTrack: () => setTrack(track + 1),

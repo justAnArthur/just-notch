@@ -171,11 +171,22 @@ public struct ActiveDownload: Codable, Equatable, Sendable {
     public var from: String?
 }
 
+public struct RecentFolder: Codable, Equatable, Sendable {
+    public var path: String
+    public var custom: Bool
+}
+
 public struct RecentFilesState: Codable, Equatable, Sendable {
     public enum Access: String, Codable, Sendable { case granted, denied }
+    /// `Record<RecentFile['source'], RecentFolder>`.
+    public struct Folders: Codable, Equatable, Sendable {
+        public var downloads: RecentFolder
+        public var screenshots: RecentFolder
+    }
     public var access: Access
     public var files: [RecentFile]
     public var downloads: [ActiveDownload]
+    public var folders: Folders
 }
 
 public struct DisplayState: Codable, Equatable, Sendable {
