@@ -62,6 +62,18 @@ static void emit(NSDictionary *info, BOOL playing, NSString *bundleId) {
     NSDate *date = [timestamp isKindOfClass:NSDate.class] ? timestamp : [NSDate date];
     out[@"timestamp"] = @((long long)(date.timeIntervalSince1970 * 1000));
 
+    // Left out when the player doesn't report them, so the island hides their toggles.
+    NSDictionary *optional = @{
+        @"shuffleMode": @"kMRMediaRemoteNowPlayingInfoShuffleMode",
+        @"repeatMode": @"kMRMediaRemoteNowPlayingInfoRepeatMode",
+        @"isLiked": @"kMRMediaRemoteNowPlayingInfoIsLiked",
+        @"supportsIsLiked": @"kMRMediaRemoteNowPlayingInfoSupportsIsLiked",
+    };
+    for (NSString *field in optional) {
+        id value = info[optional[field]];
+        if ([value isKindOfClass:NSNumber.class]) out[field] = value;
+    }
+
     id artwork = info[@"kMRMediaRemoteNowPlayingInfoArtworkData"];
     if ([artwork isKindOfClass:NSData.class] && [artwork length] > 0) {
         // Artwork only travels when it changed; the reader keeps the last one.
@@ -111,8 +123,16 @@ static void runCommand(NSString *line) {
     NSString *name = parts.firstObject;
     NSDictionary<NSString *, NSNumber *> *codes = @{ @"play": @0, @"pause": @1, @"toggle": @2, @"next": @4, @"previous": @5 };
 
+    // MRMediaRemoteSendCommand codes and option keys, as MRMediaRemoteCopyCommandDescription names them on macOS 26:
+    // 21 LikeTrack, 25 SetRepeatMode, 26 SetShuffleMode.
     if ([name isEqualToString:@"seek"] && parts.count > 1) {
         if (setElapsed) setElapsed(parts[1].doubleValue);
+    } else if ([name isEqualToString:@"shuffle"] && parts.count > 1) {
+        sendCommand(26, (__bridge CFDictionaryRef)@{ @"kMRMediaRemoteOptionShuffleMode": @(parts[1].intValue) });
+    } else if ([name isEqualToString:@"repeat"] && parts.count > 1) {
+        sendCommand(25, (__bridge CFDictionaryRef)@{ @"kMRMediaRemoteOptionRepeatMode": @(parts[1].intValue) });
+    } else if ([name isEqualToString:@"like"] && parts.count > 1) {
+        sendCommand(21, (__bridge CFDictionaryRef)@{ @"kMRMediaRemoteOptionIsNegative": @(parts[1].intValue == 0) });
     } else if (codes[name]) {
         sendCommand(codes[name].intValue, NULL);
     }

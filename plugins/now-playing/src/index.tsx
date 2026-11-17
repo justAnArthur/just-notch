@@ -89,6 +89,12 @@ function Player() {
       onPrevious={() => command('previous')}
       onNext={() => command('next')}
       onSeek={(positionS) => void call('media.command', { command: 'seek', positionS })}
+      shuffle={media?.shuffle}
+      onShuffleChange={media?.shuffle === undefined ? undefined : (shuffle) => void call('media.command', { command: 'shuffle', shuffle })}
+      repeat={media?.repeat}
+      onRepeatChange={media?.repeat === undefined ? undefined : (repeat) => void call('media.command', { command: 'repeat', repeat })}
+      liked={media?.liked}
+      onLikedChange={media?.liked === undefined ? undefined : (liked) => void call('media.command', { command: 'like', liked })}
     />
   )
 }

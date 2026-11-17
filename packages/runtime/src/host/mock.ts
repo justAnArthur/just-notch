@@ -61,6 +61,9 @@ const values: Topics = {
     rate: 1,
     updatedAt: Date.now(),
     sourceApp: 'com.apple.Music',
+    shuffle: false,
+    repeat: 'off',
+    liked: false,
   },
   power: { percent: 76, charging: false, pluggedIn: false, minutesRemaining: 312, lowPowerMode: false, hasBattery: true },
   audio: { volume: 0.5, muted: false, outputDevice: 'MacBook Pro Speakers' },
@@ -259,6 +262,9 @@ const handlers: Handlers = {
     if (command.command === 'next') setTrack(track + 1, media.playing)
     else if (command.command === 'previous') setTrack(track - 1, media.playing)
     else if (command.command === 'seek') publish('media', { ...media, positionS: command.positionS })
+    else if (command.command === 'shuffle') publish('media', { ...media, shuffle: command.shuffle })
+    else if (command.command === 'repeat') publish('media', { ...media, repeat: command.repeat })
+    else if (command.command === 'like') publish('media', { ...media, liked: command.liked })
     else publish('media', { ...media, playing: command.command === 'toggle' ? !media.playing : command.command === 'play' })
     return null
   },

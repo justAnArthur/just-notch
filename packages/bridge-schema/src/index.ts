@@ -73,6 +73,8 @@ export interface ScreenGeometry {
 
 // ── Topics: values the host publishes while at least one subscriber exists ──
 
+export type MediaRepeat = 'off' | 'all' | 'one'
+
 export interface MediaState {
   playing: boolean
   title: string
@@ -87,6 +89,12 @@ export interface MediaState {
   updatedAt: number
   /** Bundle id of the playing app. */
   sourceApp?: string
+  /** Shuffle is on (by songs or albums); absent when the player doesn't report it. */
+  shuffle?: boolean
+  /** Absent when the player doesn't report it. */
+  repeat?: MediaRepeat
+  /** The track is liked; absent when the player doesn't support likes. */
+  liked?: boolean
 }
 
 export interface PowerState {
@@ -326,6 +334,9 @@ export interface HostInfo {
 export type MediaCommand =
   | { command: 'play' | 'pause' | 'toggle' | 'next' | 'previous' }
   | { command: 'seek'; positionS: number }
+  | { command: 'shuffle'; shuffle: boolean }
+  | { command: 'repeat'; repeat: MediaRepeat }
+  | { command: 'like'; liked: boolean }
 
 export interface Methods {
   /** Sent once by the runtime after it has installed `window.__notch`. */
