@@ -17,6 +17,62 @@ struct RawNowPlaying: Decodable, Equatable {
     /// New artwork bytes; nil means unchanged unless `artworkCleared`.
     var artwork: Data?
     var artworkCleared: Bool?
+    /// MediaRemote's raw values, nil when the player leaves them out of its now-playing info.
+    var shuffleMode: Int?
+    var repeatMode: Int?
+    var isLiked: Bool?
+    var supportsIsLiked: Bool?
+}
+
+/// MediaRemote's shuffle and repeat modes, as `MRMediaRemoteCopyShuffleModeDescription` /
+/// `…RepeatModeDescription` name them (checked on macOS 26): shuffle 1 Off, 2 Albums, 3 Songs;
+/// repeat 1 None, 2 One, 3 All; 0 is unknown.
+enum MediaRemoteMode {
+    static func shuffle(_ mode: Int?) -> Bool? {
+        switch mode {
+        case 1: false
+        case 2, 3: true
+        default: nil
+        }
+    }
+
+    static func `repeat`(_ mode: Int?) -> MediaState.Repeat? {
+        switch mode {
+        case 1: .off
+        case 2: .one
+        case 3: .all
+        default: nil
+        }
+    }
+
+    static func code(shuffle: Bool) -> Int { shuffle ? 3 : 1 }
+
+    static func code(repeat mode: MediaState.Repeat) -> Int {
+        switch mode {
+        case .off: 1
+        case .one: 2
+        case .all: 3
+        }
+    }
+
+    /// Players that support likes say so; a missing `IsLiked` then means not liked.
+    static func liked(_ isLiked: Bool?, supported: Bool?) -> Bool? {
+        supported == false ? nil : isLiked ?? (supported == true ? false : nil)
+    }
+
+    /// `MRMediaRemoteSendCommand` codes and option keys (`MRMediaRemoteCopyCommandDescription`, macOS 26).
+    static let likeTrack: Int32 = 21
+    static let setRepeatMode: Int32 = 25
+    static let setShuffleMode: Int32 = 26
+
+    static func options(_ command: MediaCommand) -> (code: Int32, options: [String: Any])? {
+        switch command {
+        case .shuffle(let on): (setShuffleMode, ["kMRMediaRemoteOptionShuffleMode": code(shuffle: on)])
+        case .repeat(let mode): (setRepeatMode, ["kMRMediaRemoteOptionRepeatMode": code(repeat: mode)])
+        case .like(let liked): (likeTrack, ["kMRMediaRemoteOptionIsNegative": !liked])
+        default: nil
+        }
+    }
 }
 
 @MainActor

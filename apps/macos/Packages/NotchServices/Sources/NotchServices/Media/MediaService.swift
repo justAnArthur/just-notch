@@ -174,7 +174,10 @@ public final class MediaService: NotchService {
             positionS: raw.positionS,
             rate: raw.playing ? raw.rate : 0,
             updatedAt: raw.timestamp,
-            sourceApp: raw.bundleId
+            sourceApp: raw.bundleId,
+            shuffle: MediaRemoteMode.shuffle(raw.shuffleMode),
+            repeat: MediaRemoteMode.repeat(raw.repeatMode),
+            liked: MediaRemoteMode.liked(raw.isLiked, supported: raw.supportsIsLiked)
         ))
     }
 
@@ -191,7 +194,8 @@ extension MediaState {
     /// anyway: not worth a publish.
     func continues(_ old: MediaState, tolerance: Double = 1.5) -> Bool {
         guard playing == old.playing, rate == old.rate, title == old.title, artist == old.artist, album == old.album,
-              artworkUrl == old.artworkUrl, durationS == old.durationS, sourceApp == old.sourceApp else { return false }
+              artworkUrl == old.artworkUrl, durationS == old.durationS, sourceApp == old.sourceApp,
+              shuffle == old.shuffle, self.repeat == old.repeat, liked == old.liked else { return false }
         let expected = old.positionS + (updatedAt - old.updatedAt) / 1000 * old.rate
         return abs(expected - positionS) < tolerance
     }

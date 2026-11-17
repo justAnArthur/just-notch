@@ -104,6 +104,9 @@ final class MediaRemoteDirect: MediaBackend {
         case .next: _ = api.send(4, nil)
         case .previous: _ = api.send(5, nil)
         case .seek(let position): api.setElapsed?(position)
+        case .shuffle, .repeat, .like:
+            guard let (code, options) = MediaRemoteMode.options(command) else { return }
+            _ = api.send(code, options as CFDictionary)
         }
         scheduleRefresh()
     }
@@ -147,6 +150,7 @@ final class MediaRemoteDirect: MediaBackend {
         func number(_ key: String) -> Double { (info["kMRMediaRemoteNowPlayingInfo\(key)"] as? NSNumber)?.doubleValue ?? 0 }
         let date = info["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date ?? Date()
         let artwork = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data
+        func optional(_ key: String) -> NSNumber? { info["kMRMediaRemoteNowPlayingInfo\(key)"] as? NSNumber }
         return RawNowPlaying(
             title: string("Title"),
             artist: string("Artist"),
@@ -158,7 +162,11 @@ final class MediaRemoteDirect: MediaBackend {
             timestamp: (date.timeIntervalSince1970 * 1000).rounded(),
             bundleId: bundleId,
             artwork: artwork,
-            artworkCleared: artwork == nil
+            artworkCleared: artwork == nil,
+            shuffleMode: optional("ShuffleMode")?.intValue,
+            repeatMode: optional("RepeatMode")?.intValue,
+            isLiked: optional("IsLiked")?.boolValue,
+            supportsIsLiked: optional("SupportsIsLiked")?.boolValue
         )
     }
 }

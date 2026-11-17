@@ -61,6 +61,9 @@ const values: Topics = {
     rate: 1,
     updatedAt: Date.now(),
     sourceApp: 'com.apple.Music',
+    shuffle: false,
+    repeat: 'off',
+    liked: false,
   },
   power: { percent: 76, charging: false, pluggedIn: false, minutesRemaining: 312, lowPowerMode: false, hasBattery: true },
   audio: { volume: 0.5, muted: false, outputDevice: 'MacBook Pro Speakers' },
@@ -132,8 +135,10 @@ const values: Topics = {
       { id: '/Users/me/Downloads/modo-kit.zip', name: 'modo-kit.zip', size: 8_400_000, addedAt: Date.now() - 3 * hour, source: 'downloads', from: 'github.com' },
     ],
     downloads: [],
+    folders: { downloads: { path: '/Users/me/Downloads', custom: false }, screenshots: { path: '/Users/me/Desktop', custom: false } },
   },
 }
+const DEFAULT_FOLDERS = values.recentFiles.folders
 
 const subscribed = new Set<Topic>()
 /** Topics whose next subscription is answered with `null`, as the real host does before its first sample. */
@@ -257,6 +262,9 @@ const handlers: Handlers = {
     if (command.command === 'next') setTrack(track + 1, media.playing)
     else if (command.command === 'previous') setTrack(track - 1, media.playing)
     else if (command.command === 'seek') publish('media', { ...media, positionS: command.positionS })
+    else if (command.command === 'shuffle') publish('media', { ...media, shuffle: command.shuffle })
+    else if (command.command === 'repeat') publish('media', { ...media, repeat: command.repeat })
+    else if (command.command === 'like') publish('media', { ...media, liked: command.liked })
     else publish('media', { ...media, playing: command.command === 'toggle' ? !media.playing : command.command === 'play' })
     return null
   },
@@ -295,8 +303,28 @@ const handlers: Handlers = {
     publish('clipboard', { ...values.clipboard, ignoredApps: apps })
     return null
   },
+  'apps.list': () =>
+    [
+      { bundleId: 'com.1password.1password', name: '1Password' },
+      { bundleId: 'com.figma.Desktop', name: 'Figma' },
+      { bundleId: 'com.apple.Safari', name: 'Safari' },
+      { bundleId: 'com.apple.Terminal', name: 'Terminal' },
+    ].map((app, i) => ({ ...app, icon: artwork(i + 7) })),
   'recentFiles.clear': ({ source }) => {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
+    return null
+  },
+  'recentFiles.chooseFolder': ({ source }) => {
+    const folder = { path: `/Users/me/Documents/${source === 'downloads' ? 'Inbox' : 'Captures'}`, custom: true }
+    publish('recentFiles', { ...values.recentFiles, folders: { ...values.recentFiles.folders, [source]: folder } })
+    return folder
+  },
+  'recentFiles.resetFolder': ({ source }) => {
+    publish('recentFiles', { ...values.recentFiles, folders: { ...values.recentFiles.folders, [source]: DEFAULT_FOLDERS[source] } })
+    return null
+  },
+  'recentFiles.cancelDownload': ({ id }) => {
+    publish('recentFiles', { ...values.recentFiles, downloads: values.recentFiles.downloads.filter((d) => d.id !== id) })
     return null
   },
   'files.thumbnail': ({ path }) => ({ url: artwork(path.length) }),
@@ -388,6 +416,11 @@ export const mock = {
     const start = Date.now() + minutes * 60_000
     const event = { id: `soon-${start}`, title: 'Sync with Alex', start, end: start + 30 * 60_000, allDay: false, calendarColor: '#22c55e', meetingUrl: 'https://meet.example.com/sync' }
     publish('calendar', { ...values.calendar, upcoming: [event, ...values.calendar.upcoming].sort((a, b) => a.start - b.start) })
+  },
+  /** A download under way in Downloads, as Safari writes one. */
+  download() {
+    const download = { id: '/Users/me/Downloads/notch-1.0.dmg.download', name: 'notch-1.0.dmg', received: 12e6, total: 48e6, rate: 2.4e6, from: 'github.com' }
+    publish('recentFiles', { ...values.recentFiles, downloads: [download] })
   },
   togglePlay: () => handlers['media.command']({ command: 'toggle' }, 'runtime'),
   nextTrack: () => setTrack(track + 1),

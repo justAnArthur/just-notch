@@ -4,6 +4,7 @@ import Foundation
 // optional fields are omitted when nil, timestamps are ms since the Unix epoch.
 
 public struct MediaState: Codable, Equatable, Sendable {
+    public enum Repeat: String, Codable, Sendable { case off, all, one }
     public var playing: Bool
     public var title: String
     public var artist: String
@@ -14,6 +15,9 @@ public struct MediaState: Codable, Equatable, Sendable {
     public var rate: Double
     public var updatedAt: Double
     public var sourceApp: String?
+    public var shuffle: Bool?
+    public var `repeat`: Repeat?
+    public var liked: Bool?
 }
 
 public struct PowerState: Codable, Equatable, Sendable {
@@ -146,6 +150,12 @@ public struct ClipboardState: Codable, Equatable, Sendable {
     public var ignoredApps: [String]
 }
 
+public struct AppInfo: Codable, Equatable, Sendable {
+    public var bundleId: String
+    public var name: String
+    public var icon: String?
+}
+
 public struct RecentFile: Codable, Equatable, Sendable {
     public enum Source: String, Codable, Sendable { case downloads, screenshots }
     public var id: String
@@ -165,11 +175,22 @@ public struct ActiveDownload: Codable, Equatable, Sendable {
     public var from: String?
 }
 
+public struct RecentFolder: Codable, Equatable, Sendable {
+    public var path: String
+    public var custom: Bool
+}
+
 public struct RecentFilesState: Codable, Equatable, Sendable {
     public enum Access: String, Codable, Sendable { case granted, denied }
+    /// `Record<RecentFile['source'], RecentFolder>`.
+    public struct Folders: Codable, Equatable, Sendable {
+        public var downloads: RecentFolder
+        public var screenshots: RecentFolder
+    }
     public var access: Access
     public var files: [RecentFile]
     public var downloads: [ActiveDownload]
+    public var folders: Folders
 }
 
 public struct DisplayState: Codable, Equatable, Sendable {
@@ -195,8 +216,11 @@ public struct PluggedEvent: Codable, Equatable, Sendable {
 public enum MediaCommand: Equatable, Sendable, Decodable {
     case play, pause, toggle, next, previous
     case seek(positionS: Double)
+    case shuffle(Bool)
+    case `repeat`(MediaState.Repeat)
+    case like(Bool)
 
-    private enum CodingKeys: String, CodingKey { case command, positionS }
+    private enum CodingKeys: String, CodingKey { case command, positionS, shuffle, `repeat`, liked }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -208,6 +232,9 @@ public enum MediaCommand: Equatable, Sendable, Decodable {
         case "next": self = .next
         case "previous": self = .previous
         case "seek": self = .seek(positionS: try container.decode(Double.self, forKey: .positionS))
+        case "shuffle": self = .shuffle(try container.decode(Bool.self, forKey: .shuffle))
+        case "repeat": self = .repeat(try container.decode(MediaState.Repeat.self, forKey: .repeat))
+        case "like": self = .like(try container.decode(Bool.self, forKey: .liked))
         default: throw ServiceError("unknown media command \(command)")
         }
     }

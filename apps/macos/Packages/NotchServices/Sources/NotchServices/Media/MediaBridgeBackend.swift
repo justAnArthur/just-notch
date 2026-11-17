@@ -112,6 +112,9 @@ final class MediaBridgeBackend: MediaBackend {
         case .next: "next"
         case .previous: "previous"
         case .seek(let position): "seek \(position)"
+        case .shuffle(let on): "shuffle \(MediaRemoteMode.code(shuffle: on))"
+        case .repeat(let mode): "repeat \(MediaRemoteMode.code(repeat: mode))"
+        case .like(let liked): "like \(liked ? 1 : 0)"
         }
         try? input?.write(contentsOf: Data((line + "\n").utf8))
     }

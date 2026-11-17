@@ -12,11 +12,15 @@ private func keys(_ value: some Encodable) throws -> Set<String> {
 @Suite("JSON shapes match packages/bridge-schema") @MainActor
 struct ShapeTests {
     @Test func media() throws {
-        let full = MediaState(playing: true, title: "t", artist: "a", album: "b", artworkUrl: "data:", durationS: 1, positionS: 0, rate: 1, updatedAt: 1, sourceApp: "x")
-        #expect(try keys(full) == ["playing", "title", "artist", "album", "artworkUrl", "durationS", "positionS", "rate", "updatedAt", "sourceApp"])
+        let full = MediaState(playing: true, title: "t", artist: "a", album: "b", artworkUrl: "data:", durationS: 1, positionS: 0, rate: 1, updatedAt: 1, sourceApp: "x",
+                              shuffle: true, repeat: .one, liked: false)
+        #expect(try keys(full) == ["playing", "title", "artist", "album", "artworkUrl", "durationS", "positionS", "rate", "updatedAt", "sourceApp", "shuffle", "repeat", "liked"])
         var bare = full
         bare.artworkUrl = nil
         bare.sourceApp = nil
+        bare.shuffle = nil
+        bare.repeat = nil
+        bare.liked = nil
         #expect(try keys(bare) == ["playing", "title", "artist", "album", "durationS", "positionS", "rate", "updatedAt"])
     }
 
@@ -62,12 +66,17 @@ struct ShapeTests {
         let clip = Clip(id: "1", kind: .text, content: "x", copiedAt: 1, pinned: false)
         #expect(try keys(clip) == ["id", "kind", "content", "copiedAt", "pinned"])
         #expect(try keys(ClipboardState(clips: [], paused: false, ignoredApps: [])) == ["clips", "paused", "ignoredApps"])
+        #expect(try keys(AppInfo(bundleId: "a", name: "A", icon: "data:")) == ["bundleId", "name", "icon"])
     }
 
     @Test func recentFiles() throws {
         let file = RecentFile(id: "/a", name: "a", size: 1, addedAt: 1, source: .downloads, from: "example.com")
         #expect(try keys(file) == ["id", "name", "size", "addedAt", "source", "from"])
-        #expect(try keys(RecentFilesState(access: .granted, files: [], downloads: [])) == ["access", "files", "downloads"])
+        let folder = RecentFolder(path: "/a", custom: false)
+        let state = RecentFilesState(access: .granted, files: [], downloads: [], folders: .init(downloads: folder, screenshots: folder))
+        #expect(try keys(state) == ["access", "files", "downloads", "folders"])
+        #expect(try keys(state.folders) == ["downloads", "screenshots"])
+        #expect(try keys(folder) == ["path", "custom"])
     }
 
     @Test func display() throws {
@@ -83,6 +92,9 @@ struct ShapeTests {
     @Test func mediaCommand() throws {
         #expect(try decode(MediaCommand.self, Data(#"{"command":"toggle"}"#.utf8)) == .toggle)
         #expect(try decode(MediaCommand.self, Data(#"{"command":"seek","positionS":12.5}"#.utf8)) == .seek(positionS: 12.5))
+        #expect(try decode(MediaCommand.self, Data(#"{"command":"shuffle","shuffle":true}"#.utf8)) == .shuffle(true))
+        #expect(try decode(MediaCommand.self, Data(#"{"command":"repeat","repeat":"one"}"#.utf8)) == .repeat(.one))
+        #expect(try decode(MediaCommand.self, Data(#"{"command":"like","liked":false}"#.utf8)) == .like(false))
         #expect(throws: ServiceError.self) { try decode(MediaCommand.self, Data(#"{"command":"rewind"}"#.utf8)) }
     }
 
@@ -92,6 +104,9 @@ struct ShapeTests {
         #expect(raw.bundleId == "app.zen-browser.zen")
         #expect(raw.artwork == nil)
         #expect(raw.artworkCleared == true)
+        #expect(raw.shuffleMode == nil && raw.repeatMode == nil && raw.isLiked == nil)
+        let modes = try JSONDecoder().decode(RawNowPlaying.self, from: Data(line.replacingOccurrences(of: "}", with: #","shuffleMode":3,"repeatMode":2,"isLiked":true}"#).utf8))
+        #expect(modes.shuffleMode == 3 && modes.repeatMode == 2 && modes.isLiked == true)
     }
 }
 
@@ -172,6 +187,34 @@ struct ShapeTests {
         var paused = old
         paused.playing = false
         #expect(!paused.continues(old))
+        var shuffled = later
+        shuffled.positionS = 12
+        shuffled.shuffle = true
+        #expect(!shuffled.continues(old))
+    }
+
+    @Test func mediaRemoteModes() {
+        #expect([0, 1, 2, 3, nil].map(MediaRemoteMode.shuffle) == [nil, false, true, true, nil])
+        #expect([0, 1, 2, 3, nil].map(MediaRemoteMode.repeat) == [nil, .off, .one, .all, nil])
+        for mode in [MediaState.Repeat.off, .one, .all] {
+            #expect(MediaRemoteMode.repeat(MediaRemoteMode.code(repeat: mode)) == mode)
+        }
+        #expect(MediaRemoteMode.shuffle(MediaRemoteMode.code(shuffle: true)) == true)
+        #expect(MediaRemoteMode.shuffle(MediaRemoteMode.code(shuffle: false)) == false)
+        #expect(MediaRemoteMode.liked(nil, supported: nil) == nil)
+        #expect(MediaRemoteMode.liked(nil, supported: true) == false)
+        #expect(MediaRemoteMode.liked(true, supported: nil) == true)
+        #expect(MediaRemoteMode.liked(true, supported: false) == nil)
+        #expect(MediaRemoteMode.options(.like(false))?.code == 21)
+        #expect(MediaRemoteMode.options(.like(false))?.options["kMRMediaRemoteOptionIsNegative"] as? Bool == true)
+        #expect(MediaRemoteMode.options(.repeat(.all))?.options["kMRMediaRemoteOptionRepeatMode"] as? Int == 3)
+        #expect(MediaRemoteMode.options(.next) == nil)
+    }
+
+    @Test func mediaRemoteInfo() throws {
+        let info: [String: Any] = ["kMRMediaRemoteNowPlayingInfoTitle": "t", "kMRMediaRemoteNowPlayingInfoShuffleMode": 1, "kMRMediaRemoteNowPlayingInfoRepeatMode": 3]
+        let raw = try #require(MediaRemoteDirect.parse(info, playing: true, bundleId: "com.apple.Music"))
+        #expect(raw.shuffleMode == 1 && raw.repeatMode == 3 && raw.isLiked == nil && raw.supportsIsLiked == nil)
     }
 }
 
@@ -318,5 +361,44 @@ struct NewServiceTests {
         let top = ProcessTimes.top(5, from: old, to: new)
         #expect(top.map(\.name) == ["a", "b"])
         #expect(top.first?.cpu == 0.5)
+    }
+}
+
+@Suite @MainActor struct InstalledAppsTests {
+    private func entry(_ id: String, _ name: String, _ path: String = "/x") -> InstalledApps.Entry {
+        .init(app: AppInfo(bundleId: id, name: name), url: URL(fileURLWithPath: path))
+    }
+
+    @Test func mergesByBundleIdAndSortsByName() {
+        let merged = InstalledApps.merge([entry("b", "Zed", "/running"), entry("a", "arc"), entry("b", "Zed", "/Applications"), entry("c", "Bear 2"), entry("d", "Bear 10")])
+        #expect(merged.map(\.app.bundleId) == ["a", "c", "d", "b"])
+        #expect(merged.last?.url.path == "/running")
+    }
+
+    @Test func listsInstalledAppsWithIcons() async {
+        let apps = await InstalledApps.list()
+        let safari = apps.first { $0.bundleId == "com.apple.Safari" }
+        #expect(safari?.name == "Safari")
+        #expect(safari?.icon?.hasPrefix("data:image/png;base64,") == true)
+        #expect(Set(apps.map(\.bundleId)).count == apps.count)
+    }
+}
+
+@Suite struct RecentFilesTests {
+    @Test func chosenFolderOverridesTheSystems() {
+        #expect(RecentFilesService.folder(.downloads, custom: nil).lastPathComponent == "Downloads")
+        #expect(RecentFilesService.folder(.downloads, custom: "/tmp/inbox/../watched").path == "/tmp/watched")
+        #expect(RecentFilesService.folder(.screenshots, custom: "/Volumes/Shots").path == "/Volumes/Shots")
+    }
+
+    @Test func cancelsOnlyPartialDownloadsInTheFolder() {
+        let downloads = URL(fileURLWithPath: "/Users/me/Downloads", isDirectory: true)
+        #expect(RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/a.zip.crdownload"), in: downloads))
+        #expect(RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/b.dmg.download"), in: downloads))
+        #expect(RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/c.PART"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/a.zip"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Documents/a.part"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/x/a.part"), in: downloads))
+        #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/../a.part"), in: downloads))
     }
 }

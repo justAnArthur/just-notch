@@ -82,6 +82,7 @@ function Files() {
       onCopy={(file) => void call('files.copy', { paths: [file.id] })}
       onDelete={(file) => void call('files.trash', { path: file.id })}
       onClear={(source) => void call('recentFiles.clear', { source })}
+      onCancelDownload={(d) => void call('recentFiles.cancelDownload', { id: d.id })}
       onDragStart={(file, event) => {
         event.preventDefault()
         void call('files.beginDrag', { paths: [file.id] })
@@ -112,6 +113,25 @@ function Minimal() {
   return download ? <RecentFiles.Minimal download={download} /> : null
 }
 
+const LABEL: Record<RecentFile['source'], string> = { downloads: 'Downloads folder', screenshots: 'Screenshots folder' }
+
+function FolderRow({ source }: { source: RecentFile['source'] }) {
+  const { call } = usePlugin()
+  const folder = useTopic('recentFiles')?.folders[source]
+  return (
+    <List.Row label={LABEL[source]} description={folder?.path}>
+      {folder?.custom && (
+        <Button variant="ghost" size="compact" onClick={() => void call('recentFiles.resetFolder', { source })}>
+          Reset
+        </Button>
+      )}
+      <Button variant="secondary" size="compact" onClick={() => void call('recentFiles.chooseFolder', { source })}>
+        Choose…
+      </Button>
+    </List.Row>
+  )
+}
+
 function Settings() {
   const [sources, setSources] = useStorage(SOURCES, ALL)
   const [show, setShow] = useStorage(SHOW, 12)
@@ -127,10 +147,14 @@ function Settings() {
         />
         <SwitchRow
           label="Screenshots"
-          description="Each screenshot as it is saved, in the folder set in the Screenshot app."
+          description="Each screenshot as it is saved."
           checked={sources.screenshots}
           onCheckedChange={(screenshots) => setSources({ ...sources, screenshots })}
         />
+      </List.Section>
+      <List.Section title="Folders">
+        <FolderRow source="downloads" />
+        <FolderRow source="screenshots" />
       </List.Section>
       <List.Section title="List">
         <SelectRow
