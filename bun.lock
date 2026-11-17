@@ -39,7 +39,7 @@
         "@just-notch/bridge-schema": "workspace:*",
         "@just-notch/sdk": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "lucide-react": "^1.72.0",
         "motion": "^13.4.0",
         "react": "^18.3.1",
@@ -80,7 +80,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -98,7 +98,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -116,7 +116,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -134,7 +134,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -152,7 +152,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -170,7 +170,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -188,7 +188,7 @@
       "devDependencies": {
         "@just-notch/cli": "workspace:*",
         "@justanarthur/modo-ui": "^2.2.0",
-        "@justanarthur/modo-ui-notch": "^0.3.0",
+        "@justanarthur/modo-ui-notch": "^0.4.0",
         "@types/react": "^18.3.0",
         "react": "^18.3.1",
       },
@@ -314,7 +314,7 @@
 
     "@justanarthur/modo-ui": ["@justanarthur/modo-ui@2.2.0", "", { "dependencies": { "@base-ui/react": "1.4.1", "@fontsource-variable/inter": "^5.3.0", "class-variance-authority": "^0.7.1", "cn": "^0.3.0", "date-fns": "^4.4.0", "lucide-react": "^1.47.0", "marked": "^18.0.14", "motion": "^13.4.0", "react-day-picker": "^10.0.2", "sugar-high": "^2.5.1" }, "peerDependencies": { "@justanarthur/modo": ">=1", "react": ">=18", "react-dom": ">=18", "unocss": ">=66" }, "optionalPeers": ["@justanarthur/modo", "unocss"] }, "sha512-d9SM5wsx/rE1Vt5ZZS9hump4Wd+zc8usTAg4RoI/wZHjvmFrOmL5uyGdGMBVpTal6DWNvEH5nxhjsu1C412UGg=="],
 
-    "@justanarthur/modo-ui-notch": ["@justanarthur/modo-ui-notch@0.3.0", "", { "dependencies": { "lucide-react": "^1.47.0", "motion": "^13.4.0" }, "peerDependencies": { "@justanarthur/modo-ui": "^2.1.0", "react": ">=18", "react-dom": ">=18" } }, "sha512-mYY2+AdePzREiDufPi24N1cowozFjxA1MitsjNROgMc8jPi6eEnMeSerEzI4SDmLpLcSh7OLJjs36R8RytCihg=="],
+    "@justanarthur/modo-ui-notch": ["@justanarthur/modo-ui-notch@0.4.0", "", { "dependencies": { "lucide-react": "^1.47.0", "motion": "^13.4.0" }, "peerDependencies": { "@justanarthur/modo-ui": "^2.1.0", "react": ">=18", "react-dom": ">=18" } }, "sha512-PaBZ1mYsXpXkHM6GK1RwCI8s0jnXOV4nadbm0S9MuCHRxwtH2OZF9eIUhPHKYlruTB31y05FsRTUAGFIWY703w=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.6", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || 2.0.0-beta.2", "@emnapi/runtime": "^1.7.1 || 2.0.0-beta.2" } }, "sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw=="],
 

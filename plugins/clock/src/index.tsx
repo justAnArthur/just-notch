@@ -1,6 +1,6 @@
 import { advancePomodoro, Clock, type ClockZone, type PomodoroRun, type PomodoroSettings, resumePomodoro } from '@justanarthur/modo-ui-notch'
 import { Button, List } from '@justanarthur/modo-ui'
-import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, useStorage } from '@just-notch/sdk'
+import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, useSheet, useStorage } from '@just-notch/sdk'
 import { Clock3, X } from 'lucide-react'
 
 const RUN = 'run'
@@ -53,7 +53,19 @@ function Widget() {
   const [seconds] = useStorage(SECONDS, false)
   const [zones] = useStorage<ClockZone[]>(ZONES, [])
   const [pomodoro] = useStorage(POMODORO, DEFAULT_POMODORO)
-  return <Clock zones={zones} seconds={seconds} hour12={hour12(format)} pomodoro={pomodoro} value={run} onValueChange={setRun} />
+  const [completed] = useStorage<Completed | null>(COMPLETED, null)
+  return (
+    <Clock
+      layout={useSheet()}
+      zones={zones}
+      seconds={seconds}
+      hour12={hour12(format)}
+      pomodoro={pomodoro}
+      completedToday={completedToday(completed)}
+      value={run}
+      onValueChange={setRun}
+    />
+  )
 }
 
 function Leading() {

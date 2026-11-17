@@ -1,6 +1,6 @@
 import { NowPlaying, type NowPlayingOutput, type NowPlayingTrack } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
-import { definePlugin, type MediaState, type PluginContext, signal, SwitchRow, useMediaPosition, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
+import { definePlugin, type MediaState, type PluginContext, signal, SwitchRow, useMediaPosition, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { Music } from 'lucide-react'
 
 const PAUSED_MS = 30_000
@@ -78,9 +78,11 @@ function useTrack() {
 function Player() {
   const { call } = usePlugin()
   const { media, track } = useTrack()
+  const layout = useSheet()
   const command = (command: 'play' | 'pause' | 'next' | 'previous') => void call('media.command', { command })
   return (
     <NowPlaying
+      layout={layout}
       track={track}
       playing={media?.playing ?? false}
       onPlayingChange={(playing) => command(playing ? 'play' : 'pause')}

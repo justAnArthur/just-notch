@@ -16,7 +16,7 @@
     "@just-notch/bridge-schema": "workspace:*",
     "@just-notch/sdk": "workspace:*",
     "@justanarthur/modo-ui": "^2.2.0",
-    "@justanarthur/modo-ui-notch": "^0.3.0",
+    "@justanarthur/modo-ui-notch": "^0.4.0",
     "lucide-react": "^1.72.0",
     "motion": "^13.4.0",
     "react": "^18.3.1",

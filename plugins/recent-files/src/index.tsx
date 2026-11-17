@@ -1,17 +1,6 @@
 import { type RecentDownload, type RecentFile as KitFile, RecentFiles, Widget } from '@justanarthur/modo-ui-notch'
 import { Button, List } from '@justanarthur/modo-ui'
-import {
-  type ActiveDownload,
-  definePlugin,
-  type PluginContext,
-  type RecentFile,
-  SelectRow,
-  signal,
-  SwitchRow,
-  usePlugin,
-  useStorage,
-  useTopic,
-} from '@just-notch/sdk'
+import { type ActiveDownload, definePlugin, type PluginContext, type RecentFile, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { FolderDown, FolderLock } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -67,6 +56,7 @@ function Files() {
   const { call } = usePlugin()
   const { state, files, download } = useFiles()
   const withThumbnail = useThumbnails(files)
+  const layout = useSheet()
 
   if (state?.access === 'denied')
     return (
@@ -84,6 +74,7 @@ function Files() {
 
   return (
     <RecentFiles
+      layout={layout}
       files={files.map(withThumbnail)}
       download={download}
       onOpen={(file) => void call('files.open', { path: file.id })}

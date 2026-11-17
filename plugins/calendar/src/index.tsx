@@ -1,6 +1,6 @@
 import { Agenda, type AgendaEvent } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
-import { type CalendarEvent, definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
+import { type CalendarEvent, definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { CalendarDays } from 'lucide-react'
 
 const MINUTE = 60_000
@@ -31,7 +31,8 @@ function Widget() {
   const calendar = useTopic('calendar')
   const [allDay] = useStorage(ALL_DAY, false)
   const events = (calendar?.upcoming ?? []).filter((e) => allDay || !e.allDay).map(toEvent)
-  return <Agenda events={events} access={calendar?.access} {...useActions()} />
+  const actions = useActions()
+  return <Agenda layout={useSheet()} events={events} access={calendar?.access} {...actions} />
 }
 
 function UpNext() {

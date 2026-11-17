@@ -70,12 +70,13 @@ export default function Settings() {
       ]
     : []
 
-  // The kit's sidebar pads its labels 16 px in from its edge: pulled out by as much, its text lines up with the
-  // island's title and tabs (INSET), the row highlights reaching into the margin as they do in a list.
+  // `flush` drops the sidebar's own inset; its rows keep 8 px of padding, so pulled out by that much the text
+  // lines up with the island's title and tabs (INSET), the row highlights reaching into the margin as in a list.
   return (
-    <div className="-mx-4 h-full">
+    <div className="-mx-2 h-full">
       <SettingsWindow
         name="Just Notch"
+        flush
         className="size-full"
         preferences={preferences}
         onPreferencesChange={setPreferences}

@@ -1,6 +1,6 @@
 import { conditionFromCode, Weather, type WeatherNow, type WeatherUnit } from '@justanarthur/modo-ui-notch'
 import { Button, Input, List } from '@justanarthur/modo-ui'
-import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useStorage, useTopic, type WeatherState } from '@just-notch/sdk'
+import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic, type WeatherState } from '@just-notch/sdk'
 import { CloudSun, MapPin } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -39,8 +39,9 @@ function Widget() {
   const state = useTopic('weather')
   const [unit] = useStorage<WeatherUnit>(UNIT, 'celsius')
   const actions = useActions()
-  if (!state) return <Weather status="loading" unit={unit} />
-  return <Weather {...forecast(state)} unit={unit} {...actions} />
+  const layout = useSheet()
+  if (!state) return <Weather layout={layout} status="loading" unit={unit} />
+  return <Weather layout={layout} {...forecast(state)} unit={unit} {...actions} />
 }
 
 /** The rain the alert is about: when it starts and how sure. */

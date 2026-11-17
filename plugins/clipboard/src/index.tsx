@@ -1,6 +1,6 @@
 import { type ClipboardClip, ClipboardHistory } from '@justanarthur/modo-ui-notch'
 import { Button, Input, List } from '@justanarthur/modo-ui'
-import { type Clip, definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
+import { type Clip, definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { ClipboardList, X } from 'lucide-react'
 import { useState } from 'react'
 
@@ -24,8 +24,10 @@ function Widget() {
     }
   }
 
+  const layout = useSheet()
   return (
     <ClipboardHistory
+      layout={layout}
       clips={clips.map(toClip)}
       pinned={pinned}
       onPinnedChange={pin}

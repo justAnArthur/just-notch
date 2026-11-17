@@ -1,6 +1,6 @@
 import { type StatsHero, type StatsSample, SystemStats } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
-import { definePlugin, type PluginContext, SelectRow, signal, type StatsState, SwitchRow, useStorage, useTopic } from '@just-notch/sdk'
+import { definePlugin, type PluginContext, SelectRow, signal, type StatsState, SwitchRow, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { Activity } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -37,8 +37,10 @@ function Widget() {
     if (stats) setSamples((all) => [...all.slice(1 - KEEP), toSample(stats)])
   }, [stats])
 
+  const layout = useSheet()
   return (
     <SystemStats
+      layout={layout}
       samples={samples}
       hero={hero}
       battery={power?.hasBattery ? { level: power.percent, charging: power.charging, minutesLeft: power.minutesRemaining } : undefined}
