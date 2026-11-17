@@ -21,6 +21,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     private var services: [NotchService] = []
     /// Subscription counts per web view, so a reloaded page releases what its previous instance held.
     private var subscriptions: [ObjectIdentifier: [String: Int]] = [:]
+    private let hotKeys = HotKeys()
 
     init(plugins: PluginStore, events: EventDispatcher) {
         self.plugins = plugins
@@ -31,6 +32,11 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     func startServices() {
         services = ServiceRegistry.makeAll()
         for service in services { service.sink = self }
+        hotKeys.onPress = { [weak self] id, owner in
+            guard let self, let webView = app.webViews.first(where: { ObjectIdentifier($0) == owner }),
+                  let payload = try? JSONSerialization.data(withJSONObject: ["id": id]) else { return }
+            events.send("shortcut", payload: payload, to: [webView])
+        }
     }
 
     // MARK: ServiceSink
@@ -73,6 +79,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         switch method {
         case "host.ready":
             release(webView)
+            app.pageReady()
             return hostInfo(for: webView).json()
 
         case "host.log":
@@ -134,6 +141,17 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
 
         case "permissions.status":
             return GrantedResult(granted: permissionGranted(try decode(PermissionParams.self, params).permission)).json()
+
+        case "shortcuts.register":
+            let id = try hotKeys.register(try decode(AcceleratorParams.self, params).accelerator, owner: ObjectIdentifier(webView))
+            return IdResult(id: id).json()
+
+        case "shortcuts.unregister":
+            hotKeys.unregister(try decode(IdParams.self, params).id, owner: ObjectIdentifier(webView))
+            return nil
+
+        case "deepLinks.initial":
+            return DeepLinkResult(url: app.initialDeepLink).json()
 
         case "plugins.setEnabled":
             let p = try decode(SetEnabledParams.self, params)
@@ -200,6 +218,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
 
     /// Drops every subscription a web view holds (page reload, crash, panel closed).
     func release(_ webView: WKWebView) {
+        hotKeys.release(owner: ObjectIdentifier(webView))
         guard let held = subscriptions.removeValue(forKey: ObjectIdentifier(webView)) else { return }
         for topic in held.keys where total(topic) == 0 {
             service(for: topic)?.stop(topic: topic)

@@ -4,7 +4,7 @@ import { on } from './bus'
 import { call } from './client'
 
 const noop: Unsubscribe = () => {}
-const unsupported = (what: string) => Promise.reject(new Error(`${what}: not supported by the notch host yet`))
+const unsupported = (what: string) => Promise.reject(new Error(`${what}: not supported by the notch host`))
 
 /**
  * The platform's `Host` over the notch bridge, as the runtime (`plugin: 'runtime'`).
@@ -26,16 +26,16 @@ export function createSwiftHost(app: Host['app']): Host {
       revealPath: async (path) => {
         await call('runtime', 'files.reveal', { path })
       },
-      openPath: async (path, opener) => {
-        if (opener) return unsupported('openPath with an app')
-        await call('runtime', 'files.open', { path })
+      openPath: async (path, app) => {
+        await call('runtime', 'files.open', app ? { path, app } : { path })
       },
     },
 
-    // The bridge copies only its own clips: arbitrary text goes through the web view's pasteboard.
     clipboard: {
-      writeText: (text) => navigator.clipboard.writeText(text),
-      readText: () => navigator.clipboard.readText(),
+      writeText: async (text) => {
+        await call('runtime', 'clipboard.writeText', { text })
+      },
+      readText: async () => (await call('runtime', 'clipboard.readText', {})).text,
     },
 
     // One borderless panel, always on screen: nothing to title, minimize or close; its one other page is settings.
@@ -73,14 +73,30 @@ export function createSwiftHost(app: Host['app']): Host {
         on('storage.changed', (change) => change.plugin === 'runtime' && change.key === key && listener((change.value ?? undefined) as never)),
     },
 
-    notifications: { send: () => unsupported('notifications') },
-    shortcuts: { register: () => unsupported('global shortcuts') },
+    notifications: {
+      send: async (notification) => {
+        await call('runtime', 'notifications.send', notification)
+      },
+    },
+    shortcuts: {
+      register: async (accelerator, handler) => {
+        const { id } = await call('runtime', 'shortcuts.register', { accelerator })
+        const stop = on('shortcut', (pressed) => pressed.id === id && handler())
+        return () => {
+          stop()
+          void call('runtime', 'shortcuts.unregister', { id }).catch(() => {})
+        }
+      },
+    },
     // Updates ship as releases of the app, not through an in-app updater.
     updater: {
       check: async () => ({ kind: 'idle' }),
       install: () => unsupported('in-app updates'),
     },
-    deepLinks: { initialUrl: async () => undefined, onOpen: () => noop },
+    deepLinks: {
+      initialUrl: async () => (await call('runtime', 'deepLinks.initial', {})).url ?? undefined,
+      onOpen: (listener) => on('deepLink.open', ({ url }) => listener(url)),
+    },
 
     invoke: (command, args = {}) => call('runtime', command as Method, args as never),
     on: (event, listener) => on(event as EventName, listener),

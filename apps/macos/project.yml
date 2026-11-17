@@ -43,6 +43,9 @@ targets:
         NSLocationWhenInUseUsageDescription: Just Notch shows the weather where you are.
         NSDownloadsFolderUsageDescription: Just Notch shows your recent downloads.
         NSDesktopFolderUsageDescription: Just Notch shows your recent screenshots.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.justanarthur.justnotch
+            CFBundleURLSchemes: [justnotch]
     entitlements:
       path: JustNotch/JustNotch.entitlements
       properties:

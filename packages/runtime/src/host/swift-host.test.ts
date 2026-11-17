@@ -4,6 +4,9 @@ const stored = new Map<string, unknown>()
 const call = vi.fn(async (_plugin: string, method: string, params: { key: string; value?: unknown }) => {
   if (method === 'storage.get') return stored.get(params.key) ?? null
   if (method === 'storage.set') stored.set(params.key, params.value)
+  if (method === 'shortcuts.register') return { id: 's1' }
+  if (method === 'clipboard.readText') return { text: 'copied' }
+  if (method === 'deepLinks.initial') return { url: null }
   return null
 })
 vi.mock('./client', () => ({ call, log: vi.fn() }))
@@ -21,7 +24,10 @@ describe('swift host', () => {
   test('maps os calls onto bridge methods as the runtime', async () => {
     await host.os.openExternal('https://example.com')
     expect(call).toHaveBeenLastCalledWith('runtime', 'system.openUrl', { url: 'https://example.com' })
-    await expect(host.os.openPath('/tmp/a', 'Xcode')).rejects.toThrow()
+    await host.os.openPath('/tmp/a', 'Xcode')
+    expect(call).toHaveBeenLastCalledWith('runtime', 'files.open', { path: '/tmp/a', app: 'Xcode' })
+    await host.os.openPath('/tmp/a')
+    expect(call).toHaveBeenLastCalledWith('runtime', 'files.open', { path: '/tmp/a' })
   })
 
   test('the store is the runtime storage: unset and deleted read as undefined', async () => {
@@ -55,11 +61,36 @@ describe('swift host', () => {
     expect(seen).toEqual([{}])
   })
 
-  test('what a notch panel lacks rejects or does nothing', async () => {
-    await expect(host.notifications.send({ title: 'hi' })).rejects.toThrow()
-    await expect(host.shortcuts.register('Cmd+K', () => {})).rejects.toThrow()
-    expect(await host.updater.check()).toEqual({ kind: 'idle' })
+  test('clipboard and notifications go through the bridge', async () => {
+    await host.clipboard.writeText('hello')
+    expect(call).toHaveBeenLastCalledWith('runtime', 'clipboard.writeText', { text: 'hello' })
+    expect(await host.clipboard.readText()).toBe('copied')
+    await host.notifications.send({ title: 'hi', body: 'there' })
+    expect(call).toHaveBeenLastCalledWith('runtime', 'notifications.send', { title: 'hi', body: 'there' })
+  })
+
+  test('a shortcut fires on its own id until it is unregistered', async () => {
+    let pressed = 0
+    const off = await host.shortcuts.register('CommandOrControl+Shift+K', () => pressed++)
+    expect(call).toHaveBeenLastCalledWith('runtime', 'shortcuts.register', { accelerator: 'CommandOrControl+Shift+K' })
+    dispatch([{ type: 'shortcut', payload: { id: 'other' } }, { type: 'shortcut', payload: { id: 's1' } }])
+    off()
+    expect(call).toHaveBeenLastCalledWith('runtime', 'shortcuts.unregister', { id: 's1' })
+    dispatch([{ type: 'shortcut', payload: { id: 's1' } }])
+    expect(pressed).toBe(1)
+  })
+
+  test('deep links: no launch URL reads undefined, opened ones reach listeners', async () => {
     expect(await host.deepLinks.initialUrl()).toBeUndefined()
+    const seen: string[] = []
+    const off = host.deepLinks.onOpen((url) => seen.push(url))
+    dispatch([{ type: 'deepLink.open', payload: { url: 'justnotch://settings' } }])
+    off()
+    expect(seen).toEqual(['justnotch://settings'])
+  })
+
+  test('what a notch panel lacks does nothing', async () => {
+    expect(await host.updater.check()).toEqual({ kind: 'idle' })
     await host.window.minimize()
   })
 })

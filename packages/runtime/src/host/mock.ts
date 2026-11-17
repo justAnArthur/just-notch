@@ -145,6 +145,10 @@ const subscribed = new Set<Topic>()
 const nullOnce = new Set<Topic>()
 const haptics: Methods['window.haptic']['params']['pattern'][] = []
 let plugins: InstalledPlugin[] = []
+let pasteboard = ''
+/** Registered shortcuts: id → accelerator. */
+const shortcuts = new Map<string, string>()
+let shortcutIds = 0
 export const hitRegions: { rects: Rect[]; focusable: boolean } = { rects: [], focusable: false }
 
 function emit(...events: HostEvent[]) {
@@ -350,6 +354,25 @@ const handlers: Handlers = {
     window.open(url, '_blank', 'noopener')
     return null
   },
+  'clipboard.writeText': ({ text }) => {
+    pasteboard = text
+    return null
+  },
+  'clipboard.readText': () => ({ text: pasteboard }),
+  'notifications.send': ({ title, body }) => {
+    console.info(`[mock host] notification: ${title}${body ? ` — ${body}` : ''}`)
+    return null
+  },
+  'shortcuts.register': ({ accelerator }) => {
+    const id = `shortcut-${++shortcutIds}`
+    shortcuts.set(id, accelerator)
+    return { id }
+  },
+  'shortcuts.unregister': ({ id }) => {
+    shortcuts.delete(id)
+    return null
+  },
+  'deepLinks.initial': () => ({ url: null }),
   'permissions.status': ({ permission }) => ({ granted: permission !== 'accessibility' }),
   'plugins.setEnabled': ({ id, enabled }) => {
     localStorage.setItem(enabledKey(id), String(enabled))
@@ -376,6 +399,12 @@ function authorize({ plugin, method }: HostRequest) {
 /** Triggers for the dev toolbar: what the real host would send. */
 export const mock = {
   hover: (inside: boolean) => emit({ type: 'hover', payload: { inside } }),
+  /** Presses the shortcut registered as `accelerator`, else the last one registered. */
+  shortcut(accelerator?: string) {
+    const id = [...shortcuts].reverse().find(([, a]) => !accelerator || a === accelerator)?.[0]
+    if (id) emit({ type: 'shortcut', payload: { id } })
+  },
+  deepLink: (url: string) => emit({ type: 'deepLink.open', payload: { url } }),
   charger() {
     const pluggedIn = !values.power.pluggedIn
     publish('power', { ...values.power, pluggedIn, charging: pluggedIn })

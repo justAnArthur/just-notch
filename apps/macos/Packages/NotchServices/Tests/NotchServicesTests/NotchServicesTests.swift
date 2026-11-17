@@ -402,3 +402,28 @@ struct NewServiceTests {
         #expect(!RecentFilesService.isPartial(URL(fileURLWithPath: "/Users/me/Downloads/../a.part"), in: downloads))
     }
 }
+
+@Suite("files.open with an app") @MainActor
+struct OpenWithTests {
+    @Test func findsAppsByNameBundleIdOrPath() throws {
+        #expect(try FilesService.application("Calculator").lastPathComponent == "Calculator.app")
+        #expect(try FilesService.application("com.apple.calculator").lastPathComponent == "Calculator.app")
+        #expect(try FilesService.application("/System/Applications/Calculator.app").path == "/System/Applications/Calculator.app")
+        #expect(throws: ServiceError.self) { try FilesService.application("No Such App") }
+    }
+}
+
+@Suite("system service") @MainActor
+struct SystemServiceTests {
+    @Test func clipboardTextRoundTrips() async throws {
+        let service = SystemService()
+        let before = NSPasteboard.general.string(forType: .string)
+        defer {
+            NSPasteboard.general.clearContents()
+            if let before { NSPasteboard.general.setString(before, forType: .string) }
+        }
+        _ = try await service.handle(method: "clipboard.writeText", params: Data(#"{"text":"notch ✓"}"#.utf8))
+        let read = try #require(try await service.handle(method: "clipboard.readText", params: Data("{}".utf8)))
+        #expect(String(decoding: read, as: UTF8.self) == #"{"text":"notch ✓"}"#)
+    }
+}

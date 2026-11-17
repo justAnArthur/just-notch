@@ -250,6 +250,10 @@ struct ThumbnailParams: Decodable { var path: String; var size: Double }
 struct URLResult: Encodable { var url: String }
 struct PathsParams: Decodable { var paths: [String] }
 struct PathParams: Decodable { var path: String }
+struct OpenParams: Decodable { var path: String; var app: String? }
+struct TextParams: Decodable { var text: String }
+struct TextResult: Encodable { var text: String }
+struct NotificationParams: Decodable { var title: String; var body: String? }
 struct IdParams: Decodable { var id: String }
 struct PinParams: Decodable { var id: String; var pinned: Bool }
 struct PausedParams: Decodable { var paused: Bool }

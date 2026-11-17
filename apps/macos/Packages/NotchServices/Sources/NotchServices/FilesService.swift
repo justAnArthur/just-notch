@@ -21,7 +21,14 @@ public final class FilesService: NotchService {
             NSWorkspace.shared.activateFileViewerSelecting([try existing(try decode(PathParams.self, params).path)])
             return nil
         case "files.open":
-            guard NSWorkspace.shared.open(try existing(try decode(PathParams.self, params).path)) else { throw ServiceError("no app opens this file") }
+            let request = try decode(OpenParams.self, params)
+            let url = try existing(request.path)
+            if let app = request.app {
+                let configuration = NSWorkspace.OpenConfiguration()
+                _ = try await NSWorkspace.shared.open([url], withApplicationAt: try Self.application(app), configuration: configuration)
+            } else {
+                guard NSWorkspace.shared.open(url) else { throw ServiceError("no app opens this file") }
+            }
             return nil
         case "files.copy":
             let urls = try decode(PathsParams.self, params).paths.map(existing)
@@ -34,6 +41,23 @@ public final class FilesService: NotchService {
         default:
             throw ServiceError("unknown method \(method)")
         }
+    }
+
+    /// An app by path, bundle id or name (`Visual Studio Code`), looked up in the usual Applications folders.
+    static func application(_ app: String) throws -> URL {
+        let manager = FileManager.default
+        if app.hasPrefix("/") || app.hasPrefix("~") {
+            let url = URL(fileURLWithPath: (app as NSString).expandingTildeInPath)
+            if manager.fileExists(atPath: url.path) { return url }
+        }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app) { return url }
+        let name = app.hasSuffix(".app") ? app : app + ".app"
+        let home = manager.homeDirectoryForCurrentUser.path
+        for folder in ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities", home + "/Applications"] {
+            let url = URL(fileURLWithPath: folder).appendingPathComponent(name)
+            if manager.fileExists(atPath: url.path) { return url }
+        }
+        throw ServiceError("no app named \(app)")
     }
 
     private func existing(_ path: String) throws -> URL {

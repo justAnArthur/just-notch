@@ -130,6 +130,7 @@ enum Schema {
         "files.beginDrag": .files,
         "files.copy": .files,
         "files.trash": .files,
+        "clipboard.readText": .clipboard,
     ]
 
     static let runtimeOnly: Set<String> = [
@@ -140,6 +141,9 @@ enum Schema {
         "plugins.setEnabled",
         "app.preferences",
         "app.setPreferences",
+        "shortcuts.register",
+        "shortcuts.unregister",
+        "deepLinks.initial",
     ]
 }
 
@@ -187,6 +191,28 @@ struct SetEnabledParams: Decodable {
 struct PreferencesParams: Decodable {
     var launchAtLogin: Bool?
     var screens: AppPreferences.Screens?
+}
+
+struct AcceleratorParams: Decodable {
+    var accelerator: String
+}
+
+struct IdParams: Decodable {
+    var id: String
+}
+
+struct IdResult: Encodable {
+    var id: String
+}
+
+/// `{ url: string | null }`: the key is always there.
+struct DeepLinkResult: Encodable {
+    var url: String?
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(["url": url])
+    }
 }
 
 struct GrantedResult: Encodable {

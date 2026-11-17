@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var monitors: [Any] = []
     private var pressTimer: Timer?
     private var dragChangeCount = 0
+    /// The `justnotch://` URL the app was launched with: one that arrives before any page is up.
+    private(set) var initialDeepLink: String?
+    private var pagesUp = false
     #if DEBUG
     private var probe: DebugProbe?
     #endif
@@ -49,6 +52,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.rebuildPanels() }
         }
         log.info("launched, dev server: \(self.devServer?.absoluteString ?? "none", privacy: .public)")
+    }
+
+    // MARK: deep links
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme?.lowercased() == "justnotch" {
+            guard pagesUp else {
+                if initialDeepLink == nil { initialDeepLink = url.absoluteString }
+                continue
+            }
+            guard let payload = try? JSONSerialization.data(withJSONObject: ["url": url.absoluteString]) else { continue }
+            events.send("deepLink.open", payload: payload, to: webViews)
+        }
+    }
+
+    /// A page said `host.ready`: from now on links go to the pages as they arrive.
+    func pageReady() {
+        pagesUp = true
     }
 
     // MARK: panels

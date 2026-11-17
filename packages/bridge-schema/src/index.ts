@@ -394,7 +394,8 @@ export interface Methods {
   'files.thumbnail': { params: { path: string; size: number }; result: { url: string } }
   'files.airdrop': { params: { paths: string[] }; result: null }
   'files.reveal': { params: { path: string }; result: null }
-  'files.open': { params: { path: string }; result: null }
+  /** Opens with the default app, or with `app`: its name (`Visual Studio Code`), bundle id or path. */
+  'files.open': { params: { path: string; app?: string }; result: null }
   /** Call from a `pointerdown`: the host starts a native drag of these files out of the panel. */
   'files.beginDrag': { params: { paths: string[] }; result: null }
   /** Puts the files on the pasteboard, as Finder's Copy does. */
@@ -407,6 +408,17 @@ export interface Methods {
   'storage.set': { params: { key: string; value: unknown }; result: null }
 
   'system.openUrl': { params: { url: string }; result: null }
+  /** Puts plain text on the pasteboard (a web view's `navigator.clipboard` may be refused). */
+  'clipboard.writeText': { params: { text: string }; result: null }
+  /** The pasteboard's plain text, `''` when it holds none. */
+  'clipboard.readText': { params: Record<string, never>; result: { text: string } }
+  /** A system notification from Just Notch; asks for permission on first use. */
+  'notifications.send': { params: { title: string; body?: string }; result: null }
+  /** A system-wide shortcut such as `CommandOrControl+Shift+Space`; `shortcut` events carry the id. Released with the page. */
+  'shortcuts.register': { params: { accelerator: string }; result: { id: string } }
+  'shortcuts.unregister': { params: { id: string }; result: null }
+  /** The `justnotch://` URL the app was launched with, if any. */
+  'deepLinks.initial': { params: Record<string, never>; result: { url: string | null } }
   'permissions.status': {
     params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' }
     result: { granted: boolean }
@@ -460,6 +472,7 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'files.beginDrag': 'files',
   'files.copy': 'files',
   'files.trash': 'files',
+  'clipboard.readText': 'clipboard',
 }
 
 /** Methods only the runtime (`plugin: 'runtime'`) may call. */
@@ -471,6 +484,9 @@ export const RUNTIME_ONLY: Method[] = [
   'plugins.setEnabled',
   'app.preferences',
   'app.setPreferences',
+  'shortcuts.register',
+  'shortcuts.unregister',
+  'deepLinks.initial',
 ]
 
 // ── Events: Swift → JS ──
@@ -494,6 +510,10 @@ export interface Events {
   'gesture.touch': Record<string, never>
   /** The app menu's Settings…, or `window.openSettings`: the island opens on its settings page. */
   'settings.open': Record<string, never>
+  /** A shortcut from `shortcuts.register` was pressed; sent to the page that registered it. */
+  shortcut: { id: string }
+  /** A `justnotch://` URL was opened while the app runs. */
+  'deepLink.open': { url: string }
 }
 export type EventName = keyof Events
 
