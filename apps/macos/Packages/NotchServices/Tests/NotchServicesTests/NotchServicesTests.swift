@@ -288,7 +288,7 @@ struct NewServiceTests {
         let json = """
         {"current":{"time":1700000000,"temperature_2m":7.5,"apparent_temperature":4.1,"weather_code":2,"is_day":1,"wind_speed_10m":14,"relative_humidity_2m":71,"uv_index":1.2},
          "hourly":{"time":[1699995600,1699999200,1700002800],"temperature_2m":[6,7,null],"weather_code":[1,2,3],"precipitation_probability":[0,10,20],"is_day":[1,1,0]},
-         "daily":{"time":[1699920000],"weather_code":[61],"temperature_2m_max":[9],"temperature_2m_min":[2],"precipitation_probability_max":[80]}}
+         "daily":{"time":[1699920000],"weather_code":[61],"temperature_2m_max":[9],"temperature_2m_min":[2],"precipitation_probability_max":[80],"sunrise":[1699941600],"sunset":[1699975200]}}
         """
         let forecast = try WeatherService.parse(Data(json.utf8), now: 1_700_000_000)
         #expect(forecast.current.time == 1_700_000_000_000)
@@ -296,6 +296,7 @@ struct NewServiceTests {
         // 1699995600 is the hour before; the null-temperature hour is dropped.
         #expect(forecast.hours.map(\.time) == [1_699_999_200_000])
         #expect(forecast.days.first?.code == 61)
+        #expect(forecast.days.first?.sunrise == 1_699_941_600_000)
     }
 
     @Test func clipKinds() {

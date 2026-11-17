@@ -183,6 +183,10 @@ public final class WeatherService: NSObject, NotchService, CLLocationManagerDele
 
 // MARK: Open-Meteo
 
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
 extension WeatherService {
     struct Forecast {
         var current: WeatherNow
@@ -216,6 +220,8 @@ extension WeatherService {
             var temperature_2m_max: [Double?]
             var temperature_2m_min: [Double?]
             var precipitation_probability_max: [Double?]
+            var sunrise: [Double?]?
+            var sunset: [Double?]?
         }
 
         var current: Current
@@ -230,7 +236,7 @@ extension WeatherService {
             URLQueryItem(name: "longitude", value: String(format: "%.3f", coordinate.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m,uv_index"),
             URLQueryItem(name: "hourly", value: "temperature_2m,weather_code,precipitation_probability,is_day"),
-            URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"),
+            URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset"),
             URLQueryItem(name: "timezone", value: "auto"),
             URLQueryItem(name: "timeformat", value: "unixtime"),
             URLQueryItem(name: "forecast_days", value: "7"),
@@ -261,7 +267,11 @@ extension WeatherService {
         let d = r.daily
         let days = d.time.indices.compactMap { i -> WeatherDay? in
             guard let code = d.weather_code[i], let high = d.temperature_2m_max[i], let low = d.temperature_2m_min[i] else { return nil }
-            return WeatherDay(date: d.time[i] * 1000, code: code, high: high, low: low, precipitation: d.precipitation_probability_max[i] ?? 0)
+            let ms = { (values: [Double?]?) in values?[safe: i].flatMap { $0 }.map { $0 * 1000 } }
+            return WeatherDay(
+                date: d.time[i] * 1000, code: code, high: high, low: low, precipitation: d.precipitation_probability_max[i] ?? 0,
+                sunrise: ms(d.sunrise), sunset: ms(d.sunset)
+            )
         }
         return Forecast(current: current, hours: Array(hours), days: days)
     }

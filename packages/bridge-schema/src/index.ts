@@ -118,7 +118,7 @@ export interface CalendarEvent {
 
 export interface CalendarState {
   access: 'granted' | 'denied' | 'undetermined'
-  /** Events from now until the end of tomorrow, sorted by start. */
+  /** Events from now until the end of the sixth day ahead, sorted by start. */
   upcoming: CalendarEvent[]
 }
 
@@ -181,6 +181,8 @@ export interface WeatherDay {
   high: number
   low: number
   precipitation: number // probability, %
+  sunrise?: number
+  sunset?: number
 }
 
 export type WeatherLocation = { mode: 'auto' } | { mode: 'city'; city: string }

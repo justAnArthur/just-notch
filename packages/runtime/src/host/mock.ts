@@ -103,7 +103,15 @@ const values: Topics = {
       const h = new Date(time).getHours()
       return { time, temperature: 7 - Math.abs(14 - h) / 3, code: WEATHER_CODES[i % WEATHER_CODES.length], isDay: h >= 7 && h < 17, precipitation: i > 3 && i < 7 ? 60 : 10 }
     }),
-    days: Array.from({ length: 7 }, (_, i) => ({ date: midnight + i * day, code: WEATHER_CODES[(i * 3) % WEATHER_CODES.length], high: 9 - (i % 3), low: 2 - (i % 2), precipitation: (i * 23) % 80 })),
+    days: Array.from({ length: 7 }, (_, i) => ({
+      date: midnight + i * day,
+      code: WEATHER_CODES[(i * 3) % WEATHER_CODES.length],
+      high: 9 - (i % 3),
+      low: 2 - (i % 2),
+      precipitation: (i * 23) % 80,
+      sunrise: midnight + i * day + 7 * hour + 12 * 60_000,
+      sunset: midnight + i * day + 16 * hour + 8 * 60_000,
+    })),
     updatedAt: Date.now(),
   },
   clipboard: {

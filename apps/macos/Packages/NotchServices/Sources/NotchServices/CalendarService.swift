@@ -86,8 +86,9 @@ public final class CalendarService: NotchService {
 
         let now = Date()
         let calendar = Calendar.current
-        let endOfTomorrow = calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: now)) ?? now
-        let predicate = store.predicateForEvents(withStart: now, end: endOfTomorrow, calendars: nil)
+        // Today and the next six days: the tall agenda lists the week ahead.
+        let end = calendar.date(byAdding: .day, value: 7, to: calendar.startOfDay(for: now)) ?? now
+        let predicate = store.predicateForEvents(withStart: now, end: end, calendars: nil)
         let events = store.events(matching: predicate)
             .sorted { $0.startDate < $1.startDate }
             .map(Self.event)

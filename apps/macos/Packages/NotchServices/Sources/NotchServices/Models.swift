@@ -102,6 +102,8 @@ public struct WeatherDay: Codable, Equatable, Sendable {
     public var high: Double
     public var low: Double
     public var precipitation: Double
+    public var sunrise: Double?
+    public var sunset: Double?
 }
 
 /// `{ mode: 'auto' } | { mode: 'city'; city: string }`.

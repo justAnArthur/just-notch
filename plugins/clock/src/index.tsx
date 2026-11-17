@@ -9,6 +9,8 @@ const SECONDS = 'seconds'
 const ZONES = 'zones'
 const POMODORO = 'pomodoro'
 const AUTO_BREAK = 'autoBreak'
+/** Focus rounds finished today: `{ day, count }`, `day` the local date it counts. */
+const COMPLETED = 'completed'
 
 type Format = 'auto' | '12' | '24'
 const DEFAULT_POMODORO: PomodoroSettings = { focus: 25, shortBreak: 5, longBreak: 15, rounds: 4 }
@@ -36,6 +38,14 @@ const current = signal<PomodoroRun | null>(null)
 const ended = signal<PomodoroRun | null>(null)
 
 const hour12 = (format: Format) => (format === 'auto' ? undefined : format === '12')
+
+interface Completed {
+  day: string
+  count: number
+}
+const today = () => new Date().toDateString()
+/** Today's count; a count kept from an earlier day reads as none. */
+const completedToday = (completed: Completed | null | undefined) => (completed?.day === today() ? completed.count : 0)
 
 function Widget() {
   const [run, setRun] = useStorage<PomodoroRun | null>(RUN, null)
@@ -147,6 +157,10 @@ function activate(ctx: PluginContext) {
     const autoBreak = (await ctx.storage.get<boolean>(AUTO_BREAK)) ?? true
     const next = advancePomodoro(run, pomodoro)
     ended.set(run)
+    if (run.phase === 'focus') {
+      const count = completedToday(await ctx.storage.get<Completed>(COMPLETED)) + 1
+      await ctx.storage.set(COMPLETED, { day: today(), count })
+    }
     await ctx.storage.set(RUN, autoBreak && next.phase !== 'focus' ? resumePomodoro(next) : next)
     ctx.activity.flash({ priority: 'alert', key: 'phase', view: PhaseDone, durationMs: 8000 })
   }
