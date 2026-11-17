@@ -98,6 +98,10 @@ final class PanelController {
         events.send("files.dropped", PathsPayload(paths: urls.map(\.path)), to: [webView])
     }
 
+    func gestureTouched() {
+        events.send("gesture.touch", payload: Data("{}".utf8), to: [webView])
+    }
+
     /// Starts a native drag of `paths` from the last mouse-down on the island.
     func beginDrag(paths: [String]) async throws {
         let urls = paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }

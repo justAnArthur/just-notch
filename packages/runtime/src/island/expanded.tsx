@@ -11,7 +11,7 @@ import { useEdgeFade } from './edge-fade'
 import { type Shape, stripLayout } from './geometry'
 import TabStrip, { type Tab } from './tabs'
 
-/** Moves the selection `delta` tabs; false at either end. */
+/** Moves the selection `delta` tabs, round from settings back to the first; true when it moved. */
 export type TabStep = (delta: number) => boolean
 
 /** Arrows move a caret, a value or a menu's focus there, not the tab. */
@@ -87,10 +87,11 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
   useHeight(measure, onFit, !fills)
 
   const select = (id: string | undefined) => id && dispatch({ type: 'tab', tab: id })
+  // Swipes and arrows go round: the widgets, then settings, then back to the first widget.
+  const order = [...tabs.map((t) => t.id), SETTINGS_TAB]
   const move: TabStep = (delta) => {
-    const next = settings ? (delta < 0 ? tabs.at(-1) : undefined) : tabs[index + delta]
-    if (!next) return false
-    select(next.id)
+    const at = order.indexOf(settings ? SETTINGS_TAB : (tab?.id ?? SETTINGS_TAB))
+    select(order[(at + delta + order.length) % order.length])
     return true
   }
   useEffect(() => {

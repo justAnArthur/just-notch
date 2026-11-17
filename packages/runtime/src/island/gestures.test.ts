@@ -50,26 +50,34 @@ describe('swipes', () => {
 })
 
 describe('swipes in the app (the host ends committed gestures)', () => {
-  function runNative(samples: Sample[]) {
+  /** Samples tagged `touch` follow the host's announcement of a new touch. */
+  function runNative(samples: (Sample & { touch?: boolean })[]) {
     let g: Gesture | undefined
+    let touches = 0
     const swipes: string[] = []
     for (const s of samples) {
-      g = track(isFresh(g, s, true) ? undefined : g, s)
+      if (s.touch) touches++
+      g = track(isFresh(g, s, touches) ? undefined : g, s)
       const swipe = swipeOf(g)
       if (swipe) {
         swipes.push(swipe)
-        commit(g, s, swipe)
+        commit(g, s, swipe, touches)
       }
     }
     return swipes
   }
+  const touched = (samples: Sample[]) => samples.map((s, i) => (i === 0 ? { ...s, touch: true } : s))
 
-  test('one fast swipe with uneven speed counts once (the host holds back its tail)', () => {
-    const uneven = [30, 8, 2, 25, 40, 5].map((x, i) => ({ t: i * 16, x: -x, y: 0 }))
+  test('one swipe counts once, however its speed swings and however long its tail', () => {
+    const uneven = [30, 8, 2, 25, 40, 5, 60, 3, 45].map((x, i) => ({ t: i * 40, x: -x, y: 0 }))
     expect(runNative(uneven)).toEqual(['left'])
   })
 
-  test('fast swipes in a row each count, either way', () => {
-    expect(runNative([...stroke(0, 6, 12, 0), ...stroke(200, 6, 12, 0), ...stroke(400, 6, -12, 0)])).toEqual(['right', 'right', 'left'])
+  test('each new touch swipes again, fast and either way', () => {
+    expect(runNative([...stroke(0, 6, 12, 0), ...touched(stroke(120, 6, 12, 0)), ...touched(stroke(240, 6, -12, 0))])).toEqual([
+      'right',
+      'right',
+      'left',
+    ])
   })
 })

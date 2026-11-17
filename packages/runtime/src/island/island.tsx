@@ -10,7 +10,7 @@ import PluginView from '../plugins/plugin-view'
 import Expanded, { type TabStep } from './expanded'
 import { POPUP_SELECTOR, setIslandRegions, trackPopups } from './hit-regions'
 import { type Box, boxOf, bubbleFor, centerX, islandPath, rectOf, type Shape, shapeFor, slotWidth, union } from './geometry'
-import { type Swipe, useSwipes } from './gestures'
+import { type NativeGestures, type Swipe, useSwipes } from './gestures'
 import {
   bubbleTransition,
   contentEnter,
@@ -121,7 +121,14 @@ const haptic = (pattern: 'generic' | 'alignment') => void call('runtime', 'windo
  * Swipe down opens the island and then pulls it to the tall snap, swipe up steps back the same way; sideways,
  * the open island changes tab and a split one swaps its activities. Each committed swipe taps the trackpad.
  */
-const endGesture = () => void call('runtime', 'window.endGesture', {}).catch(() => {})
+let touches = 0
+on('gesture.touch', () => {
+  touches++
+})
+const nativeGestures: NativeGestures = {
+  end: () => void call('runtime', 'window.endGesture', {}).catch(() => {}),
+  touches: () => touches,
+}
 
 function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: React.MutableRefObject<TabStep | null>) {
   // In the app the host ends a committed gesture natively; the mock host has no trackpad phases.
@@ -145,7 +152,7 @@ function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: Rea
     if (island !== 'split') return
     dispatch({ type: 'swap' })
     haptic('alignment')
-  }, native ? endGesture : undefined)
+  }, native ? nativeGestures : undefined)
 }
 
 function GooFilter({ id }: { id: string }) {

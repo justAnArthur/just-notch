@@ -10,7 +10,8 @@ final class NotchWebView: WKWebView {
     private var swallowUntil: Date?
 
     /// `window.endGesture`: the page took this gesture as a swipe. Fingers touching down again (or a mouse
-    /// wheel, or a stuck state after 2 s) hand wheel events back to it.
+    /// wheel, or a stuck state after 2 s) hand wheel events back to it, announced as `gesture.touch` so the
+    /// page knows the next events are a new gesture without guessing from timing.
     func endGesture() {
         swallowUntil = Date().addingTimeInterval(2)
     }
@@ -21,6 +22,7 @@ final class NotchWebView: WKWebView {
             let mouseWheel = event.phase.isEmpty && event.momentumPhase.isEmpty
             guard touchedDown || mouseWheel || Date() > until else { return }
             swallowUntil = nil
+            controller?.gestureTouched()
         }
         super.scrollWheel(with: event)
     }

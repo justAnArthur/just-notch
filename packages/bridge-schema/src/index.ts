@@ -448,6 +448,8 @@ export interface Events {
   /** A `storage.set` by any web view (island or settings), so both stay in sync. Delivered to every web view. */
   'storage.changed': { plugin: string; key: string; value: unknown }
   'plugins.changed': { plugins: InstalledPlugin[] }
+  /** After `window.endGesture`: the fingers touched the trackpad again, so the next wheel events are a new gesture. */
+  'gesture.touch': Record<string, never>
   /** The app menu's Settings…, or `window.openSettings`: the island opens on its settings page. */
   'settings.open': Record<string, never>
 }
