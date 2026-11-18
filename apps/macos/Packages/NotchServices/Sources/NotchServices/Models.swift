@@ -17,6 +17,8 @@ public struct MediaState: Codable, Equatable, Sendable {
     public var sourceApp: String?
     public var shuffle: Bool?
     public var `repeat`: Repeat?
+    /// The modes `repeat` steps through; nil: all three.
+    public var repeatModes: [Repeat]?
     public var liked: Bool?
 }
 

@@ -13,13 +13,14 @@ private func keys(_ value: some Encodable) throws -> Set<String> {
 struct ShapeTests {
     @Test func media() throws {
         let full = MediaState(playing: true, title: "t", artist: "a", album: "b", artworkUrl: "data:", durationS: 1, positionS: 0, rate: 1, updatedAt: 1, sourceApp: "x",
-                              shuffle: true, repeat: .one, liked: false)
-        #expect(try keys(full) == ["playing", "title", "artist", "album", "artworkUrl", "durationS", "positionS", "rate", "updatedAt", "sourceApp", "shuffle", "repeat", "liked"])
+                              shuffle: true, repeat: .one, repeatModes: [.off, .all], liked: false)
+        #expect(try keys(full) == ["playing", "title", "artist", "album", "artworkUrl", "durationS", "positionS", "rate", "updatedAt", "sourceApp", "shuffle", "repeat", "repeatModes", "liked"])
         var bare = full
         bare.artworkUrl = nil
         bare.sourceApp = nil
         bare.shuffle = nil
         bare.repeat = nil
+        bare.repeatModes = nil
         bare.liked = nil
         #expect(try keys(bare) == ["playing", "title", "artist", "album", "durationS", "positionS", "rate", "updatedAt"])
     }
@@ -209,6 +210,36 @@ struct ShapeTests {
         #expect(MediaRemoteMode.options(.like(false))?.options["kMRMediaRemoteOptionIsNegative"] as? Bool == true)
         #expect(MediaRemoteMode.options(.repeat(.all))?.options["kMRMediaRemoteOptionRepeatMode"] as? Int == 3)
         #expect(MediaRemoteMode.options(.next) == nil)
+    }
+
+    @Test func appleEventModes() throws {
+        #expect(AppleEventModes.spotify(shuffling: true, repeating: false) == PlayerModes(shuffle: true, repeat: .off, repeatModes: [.off, .all]))
+        #expect(AppleEventModes.spotify(shuffling: false, repeating: true).repeat == .all)
+        let codes = ["kRpO", "kRp1", "kAll", "xxxx"].map(AppleEventModes.code)
+        #expect(codes.map { AppleEventModes.music(shuffle: false, repeat: $0, favorited: nil).repeat } == [.off, .one, .all, nil])
+        #expect(AppleEventModes.music(shuffle: true, repeat: codes[0], favorited: true) == PlayerModes(shuffle: true, repeat: .off, liked: true))
+
+        let spotify = NSAppleEventDescriptor.list()
+        spotify.insert(NSAppleEventDescriptor(boolean: true), at: 1)
+        spotify.insert(NSAppleEventDescriptor(boolean: true), at: 2)
+        #expect(AppleEventModes.parse(spotify, bundleId: AppleEventModes.spotify) == PlayerModes(shuffle: true, repeat: .all, repeatModes: [.off, .all]))
+
+        let music = NSAppleEventDescriptor.list()
+        music.insert(NSAppleEventDescriptor(boolean: false), at: 1)
+        music.insert(NSAppleEventDescriptor(enumCode: AppleEventModes.code("kRp1")), at: 2)
+        music.insert(NSAppleEventDescriptor(typeCode: AppleEventModes.code("msng")), at: 3)
+        #expect(AppleEventModes.parse(music, bundleId: AppleEventModes.music) == PlayerModes(shuffle: false, repeat: .one))
+        music.insert(NSAppleEventDescriptor(boolean: true), at: 3)
+        #expect(AppleEventModes.parse(music, bundleId: AppleEventModes.music)?.liked == true)
+        #expect(AppleEventModes.parse(.list(), bundleId: AppleEventModes.music) == nil)
+
+        #expect(AppleEventModes.commandScript(.repeat(.one), bundleId: AppleEventModes.spotify)?.hasSuffix("set repeating to true") == true)
+        #expect(AppleEventModes.commandScript(.repeat(.off), bundleId: AppleEventModes.spotify)?.hasSuffix("set repeating to false") == true)
+        #expect(AppleEventModes.commandScript(.repeat(.one), bundleId: AppleEventModes.music)?.hasSuffix("set song repeat to one") == true)
+        #expect(AppleEventModes.commandScript(.shuffle(true), bundleId: AppleEventModes.music)?.hasSuffix("set shuffle enabled to true") == true)
+        #expect(AppleEventModes.commandScript(.like(true), bundleId: AppleEventModes.spotify) == nil)
+        #expect(AppleEventModes.commandScript(.next, bundleId: AppleEventModes.music) == nil)
+        #expect(AppleEventModes.readScript("com.example") == nil)
     }
 
     @Test func mediaRemoteInfo() throws {

@@ -27,6 +27,9 @@ public final class MediaService: NotchService {
     /// The track the current artwork belongs to.
     private var artworkTrack: String?
     private var latest = Latest<MediaState?>()
+    /// The state as the backend reported it, before `modes` fills in what it left out.
+    private var reported: MediaState?
+    private let modes = AppleEventModePoller()
 
     private static let idleTimeout: TimeInterval = 60
     private let picker: @MainActor (Set<String>) async -> MediaBackend
@@ -39,6 +42,10 @@ public final class MediaService: NotchService {
 
     init(picker: @escaping @MainActor (Set<String>) async -> MediaBackend) {
         self.picker = picker
+        modes.onChange = { [weak self] _ in
+            guard let self, let reported = self.reported else { return }
+            self.publish(self.filled(reported))
+        }
     }
 
     public func start(topic: String) {
@@ -59,6 +66,8 @@ public final class MediaService: NotchService {
         artworkData = nil
         artworkUrl = nil
         latest.reset()
+        reported = nil
+        modes.watch(nil)
     }
 
     public func snapshot(topic: String) async -> Data? {
@@ -69,6 +78,10 @@ public final class MediaService: NotchService {
     public func handle(method: String, params: Data) async throws -> Data? {
         guard method == "media.command" else { throw ServiceError("unknown method \(method)") }
         let command = try decode(MediaCommand.self, params)
+        if let reported, scriptsModes(command, reported) {
+            modes.send(command)
+            return nil
+        }
         let target = if let backend { backend } else { await commandBackend() }
         target.send(command)
         return nil
@@ -142,6 +155,8 @@ public final class MediaService: NotchService {
             artworkData = nil
             artworkUrl = nil
             artworkTrack = nil
+            reported = nil
+            modes.watch(nil)
             return publish(nil)
         }
 
@@ -164,7 +179,7 @@ public final class MediaService: NotchService {
             artworkUrl = nil
         }
 
-        publish(MediaState(
+        let state = MediaState(
             playing: raw.playing,
             title: raw.title,
             artist: raw.artist,
@@ -178,7 +193,35 @@ public final class MediaService: NotchService {
             shuffle: MediaRemoteMode.shuffle(raw.shuffleMode),
             repeat: MediaRemoteMode.repeat(raw.repeatMode),
             liked: MediaRemoteMode.liked(raw.isLiked, supported: raw.supportsIsLiked)
-        ))
+        )
+        reported = state
+        let missing = state.shuffle == nil || state.repeat == nil || (state.liked == nil && raw.bundleId == AppleEventModes.music)
+        modes.watch(missing ? raw.bundleId : nil)
+        publish(filled(state))
+    }
+
+    /// Fills in what the backend left out from the player's own Apple Events.
+    private func filled(_ state: MediaState) -> MediaState {
+        guard let read = modes.modes, modes.bundleId == state.sourceApp else { return state }
+        var state = state
+        if state.shuffle == nil { state.shuffle = read.shuffle }
+        if state.repeat == nil {
+            state.repeat = read.repeat
+            state.repeatModes = read.repeatModes
+        }
+        if state.liked == nil { state.liked = read.liked }
+        return state
+    }
+
+    /// The command changes a mode that came from Apple Events.
+    private func scriptsModes(_ command: MediaCommand, _ reported: MediaState) -> Bool {
+        guard let read = modes.modes, modes.bundleId == reported.sourceApp else { return false }
+        return switch command {
+        case .shuffle: reported.shuffle == nil && read.shuffle != nil
+        case .repeat: reported.repeat == nil && read.repeat != nil
+        case .like: reported.liked == nil && read.liked != nil
+        default: false
+        }
     }
 
     private func publish(_ new: MediaState?) {
@@ -195,7 +238,7 @@ extension MediaState {
     func continues(_ old: MediaState, tolerance: Double = 1.5) -> Bool {
         guard playing == old.playing, rate == old.rate, title == old.title, artist == old.artist, album == old.album,
               artworkUrl == old.artworkUrl, durationS == old.durationS, sourceApp == old.sourceApp,
-              shuffle == old.shuffle, self.repeat == old.repeat, liked == old.liked else { return false }
+              shuffle == old.shuffle, self.repeat == old.repeat, repeatModes == old.repeatModes, liked == old.liked else { return false }
         let expected = old.positionS + (updatedAt - old.updatedAt) / 1000 * old.rate
         return abs(expected - positionS) < tolerance
     }

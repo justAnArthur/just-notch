@@ -2,6 +2,7 @@ import { NowPlaying, type NowPlayingOutput, type NowPlayingTrack } from '@justan
 import { List } from '@justanarthur/modo-ui'
 import { definePlugin, type MediaState, type PluginContext, signal, SwitchRow, useMediaPosition, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { Music } from 'lucide-react'
+import { supportedRepeat } from './repeat'
 
 const PAUSED_MS = 30_000
 /** A new track's artwork often lands a moment after its title: the last picture stays up this long. */
@@ -92,7 +93,7 @@ function Player() {
       shuffle={media?.shuffle}
       onShuffleChange={media?.shuffle === undefined ? undefined : (shuffle) => void call('media.command', { command: 'shuffle', shuffle })}
       repeat={media?.repeat}
-      onRepeatChange={media?.repeat === undefined ? undefined : (repeat) => void call('media.command', { command: 'repeat', repeat })}
+      onRepeatChange={media?.repeat === undefined ? undefined : (repeat) => void call('media.command', { command: 'repeat', repeat: supportedRepeat(repeat, media.repeatModes) })}
       liked={media?.liked}
       onLikedChange={media?.liked === undefined ? undefined : (liked) => void call('media.command', { command: 'like', liked })}
     />

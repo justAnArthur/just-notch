@@ -6,7 +6,8 @@
   "scripts": {
     "build": "notch build",
     "dev": "notch dev",
-    "check": "notch check"
+    "check": "notch check",
+    "test": "bun test"
   },
   "dependencies": {
     "@just-notch/sdk": "workspace:*",

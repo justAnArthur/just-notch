@@ -262,6 +262,8 @@ export interface MediaState {
   shuffle?: boolean
   /** Absent when the player doesn't report it. */
   repeat?: MediaRepeat
+  /** The modes the player takes (Spotify: `off`, `all`); absent: all three. */
+  repeatModes?: MediaRepeat[]
   /** The track is liked; absent when the player doesn't support likes. */
   liked?: boolean
 }

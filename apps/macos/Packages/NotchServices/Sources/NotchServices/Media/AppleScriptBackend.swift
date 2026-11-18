@@ -53,7 +53,7 @@ final class AppleScriptBackend: MediaBackend {
         case .next: verb = "next track"
         case .previous: verb = "previous track"
         case .seek(let position): verb = "set player position to \(position)"
-        // Not read over Apple Events, so their toggles never show for this backend.
+        // MediaService reads and sets these over Apple Events itself (AppleEventModePoller).
         case .shuffle, .repeat, .like: return
         }
         _ = Self.run("tell \(player.target) to \(verb)")
