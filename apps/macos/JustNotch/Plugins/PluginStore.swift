@@ -1,8 +1,10 @@
 import CoreServices
 import Foundation
+import NotchServices
 import os
 
 /// Built-in plugins (Resources/Web/plugins) and user plugins (Application Support/JustNotch/Plugins).
+/// A user plugin whose `engines.notch` doesn't admit the plugin API version is listed as incompatible; the runtime skips it.
 @MainActor
 final class PluginStore {
     private static let enabledKey = "plugins.enabled"
@@ -21,6 +23,16 @@ final class PluginStore {
 
     func manifest(_ id: String) -> PluginManifest? {
         plugins.first { $0.manifest.id == id }?.manifest
+    }
+
+    func incompatible(_ id: String) -> String? {
+        plugins.first { $0.manifest.id == id }?.incompatible
+    }
+
+    /// The host's wording, mirrored by the mock host.
+    static func incompatibility(_ manifest: PluginManifest) -> String? {
+        Semver.satisfies(Semver.apiVersion, manifest.engines.notch) ? nil
+            : "Needs plugin API \(manifest.engines.notch); this Just Notch has \(Semver.apiVersion)."
     }
 
     func setEnabled(_ id: String, _ enabled: Bool) {
@@ -60,7 +72,9 @@ final class PluginStore {
         for (folder, builtIn) in [(Paths.builtInPlugins, true), (Paths.userPlugins, false)] {
             for manifest in manifests(in: folder) where seen.insert(manifest.id).inserted {
                 result.append(InstalledPlugin(manifest: manifest, baseUrl: baseUrl + manifest.id + "/",
-                                              enabled: states[manifest.id] ?? true, builtIn: builtIn))
+                                              enabled: states[manifest.id] ?? true, builtIn: builtIn,
+                                              source: builtIn ? .builtIn : .user,
+                                              incompatible: builtIn ? nil : Self.incompatibility(manifest)))
             }
         }
         return result

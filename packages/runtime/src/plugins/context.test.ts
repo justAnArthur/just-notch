@@ -20,6 +20,7 @@ const plugin = (permissions: InstalledPlugin['manifest']['permissions']): Instal
   baseUrl: 'notch://app/plugins/github/',
   enabled: true,
   builtIn: false,
+  source: 'user',
 })
 
 describe('ctx.fetch', () => {

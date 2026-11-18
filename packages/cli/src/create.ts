@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
+import { API_VERSION } from '@just-notch/bridge-schema'
 import { ID } from './manifest'
 import { CliError, ENTRY, STYLE } from './plugin'
 
-// TODO(phase 3): derive from the SDK's API_VERSION instead of the range every built-in plugin declares.
-export const ENGINES_NOTCH = '^0.1.0'
+/** New plugins ask for the plugin API they're scaffolded against: today's `API_VERSION` and later minors. */
+export const ENGINES_NOTCH = `^${API_VERSION}`
 
 const { version: CLI_VERSION } = (await Bun.file(join(import.meta.dir, '../package.json')).json()) as { version: string }
 

@@ -1,4 +1,5 @@
 import {
+  API_VERSION,
   type AppPreferences,
   type BluetoothDevice,
   type Clip,
@@ -19,6 +20,7 @@ import {
   type Rect,
   RUNTIME_ONLY,
   type ScreenGeometry,
+  satisfies,
   type Topic,
   type Topics,
 } from '@just-notch/bridge-schema'
@@ -261,15 +263,20 @@ async function loadPlugins(): Promise<InstalledPlugin[]> {
     baseUrl: new URL(`/plugins/${manifest.id}/`, location.href).href,
     enabled: localStorage.getItem(enabledKey(manifest.id)) !== 'false',
     builtIn,
+    source: builtIn ? 'builtIn' : 'user',
+    ...(!builtIn && !satisfies(API_VERSION, manifest.engines.notch) && { incompatible: incompatibility(manifest.engines.notch) }),
   }))
 }
+
+/** The host's wording (PluginStore.swift). */
+const incompatibility = (range: string) => `Needs plugin API ${range}; this Just Notch has ${API_VERSION}.`
 
 type Handlers = { [M in keyof Methods]: (params: Methods[M]['params'], plugin: string) => Methods[M]['result'] | Promise<Methods[M]['result']> }
 
 const handlers: Handlers = {
   'host.ready': async (): Promise<HostInfo> => {
     plugins = await loadPlugins()
-    return { version: '0.0.0-mock', devMode: true, devServerUrl: location.origin, plugins, geometry }
+    return { version: '0.0.0-mock', apiVersion: API_VERSION, devMode: true, devServerUrl: location.origin, plugins, geometry }
   },
   'host.log': ({ level, message }) => {
     if (level === 'error') console.info(`[mock host] ${message}`)

@@ -61,15 +61,23 @@ export interface PluginManifest {
    * Needs the `net` permission.
    */
   hosts?: string[]
+  /** The plugin API (`API_VERSION`) range it's written against, such as `^1.1.0`. Checked for user and library plugins. */
   engines: { notch: string }
 }
+
+/** Bundled with the app, copied into the user plugins folder by hand (`notch install`), or installed from the library. */
+export type PluginSource = 'builtIn' | 'user' | 'library'
 
 export interface InstalledPlugin {
   manifest: PluginManifest
   /** Absolute URL of the plugin folder, ending in `/` (`notch://app/plugins/<id>/`). */
   baseUrl: string
   enabled: boolean
+  /** `source === 'builtIn'`. */
   builtIn: boolean
+  source: PluginSource
+  /** Why it can't run here (its `engines.notch` doesn't match `API_VERSION`): listed, never loaded. */
+  incompatible?: string
 }
 
 export interface ScreenGeometry {
@@ -81,6 +89,155 @@ export interface ScreenGeometry {
   scale: number
   /** Stable id of the screen this panel sits on. */
   screenId: string
+}
+
+// ── Plugin API version ──
+
+/**
+ * The plugin API's version and the node-semver subset `engines.notch` is checked with: `^ ~ >= > <= < =`,
+ * x-ranges (`1.x`, `1.2`, `*`), hyphen ranges (`1.2 - 2`) and `||`. A prerelease version satisfies a set only
+ * when one of its comparators names the same `major.minor.patch` with a prerelease, as in node-semver.
+ *
+ * The Swift host mirrors this (NotchServices `Plugins/SemverRange.swift`); both run `test/semver-cases.json`.
+ */
+
+/**
+ * What plugins are written against: the bridge's methods, topics and events and the SDK. Bump the minor for
+ * an addition, the major for a break; user and library plugins whose `engines.notch` doesn't match aren't loaded.
+ * 1.0 is the surface plugins first shipped against, 1.1 adds `net` and `secrets`.
+ */
+export const API_VERSION = '1.1.0'
+
+interface Version {
+  major: number
+  minor: number
+  patch: number
+  pre: string[]
+}
+
+type Op = '<' | '<=' | '>' | '>=' | '='
+
+interface Comparator {
+  op: Op
+  version: Version
+}
+
+const IDENT = '[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*'
+const VERSION = new RegExp(`^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-(${IDENT}))?(?:\\+${IDENT})?$`)
+const PARTIAL = new RegExp(`^v?(\\d+|[xX*])(?:\\.(\\d+|[xX*]))?(?:\\.(\\d+|[xX*]))?(?:-(${IDENT}))?(?:\\+${IDENT})?$`)
+const HYPHEN = /^(\S+)\s+-\s+(\S+)$/
+const OPERATOR = /^(<=|>=|<|>|=|\^|~)?(.*)$/
+/** `-0`, the lowest prerelease: `<2.0.0-0` keeps out 2.0.0's prereleases. */
+const LOW = ['0']
+
+const version = (major: number, minor: number, patch: number, pre: string[] = []): Version => ({ major, minor, patch, pre })
+
+function parseVersion(value: string): Version | undefined {
+  const match = VERSION.exec(value.trim())
+  if (!match) return undefined
+  return version(Number(match[1]), Number(match[2]), Number(match[3]), match[4]?.split('.') ?? [])
+}
+
+function compareIdentifiers(a: string, b: string): number {
+  const numeric = /^\d+$/
+  if (numeric.test(a) && numeric.test(b)) return Math.sign(Number(a) - Number(b))
+  if (numeric.test(a)) return -1
+  if (numeric.test(b)) return 1
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+function compare(a: Version, b: Version): number {
+  const core = Math.sign(a.major - b.major) || Math.sign(a.minor - b.minor) || Math.sign(a.patch - b.patch)
+  if (core) return core
+  if (!a.pre.length || !b.pre.length) return Math.sign(b.pre.length - a.pre.length)
+  for (let i = 0; i < Math.min(a.pre.length, b.pre.length); i++) {
+    const order = compareIdentifiers(a.pre[i], b.pre[i])
+    if (order) return order
+  }
+  return Math.sign(a.pre.length - b.pre.length)
+}
+
+/** -1, 0 or 1 by semver precedence (build metadata ignored); a malformed version sorts before every valid one. */
+export function compareVersions(a: string, b: string): -1 | 0 | 1 {
+  const [x, y] = [parseVersion(a), parseVersion(b)]
+  if (!x || !y) return x ? 1 : y ? -1 : 0
+  return compare(x, y) as -1 | 0 | 1
+}
+
+/** The comparators a partial version with an operator stands for; `null` when it matches nothing. */
+function desugar(op: string, value: string): Comparator[] | null | undefined {
+  const match = PARTIAL.exec(value)
+  if (!match) return undefined
+  const [major, minor, patch] = [match[1], match[2], match[3]].map((part) => (part === undefined || /[xX*]/.test(part) ? undefined : Number(part)))
+  // Once a part is a wildcard, the ones after it are too: `1.x.3` reads as `1.x`.
+  const M = major
+  const m = M === undefined ? undefined : minor
+  const p = m === undefined ? undefined : patch
+  const pre = p !== undefined && match[4] ? match[4].split('.') : []
+  if (M === undefined) return op === '<' || op === '>' ? null : []
+
+  const nextMajor = version(M + 1, 0, 0, LOW)
+  const next = m === undefined ? nextMajor : version(M, m + 1, 0, LOW)
+  const lowest = version(M, m ?? 0, p ?? 0, pre)
+  switch (op) {
+    case '':
+    case '=':
+      return p === undefined ? [{ op: '>=', version: lowest }, { op: '<', version: next }] : [{ op: '=', version: lowest }]
+    case '~':
+      return [{ op: '>=', version: lowest }, { op: '<', version: next }]
+    case '^': {
+      const upper = M > 0 || m === undefined ? nextMajor : m > 0 || p === undefined ? version(0, m + 1, 0, LOW) : version(0, 0, p + 1, LOW)
+      return [{ op: '>=', version: lowest }, { op: '<', version: upper }]
+    }
+    case '>':
+      return p === undefined ? [{ op: '>=', version: version(next.major, next.minor, 0) }] : [{ op: '>', version: lowest }]
+    case '>=':
+      return [{ op: '>=', version: lowest }]
+    case '<':
+      return [{ op: '<', version: p === undefined ? version(M, m ?? 0, 0, LOW) : lowest }]
+    case '<=':
+      return p === undefined ? [{ op: '<', version: next }] : [{ op: '<=', version: lowest }]
+  }
+  return undefined
+}
+
+/** One `||` alternative: its comparators, `null` when it matches nothing, `undefined` when it doesn't parse. */
+function parseSet(set: string): Comparator[] | null | undefined {
+  const hyphen = HYPHEN.exec(set)
+  if (hyphen) {
+    const [low, high] = [desugar('>=', hyphen[1]), desugar('<=', hyphen[2])]
+    if (low === undefined || high === undefined) return undefined
+    return low && high ? [...low, ...high] : null
+  }
+  const comparators: Comparator[] = []
+  let none = false
+  // `>= 1.2.0` is `>=1.2.0`.
+  for (const token of set.replace(/(<=|>=|<|>|=|\^|~)\s+/g, '$1').split(/\s+/).filter(Boolean)) {
+    const [, op = '', rest] = OPERATOR.exec(token)!
+    const desugared = desugar(op, rest)
+    if (desugared === undefined) return undefined
+    if (desugared === null) none = true
+    else comparators.push(...desugared)
+  }
+  return none ? null : comparators
+}
+
+function test({ op, version: bound }: Comparator, v: Version): boolean {
+  const order = compare(v, bound)
+  return op === '<' ? order < 0 : op === '<=' ? order <= 0 : op === '>' ? order > 0 : op === '>=' ? order >= 0 : order === 0
+}
+
+/** Whether `version` is in `range`; false when either doesn't parse. */
+export function satisfies(value: string, range: string): boolean {
+  const v = parseVersion(value)
+  if (!v) return false
+  const sets = range.split('||').map((set) => parseSet(set.trim()))
+  if (sets.includes(undefined)) return false
+  return sets.some((set) => {
+    if (!set || !set.every((c) => test(c, v))) return false
+    if (!v.pre.length) return true
+    return set.some((c) => c.version.pre.length > 0 && c.version.major === v.major && c.version.minor === v.minor && c.version.patch === v.patch)
+  })
 }
 
 // ── Topics: values the host publishes while at least one subscriber exists ──
@@ -336,6 +493,8 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
 
 export interface HostInfo {
   version: string
+  /** `API_VERSION` of the host: what plugins' `engines.notch` is checked against. */
+  apiVersion: string
   devMode: boolean
   /** In dev the runtime is served by Vite at this origin; plugins too. */
   devServerUrl?: string

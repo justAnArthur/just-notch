@@ -8,6 +8,6 @@
   "permissions": ["net", "secrets"],
   "hosts": ["*.youtrack.cloud"],
   "engines": {
-    "notch": "^0.1.0"
+    "notch": "^1.1.0"
   }
 }

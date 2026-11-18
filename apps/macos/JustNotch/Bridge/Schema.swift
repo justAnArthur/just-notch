@@ -48,9 +48,14 @@ struct PluginManifest: Codable, Equatable {
     var description: String?
     var entry: String
     var style: String?
+    var icon: String?
     var permissions: [Permission]
     var hosts: [String]?
     var engines: Engines
+}
+
+enum PluginSource: String, Codable {
+    case builtIn, user, library
 }
 
 struct InstalledPlugin: Codable, Equatable {
@@ -58,6 +63,9 @@ struct InstalledPlugin: Codable, Equatable {
     var baseUrl: String
     var enabled: Bool
     var builtIn: Bool
+    var source: PluginSource
+    /// Why it can't run here: listed, never loaded.
+    var incompatible: String?
 }
 
 struct ScreenGeometry: Codable, Equatable {
@@ -75,6 +83,7 @@ struct ScreenGeometry: Codable, Equatable {
 
 struct HostInfo: Codable {
     var version: String
+    var apiVersion: String
     var devMode: Bool
     var devServerUrl: String?
     var plugins: [InstalledPlugin]

@@ -230,6 +230,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             return
         }
         guard let manifest = plugins.manifest(plugin) else { throw ServiceError("unknown plugin \(plugin)") }
+        if let reason = plugins.incompatible(plugin) { throw ServiceError(reason) }
         if Schema.runtimeOnly.contains(method) { throw ServiceError("\(method) is reserved for the runtime") }
 
         if let permission = Schema.methodPermission[method], !manifest.permissions.contains(permission) {
@@ -304,6 +305,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     private func hostInfo(for webView: WKWebView) -> HostInfo {
         HostInfo(
             version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
+            apiVersion: Semver.apiVersion,
             devMode: app.devServer != nil,
             devServerUrl: app.devServer?.absoluteString,
             plugins: plugins.plugins,

@@ -78,13 +78,14 @@ let queue = Promise.resolve()
 
 /**
  * Brings the running set in line with the host's list: stops what was disabled
- * or removed (or changed version), starts what is newly enabled. Calls are
+ * or removed (or changed version), starts what is newly enabled. An incompatible
+ * plugin is listed but never loaded. Calls are
  * serialized, so a `plugins.changed` mid-load waits for the load to finish.
  * `live: false` loads without activating (the settings page).
  */
 export function syncPlugins(plugins: InstalledPlugin[], live = true) {
   queue = queue.then(async () => {
-    const wanted = new Map(plugins.filter((p) => p.enabled).map((p) => [p.manifest.id, p]))
+    const wanted = new Map(plugins.filter((p) => p.enabled && !p.incompatible).map((p) => [p.manifest.id, p]))
     for (const [id, entry] of running) {
       const next = wanted.get(id)
       if (!next || next.manifest.version !== entry.installed.manifest.version || next.baseUrl !== entry.installed.baseUrl) stop(id)
