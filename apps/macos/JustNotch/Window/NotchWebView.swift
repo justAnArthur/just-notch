@@ -10,20 +10,26 @@ final class NotchWebView: WKWebView {
     private var swallowUntil: Date?
 
     /// `window.endGesture`: the page took this gesture as a swipe. Fingers touching down again (or a mouse
-    /// wheel, or a stuck state after 2 s) hand wheel events back to it, announced as `gesture.touch` so the
-    /// page knows the next events are a new gesture without guessing from timing.
+    /// wheel, or a stuck state after 2 s) hand wheel events back to it.
+    ///
+    /// Every new touch is announced as `gesture.touch`, so the page knows where one gesture ends and the next
+    /// begins without guessing from timing: a scroll that reaches the end of a list (momentum included) stays
+    /// a scroll, and only the next touch can swipe the island.
     func endGesture() {
         swallowUntil = Date().addingTimeInterval(2)
     }
 
     override func scrollWheel(with event: NSEvent) {
+        let began = event.phase.contains(.began)
         if let until = swallowUntil {
-            let touchedDown = event.phase.contains(.began) || event.phase.contains(.mayBegin)
+            let touchedDown = began || event.phase.contains(.mayBegin)
             let mouseWheel = event.phase.isEmpty && event.momentumPhase.isEmpty
             guard touchedDown || mouseWheel || Date() > until else { return }
             swallowUntil = nil
-            controller?.gestureTouched()
+            // A touch announces itself below; a mouse wheel or the timeout still starts a new gesture.
+            if !began { controller?.gestureTouched() }
         }
+        if began { controller?.gestureTouched() }
         super.scrollWheel(with: event)
     }
 

@@ -29,23 +29,24 @@ export interface Gesture {
   floor: number
   /** The committed swipe: only a push the same way can start the next gesture without a quiet gap. */
   swipe?: Swipe
-  /** The host's touch count at the commit (in the app). */
+  /** The host's touch count when the gesture began, or at its commit (in the app). */
   touch?: number
 }
 
 const directionOf = (s: Sample): Swipe => (Math.abs(s.x) > Math.abs(s.y) ? (s.x > 0 ? 'right' : 'left') : s.y > 0 ? 'down' : 'up')
 
 /**
- * Whether `s` starts a new gesture: after a quiet gap, or a new touch after a commit.
+ * Whether `s` starts a new gesture: after a quiet gap, or a new touch.
  *
- * In the app the host knows the fingers' phases: it holds back the rest of a committed gesture and counts each
- * new touch (`touch`, the current count), so a committed gesture ends exactly when the fingers come down again:
- * fast swipes in a row each count, one swipe never counts twice. A browser has no phases: there a fresh push the
- * same way once the momentum faded counts.
+ * In the app the host knows the fingers' phases: it counts each touch-down (`touch`, the current count) and
+ * holds back the rest of a committed gesture, so a gesture ends exactly when the fingers come down again. Fast
+ * swipes in a row each count, one swipe never counts twice, and a scroll that runs into the end of a list
+ * (its momentum included) never turns into a swipe: only the next touch can. A browser has no phases: there a
+ * fresh push the same way once the momentum faded counts.
  */
 export function isFresh(g: Gesture | undefined, s: Sample, touch?: number): boolean {
   if (!g || s.t - g.last > QUIET_MS) return true
-  if (touch !== undefined && g.owner === 'committed') return touch > (g.touch ?? touch)
+  if (touch !== undefined) return touch > (g.touch ?? touch)
   const size = Math.hypot(s.x, s.y)
   const sameWay = g.owner !== 'committed' || directionOf(s) === g.swipe
   return g.owner !== 'tracking' && sameWay && g.floor < g.peak / 4 && size > g.floor * 3 && size > 6
@@ -142,10 +143,12 @@ export function useSwipes(root: RefObject<HTMLElement | null>, onSwipe: (swipe: 
     const onWheel = (event: WheelEvent) => {
       if (!(event.target instanceof Element)) return
       const sample = sampleOf(event)
-      const fresh = isFresh(gesture, sample, host.current?.touches())
+      const touches = host.current?.touches()
+      const fresh = isFresh(gesture, sample, touches)
       const g = track(fresh ? undefined : gesture, sample)
       gesture = g
       if (fresh) {
+        g.touch = touches
         strip = stripFor(event.target)
         if (strip) g.owner = 'strip'
       }

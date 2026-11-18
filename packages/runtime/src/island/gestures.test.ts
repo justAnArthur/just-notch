@@ -50,14 +50,23 @@ describe('swipes', () => {
 })
 
 describe('swipes in the app (the host ends committed gestures)', () => {
-  /** Samples tagged `touch` follow the host's announcement of a new touch. */
-  function runNative(samples: (Sample & { touch?: boolean })[]) {
+  /**
+   * Samples tagged `touch` follow the host's announcement of a new touch. A scroller under the pointer can
+   * scroll until `scrollsUntil` (ms): a gesture that finds it scrolling belongs to it, as in the hook.
+   */
+  function runNative(samples: (Sample & { touch?: boolean })[], scrollsUntil = -1) {
     let g: Gesture | undefined
     let touches = 0
     const swipes: string[] = []
     for (const s of samples) {
       if (s.touch) touches++
-      g = track(isFresh(g, s, touches) ? undefined : g, s)
+      const fresh = isFresh(g, s, touches)
+      g = track(fresh ? undefined : g, s)
+      if (fresh) g.touch = touches
+      if (g.owner === 'tracking' && g.axis && s.t < scrollsUntil) {
+        g.owner = 'scroller'
+        continue
+      }
       const swipe = swipeOf(g)
       if (swipe) {
         swipes.push(swipe)
@@ -71,6 +80,13 @@ describe('swipes in the app (the host ends committed gestures)', () => {
   test('one swipe counts once, however its speed swings and however long its tail', () => {
     const uneven = [30, 8, 2, 25, 40, 5, 60, 3, 45].map((x, i) => ({ t: i * 40, x: -x, y: 0 }))
     expect(runNative(uneven)).toEqual(['left'])
+  })
+
+  test('a scroll that runs into the end of a list stays a scroll; only the next touch swipes', () => {
+    // A flick up whose momentum swings (it fades, then bumps) long after the list hit its end at 150 ms.
+    const flick = [...stroke(0, 6, 0, -14), ...[8, 3, 1, 20, 18, 15, 10, 6, 3, 1].map((y, i) => ({ t: 100 + i * 40, x: 0, y: -y }))]
+    expect(runNative(flick, 150)).toEqual([])
+    expect(runNative([...flick, ...touched(stroke(700, 6, 0, -12))], 150)).toEqual(['up'])
   })
 
   test('each new touch swipes again, fast and either way', () => {
