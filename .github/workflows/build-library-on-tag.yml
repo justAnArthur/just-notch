@@ -1,0 +1,138 @@
+# build-library-on-tag.yml
+# ---
+# packs a library plugin for its release tag (`@just-notch/plugin-<id>@x.y.z`, from the `version` in
+# library/<id>/package.json) and attaches `<id>-x.y.z.notchplugin` and its `.sha256` to that tag's GitHub
+# release (created by release-on-tag.yml from the same tag, possibly after this starts). A tag whose
+# library/<id> folder doesn't exist is skipped.
+#
+# release-on-tag.yml (toolkit-owned) marks every new release Latest, so a plugin release would take
+# Latest from the app, and both Sparkle (releases/latest/download/appcast.xml) and the site's Download
+# button (releases/latest/download/JustNotch.zip) would break. This re-marks the newest stable
+# `just-notch@*` release Latest once the plugin's release exists.
+#
+# like build-macos-on-tag.yml: notch builds only inside the just-apps platform, so this checks out
+# just-apps (PLATFORM_TOKEN: read access to it) and puts this repo at apps/notch. bump-version.yml
+# dispatches this workflow for every new tag that matches `push.tags`, passing the tag as the `tag`
+# input (tags pushed with GITHUB_TOKEN start no workflows) — keep that input.
+#
+# finally it starts pages.yml (on the default branch), so the site's plugin catalog can pick up the release.
+# ---
+name: build-library-on-tag
+run-name: "library plugin — ${{ inputs.tag || github.ref_name }}"
+
+on:
+  push:
+    tags: [ "@just-notch/plugin-*@*" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tag to pack (e.g. "@just-notch/plugin-github@0.1.0")'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  # gh workflow run pages.yml
+  actions: write
+
+concurrency:
+  group: build-library-${{ inputs.tag || github.ref_name }}
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # the release belongs to this repo, not to the just-apps checkout around it.
+      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        working-directory: apps/notch
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/just-apps
+          token: ${{ secrets.PLATFORM_TOKEN }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: apps/notch
+
+      - name: Resolve the plugin
+        id: meta
+        run: |
+          rest="${TAG#@just-notch/plugin-}"
+          id="${rest%@*}"
+          version="${rest##*@}"
+          if [ "$rest" = "$TAG" ] || ! [[ "$id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "::error::$TAG is not a library plugin tag (@just-notch/plugin-<id>@<version>)"
+            exit 1
+          fi
+          if [ ! -d "library/$id" ]; then
+            echo "::notice::library/$id doesn't exist at $TAG, nothing to pack"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.meta.outputs.skip != 'true'
+
+      - if: steps.meta.outputs.skip != 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Pack
+        id: pack
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          ID: ${{ steps.meta.outputs.id }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          out="$RUNNER_TEMP/notchplugin"
+          bun run notch pack --cwd "library/$ID" --out "$out" --json > "$RUNNER_TEMP/pack.json"
+          cat "$RUNNER_TEMP/pack.json"
+          packed="$(jq -r .version "$RUNNER_TEMP/pack.json")"
+          if [ "$packed" != "$VERSION" ]; then
+            echo "::error::library/$ID/package.json is $packed at $TAG, not $VERSION"
+            exit 1
+          fi
+          file="$(jq -r .file "$RUNNER_TEMP/pack.json")"
+          name="$(basename "$file")"
+          echo "$(jq -r .sha256 "$RUNNER_TEMP/pack.json")  $name" > "$file.sha256"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to the release
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          # release-on-tag.yml creates the release from the same tag, possibly after this starts.
+          for _ in $(seq 1 30); do gh release view "$TAG" > /dev/null 2>&1 && break; sleep 10; done
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::warning::release-on-tag.yml made no release for $TAG in 5 minutes; creating it (not Latest)"
+            prerelease=()
+            [[ "$VERSION" == *-* ]] && prerelease=(--prerelease)
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes "" --latest=false "${prerelease[@]}"
+          fi
+          gh release upload "$TAG" "${{ steps.pack.outputs.file }}" "${{ steps.pack.outputs.file }}.sha256" --clobber
+
+      - name: Keep the app release Latest
+        if: steps.meta.outputs.skip != 'true'
+        run: |
+          app="$(gh release list --limit 100 --exclude-drafts --exclude-pre-releases --json tagName \
+            --jq '.[].tagName | select(startswith("just-notch@"))' | sort -V | tail -n 1)"
+          if [ -z "$app" ]; then
+            echo "::warning::no stable just-notch@* release to mark Latest"
+            exit 0
+          fi
+          gh release edit "$app" --latest
+          echo "Latest: $app"
+
+      - name: Rebuild the site
+        if: steps.meta.outputs.skip != 'true'
+        run: gh workflow run pages.yml
