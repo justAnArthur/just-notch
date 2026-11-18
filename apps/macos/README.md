@@ -16,7 +16,7 @@ The build copies `packages/runtime/dist/` into `Resources/Web` and every `plugin
 
 `project.yml` is the source of truth; `JustNotch.xcodeproj`, `JustNotch/Info.plist` and `JustNotch/JustNotch.entitlements` are generated from it.
 
-Debug builds are signed ad hoc, and Xcode drops the hardened runtime for them. Release builds keep it, so they carry `com.apple.security.cs.disable-library-validation`: an ad-hoc signature has no Team ID, and library validation would otherwise refuse the embedded Sparkle.framework at launch.
+Debug builds are signed ad hoc, and Xcode drops the hardened runtime for them. Local Release builds are ad hoc too; the tag build signs with the self-signed "Just Notch Self-Signed" certificate (`MACOS_CERT_P12` secret, made by `scripts/make-signing-cert.sh`), then `scripts/sign-nested.sh` re-signs Sparkle's helpers, framework and the app inside out, because Code Sign On Copy leaves the helpers ad hoc. A certificate keeps the designated requirement stable across builds, so TCC grants and Keychain access survive updates; an ad-hoc `cdhash` requirement changes with every build. Release builds keep the hardened runtime, so they carry `com.apple.security.cs.disable-library-validation`: neither signature has a Team ID, and library validation refuses the embedded Sparkle.framework at launch even when the same certificate signs both ("different Team IDs"). A Developer ID build could drop it.
 
 Release builds also need `SPARKLE_PUBLIC_KEY` in `project.yml` (see Releases in the root README); while it's the placeholder they fail, and other builds run with updates off.
 

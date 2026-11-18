@@ -17,7 +17,7 @@ Seven default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playi
 
 Download [`JustNotch.zip`](https://github.com/justAnArthur/just-notch/releases/latest/download/JustNotch.zip) (or a versioned `JustNotch-x.y.z.zip` from [Releases](../../releases)), unzip, move `JustNotch.app` to Applications. macOS 14+.
 
-The app is ad-hoc signed, not notarized, so open it the first time with right-click → Open, or:
+The app is signed with the project's own self-signed certificate, not Apple's Developer ID, and isn't notarized, so open it the first time with right-click → Open, or:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/JustNotch.app
@@ -26,6 +26,8 @@ xattr -dr com.apple.quarantine /Applications/JustNotch.app
 ### Updates
 
 The app updates itself with [Sparkle](https://sparkle-project.org): it checks once a day, and on demand from the menu bar icon's **Check for Updates…** or Settings › About. Updates are verified with an EdDSA signature, then installed and relaunched; no second right-click → Open.
+
+Every release is signed with the same certificate, so macOS treats each update as the same app: Calendar, Location, Automation, folder and Bluetooth permissions and the plugins' Keychain items carry over. Releases up to 1.2.x were ad-hoc signed, which made every update a new app; coming from one of those, grant the permissions (and Keychain access) one last time.
 
 ## How it works
 
@@ -111,6 +113,18 @@ rm sparkle-private-key
 ```
 
 Keep the key: losing it means users can't update past that release without downloading by hand.
+
+Code signing: the build signs the app with a long-lived self-signed certificate, "Just Notch Self-Signed", so its designated requirement (`identifier "com.justanarthur.justnotch" and certificate leaf = H"…"`) is the same for every release and privacy permissions and Keychain access survive updates. The certificate lives in the `MACOS_CERT_P12` (base64 `.p12`) and `MACOS_CERT_PASSWORD` repository secrets; without them the build warns and falls back to ad-hoc signing. One-time setup, on your Mac:
+
+```bash
+apps/macos/scripts/make-signing-cert.sh          # writes ~/Projects/just-notch-signing/, prints the next commands
+base64 -i ~/Projects/just-notch-signing/cert.p12 | gh secret set MACOS_CERT_P12 -R justAnArthur/just-notch
+gh secret set MACOS_CERT_PASSWORD -R justAnArthur/just-notch < ~/Projects/just-notch-signing/password.txt
+# back up cert.p12 and password.txt (e.g. in a password manager), then:
+rm -rf ~/Projects/just-notch-signing
+```
+
+Keep the certificate too: a new one changes the app's identity, and every user grants permissions again. The clean long-term fix is still a paid Developer ID certificate plus notarization: no right-click → Open, and no `disable-library-validation` entitlement.
 
 ## License
 
