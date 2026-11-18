@@ -12,6 +12,11 @@
 #
 # the app is ad-hoc signed, not notarized: first launch needs right-click → Open, or
 # `xattr -dr com.apple.quarantine JustNotch.app`.
+#
+# in-app updates (Sparkle): the zip is signed with the EdDSA private key from the SPARKLE_PRIVATE_KEY
+# secret (`generate_keys -x`), and an `appcast.xml` naming this release is attached too; the app reads
+# releases/latest/download/appcast.xml. Without the secret the release ships without an appcast (warning).
+# CFBundleVersion is major*10000 + minor*100 + patch, so it grows with every release (Sparkle compares it).
 # ---
 name: build-macos-on-tag
 run-name: "macOS app — ${{ inputs.tag || github.ref_name }}"
@@ -35,6 +40,9 @@ jobs:
     timeout-minutes: 30
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      # keep in step with the Sparkle package in apps/macos/project.yml
+      SPARKLE_VERSION: 2.10.1
+      SPARKLE_SHA256: 1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
     defaults:
       run:
         working-directory: apps/notch
@@ -60,13 +68,21 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Version
+        id: version
+        run: |
+          version="${TAG#just-notch@}"
+          IFS=. read -r major minor patch <<< "${version%%-*}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_OUTPUT"
+
       - name: Build the app
         working-directory: apps/notch/apps/macos
         run: |
           xcodegen
           xcodebuild -project JustNotch.xcodeproj -scheme JustNotch -configuration Release \
             -derivedDataPath build build \
-            MARKETING_VERSION="${TAG#just-notch@}" CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}"
 
       - name: Package
         id: pkg
@@ -74,6 +90,27 @@ jobs:
           zip="JustNotch-${TAG#just-notch@}.zip"
           ditto -c -k --sequesterRsrc --keepParent apps/macos/build/Build/Products/Release/JustNotch.app "$zip"
           echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      - name: Sign for Sparkle and write the appcast
+        id: appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::warning title=No in-app update::the SPARKLE_PRIVATE_KEY secret is missing, so this release has no appcast.xml and installed apps won't see it"
+            exit 0
+          fi
+          tools="$RUNNER_TEMP/sparkle"
+          mkdir -p "$tools"
+          curl -fsSL -o "$tools/sparkle.tar.xz" "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          echo "$SPARKLE_SHA256  $tools/sparkle.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$tools/sparkle.tar.xz" -C "$tools" ./bin/sign_update
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$key"
+          apps/macos/scripts/appcast.sh "$tools/bin/sign_update" "$key" "${{ steps.pkg.outputs.zip }}" \
+            "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" > appcast.xml
+          echo "appcast=appcast.xml" >> "$GITHUB_OUTPUT"
 
       - name: Attach to the release
         env:
@@ -87,3 +124,5 @@ jobs:
           # a stable name for the site's Download button: releases/latest/download/JustNotch.zip
           cp "${{ steps.pkg.outputs.zip }}" JustNotch.zip
           gh release upload "$TAG" JustNotch.zip --clobber
+          # the feed the app reads: releases/latest/download/appcast.xml
+          if [ -n "${{ steps.appcast.outputs.appcast }}" ]; then gh release upload "$TAG" appcast.xml --clobber; fi
