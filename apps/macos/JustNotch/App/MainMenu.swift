@@ -6,6 +6,8 @@ enum MainMenu {
     static func make() -> NSMenu {
         let main = NSMenu()
         main.addItem(submenu("Just Notch", [
+            NSMenuItem(title: "About Just Notch", action: #selector(AppDelegate.showAbout), keyEquivalent: ""),
+            .separator(),
             NSMenuItem(title: "Quit Just Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]))
         main.addItem(submenu("Edit", [

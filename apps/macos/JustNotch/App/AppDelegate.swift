@@ -180,8 +180,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "capsule.fill", accessibilityDescription: "Just Notch")
+        let image = NSImage(named: "StatusIcon") ?? NSImage(systemSymbolName: "capsule.fill", accessibilityDescription: nil)
+        image?.isTemplate = true
+        image?.accessibilityDescription = "Just Notch"
+        item.button?.image = image
         let menu = NSMenu()
+        menu.addItem(withTitle: "About Just Notch", action: #selector(showAbout), keyEquivalent: "").target = self
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Reload UI", action: #selector(reloadUIAction), keyEquivalent: "r").target = self
         let launch = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
@@ -195,6 +200,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func reloadUIAction() { reloadUI() }
+
+    // MARK: about
+
+    /// Also reached from the app menu through the responder chain.
+    @objc func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: Self.aboutCredits()])
+    }
+
+    private static func aboutCredits() -> NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let base: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraph,
+        ]
+        let credits = NSMutableAttributedString()
+        let links = [("Website", "https://justanarthur.github.io/just-notch/"), ("Source", "https://github.com/justAnArthur/just-notch")]
+        for (index, (title, url)) in links.enumerated() {
+            if index > 0 { credits.append(NSAttributedString(string: "  ·  ", attributes: base)) }
+            var attributes = base
+            attributes[.link] = URL(string: url)
+            credits.append(NSAttributedString(string: title, attributes: attributes))
+        }
+        return credits
+    }
 
     @objc private func toggleLaunchAtLogin() {
         do {

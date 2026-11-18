@@ -8,6 +8,8 @@
 	<string>Just Notch</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -31,6 +33,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
@@ -50,6 +54,8 @@
 	<string>Just Notch shows your recent screenshots.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Just Notch shows your recent downloads.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 justAnArthur. FSL-1.1-MIT.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Just Notch shows the weather where you are.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
