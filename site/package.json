@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173 --strictPort",
-    "check": "tsc -p . --noEmit"
+    "check": "tsc -p . --noEmit",
+    "catalog": "bun scripts/library-catalog.ts",
+    "test": "bun test scripts"
   },
   "dependencies": {
     "@justanarthur/modo-ui": "^2.5.0",

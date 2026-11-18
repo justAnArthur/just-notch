@@ -6,6 +6,11 @@
 # site/ is its own package with its own bun.lock (not a root workspace), so the
 # root install, which needs the just-apps checkout, never runs here.
 #
+# before the build, site/scripts/library-catalog.ts writes site/public/library/ (index.json, icons,
+# screenshots) from the library plugins' GitHub releases; Vite copies public/ into dist. Reading releases
+# of this public repo needs only `contents: read`. build-library-on-tag.yml starts this workflow after
+# every library release.
+#
 # one-time setup: Settings → Pages → Source: GitHub Actions.
 # ---
 
@@ -17,6 +22,7 @@ on:
     paths:
       - 'site/**'
       - 'assets/brand/**'
+      - 'library/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -46,6 +52,14 @@ jobs:
         uses: actions/configure-pages@v6
       - run: bun install --frozen-lockfile
         working-directory: site
+      - run: bun run test
+        working-directory: site
+      - name: Library catalog
+        run: bun run catalog
+        working-directory: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIBRARY_BASE_URL: ${{ steps.pages.outputs.base_url }}/
       - run: bun run build
         working-directory: site
         env:
