@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, posix, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 import { netProxy } from './net-proxy.ts'
@@ -40,9 +40,13 @@ export default function notchRuntime(): Plugin {
       command = config.command
       sharedDir = command === 'serve' ? join(config.cacheDir, 'notch-shared') : join(config.build.outDir, 'shared')
     },
-    resolveId(id) {
+    resolveId(id, importer) {
       if (command === 'build') return id in SHARED_MODULES ? { id, external: true } : null
       if (id in DEV_SHARED_MODULES) return SHARED_BASE + DEV_SHARED_MODULES[id as keyof typeof DEV_SHARED_MODULES]
+      // A shared module's own imports (its chunks). Unresolved, Vite re-sends the shared modules as an HMR update
+      // on every file created and stamps the runtime's imports of them `?t=`: a second copy of the SDK beside the
+      // plugins', whose hooks then find no plugin context.
+      if (importer?.startsWith(SHARED_BASE) && id.startsWith('.')) return posix.join(posix.dirname(importer), id)
       return id.startsWith(SHARED_BASE) ? id : null
     },
     load(id) {
