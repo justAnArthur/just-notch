@@ -117,7 +117,7 @@ jobs:
           xcodegen
           xcodebuild -project JustNotch.xcodeproj -scheme JustNotch -configuration Release \
             -derivedDataPath build build \
-            MARKETING_VERSION="${{ steps.version.outputs.version }}" CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             ${signing[@]+"${signing[@]}"}
           app=build/Build/Products/Release/JustNotch.app
           # Code Sign On Copy re-signs Sparkle.framework but leaves its helpers ad-hoc; sign those too (and verify).
