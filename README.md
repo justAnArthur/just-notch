@@ -7,7 +7,7 @@
 
 A modular Dynamic Island for the MacBook notch. A thin native Swift host owns the window and the system services; everything you see is React + [`@justanarthur/modo-ui`](https://github.com/justAnArthur/modo/tree/main/ui) in one transparent web view; plugins add the rest.
 
-Seven default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard and Recent files.
+Seven default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard and Recent files. More, such as GitHub and YouTrack, install from the [library](library/README.md).
 
 **[Download for Mac →](https://github.com/justAnArthur/just-notch/releases/latest/download/JustNotch.zip)** · [Website](https://justanarthur.github.io/just-notch/)
 
@@ -64,6 +64,8 @@ Live reload: `bun run dev` in `packages/runtime`, then launch the app with `NOTC
 
 Write a plugin: `bun run notch create <id>`, then `bun run notch build --cwd plugins/<id>`. See [`packages/sdk`](packages/sdk/src/index.ts) and [`packages/cli`](packages/cli/README.md).
 
+More plugins live in the [library](library/README.md): optional, released one by one, listed on the [website](https://justanarthur.github.io/just-notch/#library) and installed from Settings › Library after a native consent dialog. Start one with `bun run notch create <id> --library`; [`library/README.md`](library/README.md) covers the manifest, the release flow and the review checklist.
+
 just-notch is `apps/notch` in the just-apps monorepo and builds only inside a just-apps checkout. Layout, conventions and release rules: [`AGENTS.md`](AGENTS.md).
 
 ## Structure
@@ -86,8 +88,9 @@ flowchart LR
 packages/bridge-schema   the host ⇄ web contract: methods, topics, events, manifest
 packages/sdk             @just-notch/sdk: definePlugin, PluginContext, hooks
 packages/runtime         the React app in the web view: island, plugin loader, settings, mock host
-packages/cli             notch create | dev | build | pack | check
+packages/cli             notch create | dev | build | pack | install | check
 plugins/<id>             the default plugins, written against the public SDK only
+library/<id>             optional plugins, released on their own and installed from Settings › Library
 apps/macos               the Swift 6 host (XcodeGen), Packages/NotchServices for system services
 assets/brand             logo, app icon, menu bar glyph, lockups and wordmark masters
 site                     the website (GitHub Pages)

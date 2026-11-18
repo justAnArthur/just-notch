@@ -1,0 +1,5 @@
+# Library plugins are released to every user who installs them: the maintainer reviews each one.
+/library/ @justAnArthur
+/site/scripts/library-catalog.ts @justAnArthur
+/.github/workflows/build-library-on-tag.yml @justAnArthur
+/.github/CODEOWNERS @justAnArthur
