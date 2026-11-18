@@ -1,6 +1,6 @@
 import { IslandFlash, Widget } from '@justanarthur/modo-ui-notch'
 import { Button, Input, List } from '@justanarthur/modo-ui'
-import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage } from '@just-notch/sdk'
+import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSecret, useSheet, useStorage } from '@just-notch/sdk'
 import {
   Check,
   CircleDashed,
@@ -165,7 +165,7 @@ function View() {
       <Widget.Meta>
         <Widget.MetaItem icon={GitPullRequestArrow}>{inbox.mine.length} open</Widget.MetaItem>
         {failing > 0 && <Widget.MetaItem icon={CircleX}>{failing} failing</Widget.MetaItem>}
-        <Widget.MetaItem icon={CircleDot}>{inbox.issues.length} issues</Widget.MetaItem>
+        <Widget.MetaItem icon={CircleDot}>{inbox.issues.length} {inbox.issues.length === 1 ? 'issue' : 'issues'}</Widget.MetaItem>
       </Widget.Meta>
     </Widget>
   )
@@ -191,14 +191,14 @@ function flashView({ kind, pr }: Alert) {
 
 function TokenSettings() {
   const { inbox, status, error } = state.use()
-  const [token, setToken] = useStorage(TOKEN, '')
-  const [draft, setDraft] = useState(token)
-  useEffect(() => setDraft(token), [token])
+  const [token, setToken] = useSecret(TOKEN)
+  const [draft, setDraft] = useState('')
+  useEffect(() => setDraft(token ?? ''), [token])
   const open = useOpen()
 
   const save = () => {
-    const next = draft.trim()
-    if (next !== token) setToken(next)
+    const next = draft.trim() || null
+    if (next !== token) void setToken(next)
   }
   const description =
     token && inbox ? `Signed in as @${inbox.login}.` : 'A classic token with the repo scope, or a fine-grained one that reads pull requests and issues.'
@@ -220,7 +220,7 @@ function TokenSettings() {
       </List.Row>
       <List.Row label={token ? 'Sign out' : 'New token'} description={token ? 'Forgets the token on this Mac.' : 'Opens GitHub with the scopes filled in.'}>
         {token ? (
-          <Button variant="secondary" size="compact" onClick={() => setToken('')}>
+          <Button variant="secondary" size="compact" onClick={() => void setToken(null)}>
             Sign out
           </Button>
         ) : (
@@ -278,7 +278,7 @@ function activate(ctx: PluginContext) {
     const before = state.get().inbox
     state.set({ ...state.get(), status: 'loading' })
     try {
-      const inbox = await fetchInbox(token)
+      const inbox = await fetchInbox(ctx.fetch, token)
       if (mine !== run) return
       state.set({ status: 'ready', inbox })
       for (const alert of alerts(before, inbox).filter((a) => enabled[a.kind]))
@@ -293,11 +293,14 @@ function activate(ctx: PluginContext) {
   refresh = () => void poll()
 
   const stops = [
-    ctx.storage.subscribe<string>(TOKEN, (next) => {
-      token = next ?? ''
-      state.set({ status: 'loading' })
-      void poll()
-    }),
+    ctx.secrets.subscribe(TOKEN, () =>
+      void ctx.secrets.get(TOKEN).then((next) => {
+        if ((next ?? '') === token) return
+        token = next ?? ''
+        state.set({ status: 'loading' })
+        void poll()
+      }),
+    ),
     ctx.storage.subscribe<Every>(EVERY, (next) => {
       every = next ?? '2'
       void poll()
@@ -306,7 +309,7 @@ function activate(ctx: PluginContext) {
       enabled = next ?? ALL_ALERTS
     }),
   ]
-  void Promise.all([ctx.storage.get<string>(TOKEN), ctx.storage.get<Every>(EVERY), ctx.storage.get<AlertSettings>(ALERTS)]).then(([t, e, a]) => {
+  void Promise.all([ctx.secrets.get(TOKEN), ctx.storage.get<Every>(EVERY), ctx.storage.get<AlertSettings>(ALERTS)]).then(([t, e, a]) => {
     token = t ?? ''
     every = e ?? every
     enabled = a ?? enabled

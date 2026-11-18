@@ -5,7 +5,13 @@
   "description": "Review requests, your pull requests with their checks, and the issues assigned to you.",
   "entry": "dist/index.js",
   "style": "dist/index.css",
-  "permissions": [],
+  "permissions": [
+    "net",
+    "secrets"
+  ],
+  "hosts": [
+    "api.github.com"
+  ],
   "engines": {
     "notch": "^0.1.0"
   }

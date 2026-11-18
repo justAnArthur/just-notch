@@ -10,6 +10,24 @@
         "typescript": "^5.9.0",
       },
     },
+    "library/github": {
+      "name": "@just-notch/plugin-github",
+      "version": "0.1.0",
+      "dependencies": {
+        "@just-notch/sdk": "workspace:*",
+        "lucide-react": "^1.72.0",
+      },
+      "devDependencies": {
+        "@just-notch/cli": "workspace:*",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.4.3",
+        "@types/react": "^19.2.0",
+        "react": "^19.2.0",
+      },
+      "peerDependencies": {
+        "react": ">=19",
+      },
+    },
     "packages/bridge-schema": {
       "name": "@just-notch/bridge-schema",
       "version": "0.1.0",
@@ -34,7 +52,7 @@
     },
     "packages/runtime": {
       "name": "@just-notch/runtime",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "dependencies": {
         "@just-apps/host-contract": "file:../../../../packages/host-contract",
         "@just-notch/bridge-schema": "workspace:*",
@@ -300,6 +318,8 @@
     "@just-notch/plugin-clipboard": ["@just-notch/plugin-clipboard@workspace:plugins/clipboard"],
 
     "@just-notch/plugin-clock": ["@just-notch/plugin-clock@workspace:plugins/clock"],
+
+    "@just-notch/plugin-github": ["@just-notch/plugin-github@workspace:library/github"],
 
     "@just-notch/plugin-now-playing": ["@just-notch/plugin-now-playing@workspace:plugins/now-playing"],
 

@@ -1,3 +1,4 @@
+import type { PluginContext } from '@just-notch/sdk'
 import { INBOX_QUERY, type Inbox, type InboxResponse, SEARCHES, toInbox } from './github'
 
 const ENDPOINT = 'https://api.github.com/graphql'
@@ -12,15 +13,12 @@ export class GitHubError extends Error {
   }
 }
 
-/**
- * The plugin's one network call. Plain `fetch` until the host's `net.fetch`
- * lands; the mock browser runs it as is.
- */
-export async function fetchInbox(token: string): Promise<Inbox> {
+/** The plugin's one network call, through the host (`net`, `api.github.com`). */
+export async function fetchInbox(fetch: PluginContext['fetch'], token: string): Promise<Inbox> {
   const response = await fetch(ENDPOINT, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: INBOX_QUERY, variables: SEARCHES }),
+    headers: { Authorization: `Bearer ${token}` },
+    json: { query: INBOX_QUERY, variables: SEARCHES },
   }).catch(() => {
     throw new GitHubError("Can't reach GitHub")
   })
