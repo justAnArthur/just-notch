@@ -11,6 +11,6 @@
     "audio.read"
   ],
   "engines": {
-    "notch": "^0.1.0"
+    "notch": "^1.0.0"
   }
 }
