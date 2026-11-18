@@ -7,6 +7,19 @@ export interface SavedSearch {
 
 export const DEFAULT_SEARCHES: SavedSearch[] = [{ name: 'Assigned to me', query: 'for: me #Unresolved' }]
 
+/** Ready-made searches the settings offer to add (back), one click each. */
+export const SUGGESTED_SEARCHES: SavedSearch[] = [
+  ...DEFAULT_SEARCHES,
+  { name: 'Updated today', query: 'for: me updated: Today' },
+  { name: 'Reported by me', query: 'reporter: me #Unresolved' },
+]
+
+/** The suggestions not saved yet (same query), so a removed search can be added back. */
+export function missingSuggestions(saved: SavedSearch[]): SavedSearch[] {
+  const queries = new Set(saved.map((search) => search.query.trim().toLowerCase()))
+  return SUGGESTED_SEARCHES.filter((search) => !queries.has(search.query.toLowerCase()))
+}
+
 export interface Issue {
   id: string
   summary: string

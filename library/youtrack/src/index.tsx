@@ -4,7 +4,7 @@ import { definePlugin, usePlugin, useSecret, useSheet, useStorage } from '@just-
 import { ExternalLink, KeyRound, Link, ListChecks, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { type Connection, searchIssues, type SearchResult } from './api'
-import { DEFAULT_SEARCHES, ERROR_TEXT, type Issue, normalizeBaseUrl, type SavedSearch, searchUrl } from './youtrack'
+import { DEFAULT_SEARCHES, ERROR_TEXT, missingSuggestions, type Issue, normalizeBaseUrl, type SavedSearch, searchUrl } from './youtrack'
 
 const BASE_URL = 'baseUrl'
 const TOKEN = 'token'
@@ -272,7 +272,19 @@ function SearchSettings() {
           </Button>
         </List.Row>
       ))}
-      <List.Row label="New tab" description="What the tab is called.">
+      {missingSuggestions(searches).map((search) => (
+        <List.Row key={search.query} label={search.name} description={search.query} className="opacity-60">
+          <Button
+            variant="ghost"
+            size="icon-compact"
+            aria-label={`Add ${search.name}`}
+            onClick={() => setSearches([...searches, search])}
+          >
+            <Plus />
+          </Button>
+        </List.Row>
+      ))}
+      <List.Row label="New tab" description="Name your own search, then its query below.">
         <Input aria-label="Tab name" value={name} placeholder="Updated today" className="w-56" onValueChange={setName} />
       </List.Row>
       <List.Row label="Query" description="YouTrack search syntax, as in its search bar.">

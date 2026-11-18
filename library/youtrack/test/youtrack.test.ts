@@ -81,3 +81,17 @@ describe('mapIssue', () => {
 test('errorFor maps statuses', () => {
   expect([400, 401, 403, 404, 500].map(errorFor)).toEqual(['bad-query', 'unauthorized', 'forbidden', 'not-found', 'server'])
 })
+
+describe('missingSuggestions', () => {
+  test('a removed default search is offered again', () => {
+    const { missingSuggestions, DEFAULT_SEARCHES } = require('../src/youtrack') as typeof import('../src/youtrack')
+    expect(missingSuggestions([]).map((s) => s.name)).toContain(DEFAULT_SEARCHES[0].name)
+    expect(missingSuggestions(DEFAULT_SEARCHES).map((s) => s.name)).not.toContain(DEFAULT_SEARCHES[0].name)
+  })
+
+  test('matches on the query, ignoring case and spaces', () => {
+    const { missingSuggestions } = require('../src/youtrack') as typeof import('../src/youtrack')
+    const saved = [{ name: 'Mine', query: '  FOR: ME #Unresolved ' }]
+    expect(missingSuggestions(saved).some((s) => s.query === 'for: me #Unresolved')).toBe(false)
+  })
+})
