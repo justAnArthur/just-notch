@@ -5,10 +5,16 @@ import {
   type HostEvent,
   type HostInfo,
   type HostRequest,
+  hostAllowed,
   type InstalledPlugin,
   METHOD_PERMISSION,
   type MediaState,
   type Methods,
+  type NetRequest,
+  type NetResponse,
+  netHostKey,
+  netSchemeAllowed,
+  PLUGIN_ONLY,
   type PluginManifest,
   type Rect,
   RUNTIME_ONLY,
@@ -16,6 +22,7 @@ import {
   type Topic,
   type Topics,
 } from '@just-notch/bridge-schema'
+import { performNetFetch } from './net'
 
 /*
  * A host for any browser: the same transport (`window.webkit…postMessage`,
@@ -206,6 +213,38 @@ setInterval(() => {
 
 const storageKey = (plugin: string, key: string) => `notch:mock:storage:${plugin}:${key}`
 const enabledKey = (id: string) => `notch:mock:enabled:${id}`
+/** Dev only: the real host keeps secrets in the Keychain. */
+const secretKey = (plugin: string, key: string) => `notch:mock:secret:${plugin}:${key}`
+const hostsKey = (plugin: string) => `notch:mock:hosts:${plugin}`
+const SECRET_KEY = /^[A-Za-z0-9._-]{1,64}$/
+/** `plugin host` pairs refused this session. */
+const deniedHosts = new Set<string>()
+
+const manifestOf = (plugin: string) => plugins.find((p) => p.manifest.id === plugin)?.manifest
+const grantedHosts = (plugin: string): string[] => JSON.parse(localStorage.getItem(hostsKey(plugin)) ?? '[]')
+
+function checkSecretKey(key: string) {
+  if (!SECRET_KEY.test(key)) throw `secret keys match ^[A-Za-z0-9._-]{1,64}$ (got ${key})`
+}
+
+/**
+ * In the Vite dev server `net.fetch` goes through its `/__notch/net` proxy (Node fetch, no CORS), which
+ * checks the same hosts; elsewhere (a preview build) the browser fetches, CORS and all.
+ */
+async function netFetch(request: NetRequest, plugin: string): Promise<NetResponse> {
+  if (!import.meta.env.DEV) {
+    const allowed = [...(manifestOf(plugin)?.hosts ?? []), ...grantedHosts(plugin)]
+    return performNetFetch(request, allowed).catch((error: Error) => Promise.reject(error.message))
+  }
+  const response = await fetch('/__notch/net', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ plugin, grants: grantedHosts(plugin), request }),
+  })
+  const result = await response.json().catch(() => ({ error: `dev proxy answered ${response.status}` }))
+  if (!response.ok) throw String(result.error)
+  return result
+}
 const PREFERENCES_KEY = 'notch:mock:preferences'
 const DEFAULT_PREFERENCES: AppPreferences = { launchAtLogin: false, screens: 'notched' }
 
@@ -223,10 +262,6 @@ async function loadPlugins(): Promise<InstalledPlugin[]> {
     enabled: localStorage.getItem(enabledKey(manifest.id)) !== 'false',
     builtIn: true,
   }))
-}
-
-function unavailable(): never {
-  throw 'not in the mock host'
 }
 
 type Handlers = { [M in keyof Methods]: (params: Methods[M]['params'], plugin: string) => Methods[M]['result'] | Promise<Methods[M]['result']> }
@@ -347,13 +382,45 @@ const handlers: Handlers = {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.id !== path) })
     return null
   },
-  'net.fetch': unavailable,
-  'net.requestHost': unavailable,
-  'net.hosts': unavailable,
-  'net.revokeHost': unavailable,
-  'secrets.get': unavailable,
-  'secrets.set': unavailable,
-  'secrets.delete': unavailable,
+  'net.fetch': netFetch,
+  'net.requestHost': ({ url, reason }, plugin) => {
+    const parsed = URL.canParse(url) ? new URL(url) : undefined
+    if (!parsed?.hostname) throw 'net.requestHost needs an absolute URL'
+    if (!netSchemeAllowed(parsed)) throw 'net.requestHost needs https (http only for local hosts)'
+    const host = netHostKey(parsed)
+    if (hostAllowed([...(manifestOf(plugin)?.hosts ?? []), ...grantedHosts(plugin)], parsed)) return { granted: true }
+    if (deniedHosts.has(`${plugin} ${host}`)) return { granted: false }
+    const name = manifestOf(plugin)?.name ?? plugin
+    const message = `“${name}” wants to connect to ${host}. It can send anything it stores there, including saved tokens.`
+    if (!window.confirm(reason ? `${message}\n\n${reason}` : message)) {
+      deniedHosts.add(`${plugin} ${host}`)
+      return { granted: false }
+    }
+    localStorage.setItem(hostsKey(plugin), JSON.stringify([...grantedHosts(plugin), host]))
+    return { granted: true }
+  },
+  'net.hosts': (_, plugin) => ({ manifest: manifestOf(plugin)?.hosts ?? [], granted: grantedHosts(plugin) }),
+  'net.revokeHost': ({ plugin, host }) => {
+    localStorage.setItem(hostsKey(plugin), JSON.stringify(grantedHosts(plugin).filter((h) => h !== host)))
+    return null
+  },
+  'secrets.get': ({ key }, plugin) => {
+    checkSecretKey(key)
+    return { value: localStorage.getItem(secretKey(plugin, key)) }
+  },
+  'secrets.set': ({ key, value }, plugin) => {
+    checkSecretKey(key)
+    if (new TextEncoder().encode(value).length > 64 * 1024) throw 'a secret is at most 64 KB'
+    localStorage.setItem(secretKey(plugin, key), value)
+    broadcast({ type: 'secrets.changed', payload: { plugin, key } })
+    return null
+  },
+  'secrets.delete': ({ key }, plugin) => {
+    checkSecretKey(key)
+    localStorage.removeItem(secretKey(plugin, key))
+    broadcast({ type: 'secrets.changed', payload: { plugin, key } })
+    return null
+  },
   'storage.get': ({ key }, plugin) => {
     const raw = localStorage.getItem(storageKey(plugin, key))
     return raw === null ? null : JSON.parse(raw)
@@ -414,7 +481,10 @@ const handlers: Handlers = {
 }
 
 function authorize({ plugin, method }: HostRequest) {
-  if (plugin === 'runtime') return
+  if (plugin === 'runtime') {
+    if (PLUGIN_ONLY.includes(method)) throw `${method} is for plugins only`
+    return
+  }
   if (RUNTIME_ONLY.includes(method)) throw `${method} is runtime only`
   const permission = METHOD_PERMISSION[method]
   const manifest = plugins.find((p) => p.manifest.id === plugin)?.manifest

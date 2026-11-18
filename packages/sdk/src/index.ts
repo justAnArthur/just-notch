@@ -5,7 +5,7 @@
  * through the import map (one instance for the runtime and every plugin).
  */
 
-import type { Events, EventName, Method, Methods, Topic, Topics } from '@just-notch/bridge-schema'
+import type { Events, EventName, Method, Methods, NetMethod, Topic, Topics } from '@just-notch/bridge-schema'
 import { type ComponentType, createContext, createElement, type ReactNode, useContext, useEffect, useState, useSyncExternalStore } from 'react'
 
 export type * from '@just-notch/bridge-schema'
@@ -69,6 +69,38 @@ export interface PluginStorage {
   subscribe<T>(key: string, cb: (value: T | undefined) => void): Unsubscribe
 }
 
+/** Per-plugin strings in the Keychain (tokens, passwords). Needs the `secrets` permission. */
+export interface PluginSecrets {
+  /** `null` when unset. */
+  get(key: string): Promise<string | null>
+  /** `null` deletes. Keys match `^[A-Za-z0-9._-]{1,64}$`; values are at most 64 KB. */
+  set(key: string, value: string | null): Promise<void>
+  /** Runs `cb` when `key` is set or deleted, from any view; read it again with `get`. */
+  subscribe(key: string, cb: () => void): Unsubscribe
+}
+
+/** `ctx.fetch`'s options: a subset of `RequestInit`, plus `json` and a timeout. */
+export interface NetFetchInit {
+  /** @default 'GET' */
+  method?: NetMethod
+  headers?: HeadersInit
+  body?: string
+  /** Sent as JSON with `content-type: application/json`; exclusive with `body`. */
+  json?: unknown
+  /** @default 15000, clamped to 1000–60000 */
+  timeoutMs?: number
+}
+
+export interface PluginNet {
+  /**
+   * Asks the user, in a native dialog, to let this plugin reach `url`'s host (exactly that host and port).
+   * Resolves `true` at once when the manifest's `hosts` or an earlier grant already cover it.
+   */
+  requestHost(url: string, reason?: string): Promise<boolean>
+  /** The manifest's host patterns and the hosts the user granted. */
+  hosts(): Promise<{ manifest: string[]; granted: string[] }>
+}
+
 export interface PluginContext {
   readonly id: string
   /** Calls the host as this plugin; rejects when the manifest lacks the method's permission. */
@@ -78,6 +110,14 @@ export interface PluginContext {
   on<E extends EventName>(event: E, cb: (payload: Events[E]) => void): Unsubscribe
   readonly activity: ActivityController
   readonly storage: PluginStorage
+  /**
+   * HTTP(S) through the host, without CORS or cookies, to the manifest's `hosts` and granted hosts (`net`).
+   * `https:` only, `http:` for local hosts. Resolves with a real `Response` for any status; rejects when the
+   * host isn't allowed, on network errors, timeouts, and bodies over 5 MiB.
+   */
+  fetch(input: string | URL, init?: NetFetchInit): Promise<Response>
+  readonly net: PluginNet
+  readonly secrets: PluginSecrets
   /** The island's current presentation, for views that adapt to it. */
   readonly island: { get(): IslandState; subscribe(cb: (state: IslandState) => void): Unsubscribe }
   /** The open island's snap. */
@@ -164,6 +204,34 @@ export function useStorage<T>(key: string, fallback: T): [T, (value: T) => void]
     void storage.set(key, next)
   }
   return [value, set]
+}
+
+/**
+ * A Keychain secret: `[value, set, loading]`. `value` is `null` while unset (and while loading);
+ * `set(null)` deletes. Follows changes from other views (the settings page).
+ */
+export function useSecret(key: string): [string | null, (value: string | null) => Promise<void>, boolean] {
+  const { secrets } = usePlugin()
+  const [state, setState] = useState<{ value: string | null; loading: boolean }>({ value: null, loading: true })
+  useEffect(() => {
+    let live = true
+    const load = () =>
+      secrets.get(key).then(
+        (value) => live && setState({ value, loading: false }),
+        () => live && setState({ value: null, loading: false }),
+      )
+    void load()
+    const stop = secrets.subscribe(key, load)
+    return () => {
+      live = false
+      stop()
+    }
+  }, [secrets, key])
+  const set = async (value: string | null) => {
+    await secrets.set(key, value)
+    setState({ value, loading: false })
+  }
+  return [state.value, set, state.loading]
 }
 
 /** Media position extrapolated from the last `MediaState`, re-read every `everyMs`. */

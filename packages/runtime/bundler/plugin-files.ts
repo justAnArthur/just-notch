@@ -32,7 +32,7 @@ export function serveDir(dir: () => string) {
   }
 }
 
-function pluginFolders(roots: string[]) {
+export function pluginFolders(roots: string[]) {
   const folders = new Map<string, string>()
   for (const root of roots) {
     if (!existsSync(root)) continue

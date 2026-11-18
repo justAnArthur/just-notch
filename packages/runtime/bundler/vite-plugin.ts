@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
+import { netProxy } from './net-proxy.ts'
 import { servePlugins, serveDir } from './plugin-files.ts'
 import { buildShared } from './shared-build.ts'
 import { DEV_SHARED_MODULES, importMap, SHARED_BASE, SHARED_MODULES } from './shared-modules.ts'
@@ -61,6 +62,7 @@ export default function notchRuntime(): Plugin {
       })
       server.middlewares.use(SHARED_BASE, serveDir(() => sharedDir))
       server.middlewares.use('/plugins', servePlugins(pluginRoots))
+      server.middlewares.use('/__notch/net', netProxy(pluginRoots))
     },
     configurePreviewServer(server) {
       server.middlewares.use('/plugins', servePlugins(pluginRoots))

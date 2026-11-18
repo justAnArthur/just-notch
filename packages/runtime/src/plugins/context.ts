@@ -1,8 +1,9 @@
-import { type InstalledPlugin, METHOD_PERMISSION, type Method, RUNTIME_ONLY, TOPIC_PERMISSION } from '@just-notch/bridge-schema'
+import { type InstalledPlugin, METHOD_PERMISSION, type Method, type Methods, RUNTIME_ONLY, TOPIC_PERMISSION } from '@just-notch/bridge-schema'
 import type { PluginContext, Unsubscribe } from '@just-notch/sdk'
 import { dispatch, getIslandState, getSheet, subscribeIsland, subscribeSheet } from '../activity/store'
 import { on } from '../host/bus'
 import { call, log } from '../host/client'
+import { toResponse } from '../host/net'
 import { subscribeTopic } from '../host/topics'
 
 // Subscriptions go through the context so they are ref-counted per topic.
@@ -30,15 +31,17 @@ export function createPluginContext({ manifest }: InstalledPlugin, live = true):
     }
   }
 
+  const request = <M extends Method>(method: M, params: Methods[M]['params']): Promise<Methods[M]['result']> => {
+    if (RUNTIME_METHODS.includes(method)) return Promise.reject(new Error(`${method} is not available to plugins`))
+    const permission = METHOD_PERMISSION[method]
+    if (permission && !manifest.permissions.includes(permission))
+      return Promise.reject(new Error(`${id} needs the ${permission} permission for ${method}`))
+    return call(id, method, params)
+  }
+
   const ctx: PluginContext = {
     id,
-    call(method, params) {
-      if (RUNTIME_METHODS.includes(method)) return Promise.reject(new Error(`${method} is not available to plugins`))
-      const permission = METHOD_PERMISSION[method]
-      if (permission && !manifest.permissions.includes(permission))
-        return Promise.reject(new Error(`${id} needs the ${permission} permission for ${method}`))
-      return call(id, method, params)
-    },
+    call: request,
     subscribe(topic, cb) {
       if (!manifest.permissions.includes(TOPIC_PERMISSION[topic])) {
         log('error', `${id} needs the ${TOPIC_PERMISSION[topic]} permission for the ${topic} topic`)
@@ -60,6 +63,26 @@ export function createPluginContext({ manifest }: InstalledPlugin, live = true):
         await call(id, 'storage.set', { key, value })
       },
       subscribe: (key, cb) => own(on('storage.changed', (change) => change.plugin === id && change.key === key && cb((change.value ?? undefined) as never))),
+    },
+    async fetch(input, init = {}) {
+      const params: Methods['net.fetch']['params'] = { url: String(input) }
+      if (init.method) params.method = init.method
+      if (init.headers) params.headers = Object.fromEntries(new Headers(init.headers))
+      if (init.body !== undefined) params.body = init.body
+      if (init.json !== undefined) params.json = init.json
+      if (init.timeoutMs !== undefined) params.timeoutMs = init.timeoutMs
+      return toResponse(await request('net.fetch', params))
+    },
+    net: {
+      requestHost: async (url, reason) => (await request('net.requestHost', reason === undefined ? { url } : { url, reason })).granted,
+      hosts: () => request('net.hosts', {}),
+    },
+    secrets: {
+      get: async (key) => (await request('secrets.get', { key })).value,
+      set: async (key, value) => {
+        await (value === null ? request('secrets.delete', { key }) : request('secrets.set', { key, value }))
+      },
+      subscribe: (key, cb) => own(on('secrets.changed', (change) => change.plugin === id && change.key === key && cb())),
     },
     island: { get: getIslandState, subscribe: (cb) => own(subscribeIsland(cb)) },
     sheet: { get: getSheet, subscribe: (cb) => own(subscribeSheet(cb)) },
