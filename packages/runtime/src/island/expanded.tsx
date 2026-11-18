@@ -27,14 +27,14 @@ interface ExpandedProps {
   onFit: (height: number) => void
 }
 
-/** Reports `ref`'s height as it changes. */
+/** Reports `ref`'s layout height as it changes; `offsetHeight`, not the box on screen, which the island's open animation scales. */
 function useHeight(ref: RefObject<HTMLElement | null>, onHeight: (height: number) => void, active: boolean) {
   const report = useRef(onHeight)
   report.current = onHeight
   useLayoutEffect(() => {
     const el = ref.current
     if (!el || !active) return
-    report.current(el.getBoundingClientRect().height)
+    report.current(el.offsetHeight)
     const observer = new ResizeObserver(([entry]) => entry && report.current(entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height))
     observer.observe(el)
     return () => observer.disconnect()
@@ -135,17 +135,21 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
           </div>
         </div>
       </SizeProvider>
-      {/* The bottom inset matches the sides' (INSET), so the content sits evenly in the outline. */}
-      <div className="flex min-h-0 flex-1 flex-col pb-5">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-6 shrink-0 items-end px-5">
           <span data-island-title className="truncate text-caption weight-medium text-muted-foreground">
             {title}
           </span>
         </div>
+        {/* The bottom inset matches the sides' (INSET), so the content sits evenly in the outline. It is padding
+            of the scroller, so what a view draws past its box (an artwork's glow) stays inside it instead of
+            making the view scroll. */}
         <div
           ref={content}
           data-island-content
-          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pt-2 scrollbar-hide"
+          // On the first snap a vertical swipe moves the island (down to the tall snap, where the view fits), not this.
+          data-swipe-through={fills ? undefined : ''}
+          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pt-2 pb-5 scrollbar-hide"
         >
           <div ref={measure} className={fills ? 'h-full' : undefined}>
             {settings ? (

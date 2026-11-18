@@ -245,13 +245,21 @@ await page.getByRole('tab', { name: 'System' }).click()
 await page.locator('#island [data-island-content]').getByText(/%/).first().waitFor({ timeout: 4000 })
 check(true, 'the System widget waits out a null snapshot and renders its first sample')
 
-// A view taller than the content area scrolls; the wheel stays with it, it never collapses the island.
+// A view taller than the first snap: a swipe down takes the island to the tall snap instead of scrolling it.
 await page.evaluate(() => {
   const filler = document.createElement('div')
-  filler.style.height = '400px'
+  filler.style.height = '600px'
   document.querySelector('#island [data-island-content]')!.append(filler)
 })
 const content = page.locator('#island [data-island-content]')
+await swipe(page, '#island [data-island-content]', 0, 12)
+await settle(page)
+check(
+  (await content.evaluate((el) => el.scrollTop)) === 0 && (await page.locator('#island > svg path').first().boundingBox())!.height > 500,
+  'on the first snap a swipe down over a long view pulls the island to the tall snap, without scrolling',
+)
+
+// On the tall snap a view taller than the content area scrolls; the wheel stays with it, it never collapses the island.
 const scrollTop = () => content.evaluate((el) => el.scrollTop)
 const box = (await content.boundingBox())!
 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -264,6 +272,11 @@ check(down > 100 && (await scrollTop()) < down && (await state(page)) === 'expan
 check((await content.getAttribute('data-fade')) === 'start end', 'mid-scroll both content edges fade')
 await shoot(page, '8c-content-scroll')
 await content.evaluate((el) => el.scrollTo({ top: 0 }))
+// Up to the first snap and then closed; the pointer stays near the top, inside the shorter island.
+await page.mouse.move(box.x + box.width / 2, box.y + 10)
+await swipe(page, '#island [data-island-content]', 0, -12)
+await settle(page)
+check((await state(page)) === 'expanded', 'a swipe up from the tall snap returns to the first snap')
 await swipe(page, '#island [data-island-content]', 0, -12)
 await page.waitForTimeout(300)
 check((await state(page)) === 'compact', 'at the top a swipe up collapses the island')
@@ -273,7 +286,7 @@ check(true, 'a swipe down expands it')
 await settle(page)
 const insets = await page.evaluate(() => {
   const island = document.querySelector('#island svg path')!.getBoundingClientRect()
-  const content = document.querySelector('#island [data-island-content]')!.getBoundingClientRect()
+  const content = document.querySelector('#island [data-island-content] > div')!.getBoundingClientRect()
   return { bottom: Math.round(island.bottom - content.bottom) }
 })
 check(insets.bottom === 20, `the first snap fits the content: 20px at the bottom as at the sides (${insets.bottom}px)`)

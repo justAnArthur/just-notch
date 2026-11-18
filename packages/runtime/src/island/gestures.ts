@@ -98,9 +98,13 @@ function sampleOf(event: WheelEvent): Sample {
   return { t: event.timeStamp, x: event.deltaX * finger, y: event.deltaY * finger }
 }
 
-/** A scroller between `target` and `root` that can still scroll along `axis` in the wheel's direction `sign`. */
+/**
+ * A scroller between `target` and `root` that can still scroll along `axis` in the wheel's direction `sign`.
+ * One marked `data-swipe-through` (the island's content on its first snap) lets vertical swipes pass to the island.
+ */
 function scrollerFor(target: Element, root: Element, axis: 'x' | 'y', sign: number): boolean {
   for (let el: Element | null = target; el && el !== root; el = el.parentElement) {
+    if (axis === 'y' && el.hasAttribute('data-swipe-through')) continue
     const style = getComputedStyle(el)
     const overflow = axis === 'y' ? style.overflowY : style.overflowX
     if (overflow !== 'auto' && overflow !== 'scroll') continue
