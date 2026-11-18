@@ -5,6 +5,7 @@
   "description": "Search YouTrack and see your issues: saved searches as tabs, each issue one click from the browser.",
   "entry": "dist/index.js",
   "style": "dist/index.css",
+  "icon": "assets/icon.svg",
   "permissions": ["net", "secrets"],
   "hosts": ["*.youtrack.cloud"],
   "engines": {
