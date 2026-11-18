@@ -1,18 +1,18 @@
 {
-  "ref": "@justanarthur/just-github-actions-n-workflows@1.7.0-canary.3",
-  "installedAt": "2026-11-18T14:24:20.940Z",
+  "ref": "@justanarthur/just-github-actions-n-workflows@1.7.1",
+  "installedAt": "2026-11-18T18:28:28.248Z",
   "workflows": {
     "bump-version.yml": {
       "name": "bump-version",
       "file": "bump-version.yml",
-      "ref": "@justanarthur/just-github-actions-n-workflows@1.7.0-canary.3",
-      "installedAt": "2026-11-18T14:24:20.940Z"
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.7.1",
+      "installedAt": "2026-11-18T18:28:28.248Z"
     },
     "release-on-tag.yml": {
       "name": "release-on-tag",
       "file": "release-on-tag.yml",
-      "ref": "@justanarthur/just-github-actions-n-workflows@1.7.0-canary.3",
-      "installedAt": "2026-11-18T14:24:20.940Z"
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.7.1",
+      "installedAt": "2026-11-18T18:28:28.248Z"
     }
   }
 }
