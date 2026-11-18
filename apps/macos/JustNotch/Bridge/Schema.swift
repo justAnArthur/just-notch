@@ -166,6 +166,9 @@ enum Schema {
         "updater.check",
         "updater.install",
         "net.revokeHost",
+        "library.catalog",
+        "library.install",
+        "library.uninstall",
     ]
 
     /// Methods that act for one plugin (its hosts, its Keychain entries): never as `runtime`.
@@ -319,4 +322,49 @@ struct SecretsChangedPayload: Encodable {
 struct HapticParams: Decodable {
     enum Pattern: String, Decodable { case generic, alignment, levelChange }
     let pattern: Pattern
+}
+
+// Library: the catalog on the site, and installs from it.
+
+struct LibraryCatalog: Codable {
+    var schema: Int
+    var generatedAt: String
+    var plugins: [LibraryEntry]
+    var signature: String?
+}
+
+struct LibraryEntry: Codable, Equatable {
+    struct Download: Codable, Equatable {
+        var url: String
+        var sha256: String
+        var size: Int
+    }
+
+    var id: String
+    var name: String
+    var description: String?
+    var version: String
+    var engines: PluginManifest.Engines
+    /// Strings, not `Permission`: a catalog entry for a newer API mustn't break the whole catalog.
+    var permissions: [String]
+    var hosts: [String]
+    var author: String?
+    var homepage: String?
+    var source: String
+    var download: Download
+    var icon: String?
+    var screenshots: [String]
+    var releasedAt: String
+}
+
+struct RefreshParams: Decodable {
+    var refresh: Bool?
+}
+
+struct LibraryProgress: Encodable {
+    enum Phase: String, Encodable { case downloading, verifying, installing, done, error }
+    var id: String
+    var phase: Phase
+    var progress: Double?
+    var message: String?
 }

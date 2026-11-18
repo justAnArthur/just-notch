@@ -13,7 +13,8 @@ let package = Package(
     targets: [
         .target(name: "NotchServices"),
         .target(name: "NotchMediaBridge", linkerSettings: [.linkedFramework("Foundation")]),
-        .testTarget(name: "NotchServicesTests", dependencies: ["NotchServices"]),
+        // Fixtures are read through #filePath, like the bridge-schema case files.
+        .testTarget(name: "NotchServicesTests", dependencies: ["NotchServices"], exclude: ["Fixtures"]),
     ],
     swiftLanguageModes: [.v5]
 )

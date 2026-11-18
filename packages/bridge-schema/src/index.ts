@@ -610,6 +610,41 @@ export function hostAllowed(patterns: readonly string[], url: string | URL): boo
   })
 }
 
+// ── Library: optional plugins, released on their own and listed in one catalog ──
+
+/** `library/index.json` on the site. Lists only each plugin's latest version. */
+export interface LibraryCatalog {
+  schema: 1
+  /** ISO 8601. */
+  generatedAt: string
+  plugins: LibraryEntry[]
+  /** Reserved for a signature over the catalog; not checked yet. */
+  signature?: string
+}
+
+/** A plugin in the catalog: its packed manifest's fields plus where to get it. URLs are absolute. */
+export interface LibraryEntry {
+  id: string
+  name: string
+  description?: string
+  version: string
+  engines: { notch: string }
+  permissions: Permission[]
+  hosts: string[]
+  author?: string
+  homepage?: string
+  /** Its source, such as `https://github.com/justAnArthur/just-notch/tree/main/library/github`. */
+  source: string
+  /** The `.notchplugin` (a zip) on the plugin's GitHub release, its SHA-256 (hex) and size in bytes. */
+  download: { url: string; sha256: string; size: number }
+  icon?: string
+  screenshots: string[]
+  /** ISO 8601. */
+  releasedAt: string
+}
+
+export type LibraryPhase = 'downloading' | 'verifying' | 'installing' | 'done' | 'error'
+
 export interface Methods {
   /** Sent once by the runtime after it has installed `window.__notch`. */
   'host.ready': { params: Record<string, never>; result: HostInfo }
@@ -714,6 +749,19 @@ export interface Methods {
   }
 
   'plugins.setEnabled': { params: { id: string; enabled: boolean }; result: null }
+  /** The library's catalog, cached by the host; `refresh` fetches it again. */
+  'library.catalog': { params: { refresh?: boolean }; result: LibraryCatalog }
+  /**
+   * Installs or updates a catalog plugin by id: the host downloads the catalog's URL, checks its size and SHA-256,
+   * the packed manifest against the entry and `engines.notch`, then asks the user natively. `library.progress`
+   * events follow. Only an id: the page never names what to download.
+   */
+  'library.install': { params: { id: string }; result: InstalledPlugin }
+  /**
+   * Asks natively, then moves a user or library plugin to the Trash. The dialog's unchecked “Also delete its saved
+   * data and keychain items” drops its storage, secrets, host grants and on/off state too. Rejects when cancelled.
+   */
+  'library.uninstall': { params: { id: string }; result: null }
   'app.preferences': { params: Record<string, never>; result: AppPreferences }
   'app.setPreferences': { params: Partial<AppPreferences>; result: AppPreferences }
 }
@@ -796,6 +844,9 @@ export const RUNTIME_ONLY: Method[] = [
   'updater.check',
   'updater.install',
   'net.revokeHost',
+  'library.catalog',
+  'library.install',
+  'library.uninstall',
 ]
 
 /** Methods the runtime may NOT call as `runtime`: they act for one plugin, under its grants and Keychain entries. */
@@ -830,6 +881,8 @@ export interface Events {
   'deepLink.open': { url: string }
   /** A step of an update session, wherever it started (Sparkle's scheduled check, the menu, `updater.install`). */
   'updater.state': UpdateState
+  /** A step of a `library.install`. */
+  'library.progress': { id: string; phase: LibraryPhase; progress?: number; message?: string }
 }
 export type EventName = keyof Events
 

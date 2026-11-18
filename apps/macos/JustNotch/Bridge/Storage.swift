@@ -21,6 +21,13 @@ final class Storage {
         try data.write(to: try file(plugin), options: .atomic)
     }
 
+    /// Uninstalling with its data.
+    func deleteAll(plugin: String) throws {
+        cache[plugin] = nil
+        let url = try file(plugin)
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+    }
+
     private func values(_ plugin: String) throws -> [String: Any] {
         if let cached = cache[plugin] { return cached }
         let url = try file(plugin)
@@ -40,6 +47,10 @@ enum Paths {
     static let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("JustNotch", isDirectory: true)
     static let userPlugins = support.appendingPathComponent("Plugins", isDirectory: true)
+    /// The library's catalog cache and `installed.json`.
+    static let library = support.appendingPathComponent("Library", isDirectory: true)
+    /// Downloads and extractions on their way into `userPlugins`: same volume, so the swap is a rename.
+    static let staging = support.appendingPathComponent("Staging", isDirectory: true)
     static let web = Bundle.main.resourceURL!.appendingPathComponent("Web", isDirectory: true)
     static let builtInPlugins = web.appendingPathComponent("plugins", isDirectory: true)
 

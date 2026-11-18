@@ -25,6 +25,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     private let net: NetAccess
     private let proxy = HTTPProxy(version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0")
     private let secrets = SecretsStore()
+    private let library: LibraryStore
     /// `net.fetch`es in flight per web view, cancelled when the page goes away.
     private var fetches: [ObjectIdentifier: [UUID: Task<NetResponse, Error>]] = [:]
 
@@ -32,7 +33,14 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         self.plugins = plugins
         self.events = events
         net = NetAccess(plugins: plugins)
+        library = LibraryStore(plugins: plugins, storage: storage, secrets: secrets, net: net,
+                               version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0")
         super.init()
+        // Keyed by phase too: a frame keeps each step, only a phase's own updates replace each other.
+        library.onProgress = { [weak self] progress in
+            guard let self else { return }
+            events.send("library.progress", progress, key: "library.progress:\(progress.id):\(progress.phase.rawValue)", to: app.webViews)
+        }
     }
 
     func startServices() {
@@ -200,6 +208,16 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             let p = try decode(SetEnabledParams.self, params)
             guard plugins.manifest(p.id) != nil else { throw ServiceError("unknown plugin \(p.id)") }
             plugins.setEnabled(p.id, p.enabled)
+            return nil
+
+        case "library.catalog":
+            return try await library.catalog(refresh: try decode(RefreshParams.self, params).refresh ?? false).json()
+
+        case "library.install":
+            return try await library.install(try decode(IdParams.self, params).id).json()
+
+        case "library.uninstall":
+            try await library.uninstall(try decode(IdParams.self, params).id)
             return nil
 
         case "app.preferences":

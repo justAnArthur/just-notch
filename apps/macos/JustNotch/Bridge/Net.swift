@@ -1,4 +1,4 @@
-import AppKit
+import Foundation
 import NotchServices
 
 /// Which hosts each plugin may reach: its manifest's `hosts` plus the exact hosts the user granted
@@ -35,6 +35,14 @@ final class NetAccess {
         UserDefaults.standard.set(grants, forKey: Self.grantsKey)
     }
 
+    /// Uninstalling with its data: every grant, and the session's denials.
+    func revokeAll(plugin: String) {
+        var grants = grants()
+        grants[plugin] = nil
+        UserDefaults.standard.set(grants, forKey: Self.grantsKey)
+        denied = denied.filter { !$0.hasPrefix("\(plugin) ") }
+    }
+
     func requestHost(plugin: String, url raw: String, reason: String?) throws -> Bool {
         guard let url = URL(string: raw), let host = HostPattern.key(url), !host.contains("*") else {
             throw ServiceError("net.requestHost needs an absolute URL")
@@ -46,13 +54,7 @@ final class NetAccess {
         defer { pending.remove(plugin) }
 
         let name = plugins.manifest(plugin)?.name ?? plugin
-        let alert = NSAlert()
-        alert.messageText = "“\(name)” wants to connect to \(host). It can send anything it stores there, including saved tokens."
-        alert.informativeText = reason ?? ""
-        alert.addButton(withTitle: "Allow")
-        alert.addButton(withTitle: "Don’t Allow")
-        NSApp.activate()
-        guard alert.runModal() == .alertFirstButtonReturn else {
+        guard Consent.host(name: name, host: host, reason: reason) else {
             denied.insert("\(plugin) \(host)")
             return false
         }

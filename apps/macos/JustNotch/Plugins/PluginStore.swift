@@ -42,6 +42,13 @@ final class PluginStore {
         reload()
     }
 
+    /// Uninstalling with its data: its on/off state goes too, so a reinstall starts enabled.
+    func forget(_ id: String) {
+        var states = UserDefaults.standard.dictionary(forKey: Self.enabledKey) as? [String: Bool] ?? [:]
+        states[id] = nil
+        UserDefaults.standard.set(states, forKey: Self.enabledKey)
+    }
+
     func reload() {
         let next = scan()
         guard next != plugins else { return }
@@ -67,13 +74,14 @@ final class PluginStore {
 
     private func scan() -> [InstalledPlugin] {
         let states = UserDefaults.standard.dictionary(forKey: Self.enabledKey) as? [String: Bool] ?? [:]
+        let library = LibraryRecords.load()
         var seen = Set<String>()
         var result: [InstalledPlugin] = []
         for (folder, builtIn) in [(Paths.builtInPlugins, true), (Paths.userPlugins, false)] {
             for manifest in manifests(in: folder) where seen.insert(manifest.id).inserted {
                 result.append(InstalledPlugin(manifest: manifest, baseUrl: baseUrl + manifest.id + "/",
                                               enabled: states[manifest.id] ?? true, builtIn: builtIn,
-                                              source: builtIn ? .builtIn : .user,
+                                              source: builtIn ? .builtIn : library[manifest.id] != nil ? .library : .user,
                                               incompatible: builtIn ? nil : Self.incompatibility(manifest)))
             }
         }

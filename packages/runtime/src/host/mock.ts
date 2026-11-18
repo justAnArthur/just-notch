@@ -8,6 +8,9 @@ import {
   type HostRequest,
   hostAllowed,
   type InstalledPlugin,
+  type LibraryCatalog,
+  type LibraryEntry,
+  type LibraryPhase,
   METHOD_PERMISSION,
   type MediaState,
   type Methods,
@@ -258,14 +261,134 @@ function preferences(): AppPreferences {
 async function loadPlugins(): Promise<InstalledPlugin[]> {
   const response = await fetch('/plugins/index.json').catch(() => null)
   const entries: { manifest: PluginManifest; builtIn: boolean }[] = response?.ok ? await response.json().catch(() => []) : []
-  return entries.map(({ manifest, builtIn }) => ({
+  shelf = entries.filter((e) => !e.builtIn).map((e) => e.manifest)
+  const installed = libraryInstalled()
+  return entries.flatMap(({ manifest, builtIn }) => {
+    if (builtIn) return [installedPlugin(manifest, 'builtIn')]
+    if (installed && !(manifest.id in installed)) return []
+    return [installedPlugin({ ...manifest, version: installed?.[manifest.id] ?? manifest.version }, 'library')]
+  })
+}
+
+function installedPlugin(manifest: PluginManifest, source: InstalledPlugin['source']): InstalledPlugin {
+  const builtIn = source === 'builtIn'
+  return {
     manifest,
     baseUrl: new URL(`/plugins/${manifest.id}/`, location.href).href,
     enabled: localStorage.getItem(enabledKey(manifest.id)) !== 'false',
     builtIn,
-    source: builtIn ? 'builtIn' : 'user',
+    source,
     ...(!builtIn && !satisfies(API_VERSION, manifest.engines.notch) && { incompatible: incompatibility(manifest.engines.notch) }),
-  }))
+  }
+}
+
+/*
+ * The library: a catalog built from the dev-served `library/*` manifests (plus one that needs a newer API), and
+ * installs that only flip what the plugin list says, with progress events on the real host's steps. Which library
+ * plugins are installed is kept in localStorage; until something is installed or uninstalled, all of them are.
+ */
+const LIBRARY_KEY = 'notch:mock:library'
+/** The dev-served `library/*` manifests. */
+let shelf: PluginManifest[] = []
+/** Ids whose catalog entry is a patch ahead of the served plugin (`mock.libraryUpdate`). */
+const ahead = new Set<string>()
+let libraryOffline = false
+export const libraryTiming = { step: 250 }
+
+const libraryInstalled = (): Record<string, string> | undefined => JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null') ?? undefined
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const bump = (version: string) => version.replace(/(\d+)$/, (patch) => String(Number(patch) + 1))
+
+function catalogEntry(manifest: PluginManifest): LibraryEntry {
+  const { id } = manifest
+  const version = ahead.has(id) ? bump(manifest.version) : manifest.version
+  return {
+    id,
+    name: manifest.name,
+    description: manifest.description,
+    version,
+    engines: manifest.engines,
+    permissions: manifest.permissions,
+    hosts: manifest.hosts ?? [],
+    author: 'justAnArthur',
+    homepage: `https://justanarthur.github.io/just-notch/library/${id}/`,
+    source: `https://github.com/justAnArthur/just-notch/tree/main/library/${id}`,
+    download: { url: `https://github.com/justAnArthur/just-notch/releases/download/@just-notch/plugin-${id}@${version}/${id}-${version}.notchplugin`, sha256: '0'.repeat(64), size: 28_460 },
+    ...(manifest.icon && { icon: new URL(`/plugins/${id}/${manifest.icon}`, location.href).href }),
+    screenshots: [],
+    releasedAt: new Date(Date.now() - 3 * day).toISOString(),
+  }
+}
+
+/** A plugin for a newer Just Notch, so the page shows an incompatible one. */
+const FUTURE = catalogEntry({
+  id: 'linear',
+  name: 'Linear',
+  version: '2.0.0',
+  description: 'Your Linear issues and cycles.',
+  entry: 'dist/index.js',
+  permissions: ['net', 'secrets'],
+  hosts: ['api.linear.app'],
+  engines: { notch: '^2.0.0' },
+})
+
+function mockCatalog(): LibraryCatalog {
+  if (libraryOffline) throw 'The library is offline.'
+  return { schema: 1, generatedAt: new Date().toISOString(), plugins: [...shelf.map(catalogEntry), FUTURE] }
+}
+
+function libraryProgress(id: string, phase: LibraryPhase, progress?: number, message?: string) {
+  emit({ type: 'library.progress', payload: { id, phase, ...(progress !== undefined && { progress }), ...(message && { message }) } })
+}
+
+function setLibrary(change: (installed: Record<string, string>) => void) {
+  const installed = libraryInstalled() ?? Object.fromEntries(plugins.filter((p) => p.source === 'library').map((p) => [p.manifest.id, p.manifest.version]))
+  change(installed)
+  localStorage.setItem(LIBRARY_KEY, JSON.stringify(installed))
+}
+
+async function libraryInstall(id: string): Promise<InstalledPlugin> {
+  const entry = mockCatalog().plugins.find((p) => p.id === id)
+  if (!entry) throw `${id} isn't in the library`
+  if (!satisfies(API_VERSION, entry.engines.notch)) throw incompatibility(entry.engines.notch)
+  const manifest = shelf.find((m) => m.id === id)
+  if (!manifest) throw `${id} has nothing to install in the mock`
+  const update = plugins.some((p) => p.manifest.id === id)
+  for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+    libraryProgress(id, 'downloading', progress)
+    await sleep(libraryTiming.step)
+  }
+  libraryProgress(id, 'verifying')
+  await sleep(libraryTiming.step)
+  // The real host asks in a native dialog.
+  if (!window.confirm(`${update ? 'Update' : 'Install'} “${entry.name}” ${entry.version}?\n\nIt will be able to: ${entry.permissions.join(', ') || 'nothing'}.`)) {
+    libraryProgress(id, 'error', undefined, 'cancelled')
+    throw 'cancelled'
+  }
+  libraryProgress(id, 'installing')
+  await sleep(libraryTiming.step)
+  setLibrary((installed) => {
+    installed[id] = entry.version
+  })
+  if (!update) localStorage.removeItem(enabledKey(id))
+  const plugin = installedPlugin({ ...manifest, version: entry.version }, 'library')
+  plugins = update ? plugins.map((p) => (p.manifest.id === id ? plugin : p)) : [...plugins, plugin]
+  broadcast({ type: 'plugins.changed', payload: { plugins } })
+  libraryProgress(id, 'done', 1)
+  return plugin
+}
+
+function libraryUninstall(id: string) {
+  const plugin = plugins.find((p) => p.manifest.id === id)
+  if (!plugin) throw `unknown plugin ${id}`
+  if (plugin.builtIn) throw `${id} is a built-in plugin: turn it off instead`
+  if (!window.confirm(`Uninstall “${plugin.manifest.name}”? It moves to the Trash.`)) throw 'cancelled'
+  setLibrary((installed) => {
+    delete installed[id]
+  })
+  plugins = plugins.filter((p) => p.manifest.id !== id)
+  broadcast({ type: 'plugins.changed', payload: { plugins } })
+  return null
 }
 
 /** The host's wording (PluginStore.swift). */
@@ -479,6 +602,9 @@ const handlers: Handlers = {
     broadcast({ type: 'plugins.changed', payload: { plugins } })
     return null
   },
+  'library.catalog': mockCatalog,
+  'library.install': ({ id }) => libraryInstall(id),
+  'library.uninstall': ({ id }) => libraryUninstall(id),
   'app.preferences': preferences,
   'app.setPreferences': (changes) => {
     const next = { ...preferences(), ...changes }
@@ -507,6 +633,14 @@ export const mock = {
     if (id) emit({ type: 'shortcut', payload: { id } })
   },
   deepLink: (url: string) => emit({ type: 'deepLink.open', payload: { url } }),
+  /** The library lists `id` a patch ahead of the served plugin, so it shows an update. */
+  libraryUpdate(id = 'github') {
+    ahead.add(id)
+  },
+  /** `library.catalog` fails until called again. */
+  libraryOffline() {
+    libraryOffline = !libraryOffline
+  },
   /** Publishes a release for `updater.check` to find. */
   update(version = '9.9.9') {
     update = version
