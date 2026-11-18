@@ -22,5 +22,8 @@
     "@just-notch/cli": "workspace:*",
     "@types/react": "^19.2.0",
     "react": "^19.2.0"
+  },
+  "properties": {
+    "gitCommitScopeRelatedNames": "github"
   }
 }
