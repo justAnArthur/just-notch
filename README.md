@@ -1,14 +1,54 @@
+<a href="https://justanarthur.github.io/just-notch/"><img src=".github/banner.svg" alt="A Dynamic Island for your notch: a thin Swift host owns the window and the system services; plugins written in React draw everything you see." width="100%"></a>
+
 # Just Notch
+
+[![ci](https://github.com/justAnArthur/just-notch/actions/workflows/ci.yml/badge.svg)](https://github.com/justAnArthur/just-notch/actions/workflows/ci.yml)
+[![license: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-blue)](LICENSE.md)
 
 A modular Dynamic Island for the MacBook notch. A thin native Swift host owns the window and the system services; everything you see is React + [`@justanarthur/modo-ui`](https://github.com/justAnArthur/modo/tree/main/ui) in one transparent web view; plugins add the rest.
 
-Default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard and Recent files.
+Seven default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard and Recent files.
 
-## install
+**[Download for Mac →](https://github.com/justAnArthur/just-notch/releases/latest/download/JustNotch.zip)** · [Website](https://justanarthur.github.io/just-notch/)
 
-Download `JustNotch-x.y.z.zip` from [Releases](../../releases), unzip, move `JustNotch.app` to Applications. The app is ad-hoc signed, not notarized, so open it the first time with right-click → Open (or `xattr -dr com.apple.quarantine "/Applications/JustNotch.app"`). macOS 14+.
+![The Now Playing plugin in the open island: track, artist, scrubber and playback controls](.github/screenshot.png)
 
-## develop
+## Install
+
+Download [`JustNotch.zip`](https://github.com/justAnArthur/just-notch/releases/latest/download/JustNotch.zip) (or a versioned `JustNotch-x.y.z.zip` from [Releases](../../releases)), unzip, move `JustNotch.app` to Applications. macOS 14+.
+
+The app is ad-hoc signed, not notarized, so open it the first time with right-click → Open, or:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/JustNotch.app
+```
+
+## How it works
+
+The Swift host puts one transparent panel over the notch and loads the runtime into its web view. Plugins never touch the system: they ask the runtime, the runtime posts the request over the bridge, and the host checks it against the plugin's manifest before a service in `NotchServices` runs it. State comes back as topic events.
+
+```mermaid
+sequenceDiagram
+  participant P as Plugin (React)
+  participant R as Runtime (web view)
+  participant B as Bridge (postMessage)
+  participant H as Swift host
+  participant S as NotchServices
+  P->>R: ctx.subscribe("media")
+  R->>B: { plugin, method: "subscribe", params }
+  B->>H: host message handler
+  H->>H: check the manifest's permissions
+  H->>S: start the media service
+  S-->>H: now playing changed
+  H-->>R: window.__notch.dispatch(events)
+  R-->>P: topic update, the island re-renders
+  P->>R: ctx.call("media.command", playPause)
+  R->>B: { plugin, method: "media.command" }
+  B->>H: host message handler
+  H->>S: play / pause
+```
+
+## Develop
 
 ```bash
 bun install
@@ -20,4 +60,40 @@ Live reload: `bun run dev` in `packages/runtime`, then launch the app with `NOTC
 
 Write a plugin: `bun run notch create <id>`, then `bun run notch build --cwd plugins/<id>`. See [`packages/sdk`](packages/sdk/src/index.ts) and [`packages/cli`](packages/cli/README.md).
 
-Layout, conventions and release rules: [`AGENTS.md`](AGENTS.md).
+just-notch is `apps/notch` in the just-apps monorepo and builds only inside a just-apps checkout. Layout, conventions and release rules: [`AGENTS.md`](AGENTS.md).
+
+## Structure
+
+```mermaid
+flowchart LR
+  schema[bridge-schema] --> sdk
+  schema --> runtime
+  schema --> cli
+  sdk --> plugins[plugins: 7 defaults]
+  sdk --> runtime
+  cli -. builds .-> plugins
+  runtime -- loads --> plugins
+  macos[apps/macos: Swift host] -- serves --> runtime
+  macos --> services[NotchServices]
+  schema -. mirrored by hand .-> macos
+```
+
+```
+packages/bridge-schema   the host ⇄ web contract: methods, topics, events, manifest
+packages/sdk             @just-notch/sdk: definePlugin, PluginContext, hooks
+packages/runtime         the React app in the web view: island, plugin loader, settings, mock host
+packages/cli             notch create | dev | build | pack | check
+plugins/<id>             the default plugins, written against the public SDK only
+apps/macos               the Swift 6 host (XcodeGen), Packages/NotchServices for system services
+assets/brand             logo, app icon, menu bar glyph, lockups and wordmark masters
+site                     the website (GitHub Pages)
+```
+
+## Releases
+
+Versioning and GitHub releases run via [just-github-actions-n-workflows](https://github.com/justAnArthur/just-github-actions-n-workflows). A Conventional Commit on `main` scoped to the app (`app`, `macos`, `runtime`, `island`, a plugin id, …) bumps the version in the root `package.json` and tags `just-notch@x.y.z`; the tag builds the app and attaches `JustNotch-x.y.z.zip` and `JustNotch.zip` to the release.
+
+## License
+
+[FSL-1.1-MIT](LICENSE.md): source available, free to use, modify and run for anything except a competing product.
+Each release turns MIT two years after it ships.

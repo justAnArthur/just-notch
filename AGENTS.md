@@ -11,6 +11,8 @@ A modular macOS notch app. A thin Swift host owns the window and system services
 - `packages/cli` — `notch create | dev | build | pack | check` for plugins. At the root: `bun run notch <command> --cwd plugins/<id>` (not `bunx notch`, an unrelated npm package).
 - `plugins/<id>` — default plugins, written only against the public SDK.
 - `apps/macos` — Swift 6, macOS 14+, XcodeGen `project.yml`. `Packages/NotchServices` — system services as a SwiftPM package (protocol in `Service.swift`).
+- `assets/brand` — brand masters (logo, app icon, menu bar glyph, lockups, wordmark), text outlined. `apps/macos/scripts/make-icon.sh` renders `icon-1024.png` into the `AppIcon` set; the status item's `StatusIcon` PDF comes from `menubar.svg` (`rsvg-convert -f pdf -d 72 -p 72`).
+- `site` — the website (Vite + modo-ui), deployed to GitHub Pages by `pages.yml`.
 
 ## platform
 
@@ -41,6 +43,6 @@ Sparse: smallest correct code, trust the types, early returns, no comments excep
 ## releases
 
 - One versioned product: the app, versioned in the root `package.json` (`just-notch`, tags `just-notch@x.y.z`). The workspace packages and plugins are private and ship inside the app.
-- `bump-version.yml` (from just-github-actions-n-workflows, see `.github/AGENTS.md`) bumps on push to `main` from Conventional Commits whose scope is one of the root `properties.gitCommitScopeRelatedNames` (`app`, `macos`, `host`, `services`, `runtime`, `island`, `sdk`, `cli`, `bridge-schema`, `plugins`, or a plugin id): `feat` minor, `fix`/`perf`/`refactor`/… patch, `!` major. Unscoped commits (and `[skip bump]`) don't release.
-- A new tag starts `release-on-tag.yml` (GitHub release with notes) and `build-macos-on-tag.yml` (builds the app on macOS with `MARKETING_VERSION` from the tag, attaches `JustNotch-x.y.z.zip`).
+- `bump-version.yml` (from just-github-actions-n-workflows, see `.github/AGENTS.md`) bumps on push to `main` from Conventional Commits whose scope is one of the root `properties.gitCommitScopeRelatedNames` (`app`, `macos`, `host`, `services`, `runtime`, `island`, `sdk`, `cli`, `bridge-schema`, `plugins`, or a plugin id): `feat`/`perf` minor, `fix`/`refactor`/… patch; `!` after the type or scope (`feat!:`, `fix(runtime)!:`) or a `BREAKING CHANGE:` footer major, on `0.x` too (`0.4.3` → `1.0.0`). Unscoped commits (and `[skip bump]`) don't release.
+- A new tag starts `release-on-tag.yml` (GitHub release with notes) and `build-macos-on-tag.yml` (builds the app on macOS with `MARKETING_VERSION` from the tag, attaches `JustNotch-x.y.z.zip` and a stable `JustNotch.zip`, which the site's Download button links through `releases/latest/download/`).
 - Toolkit workflow files are managed by its CLI (`npx @justanarthur/just-github-actions-n-workflows-cli update`); don't edit `bump-version.yml` / `release-on-tag.yml` by hand. `ci.yml` and `build-macos-on-tag.yml` are this repo's own.
