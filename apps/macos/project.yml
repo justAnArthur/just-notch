@@ -76,7 +76,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         # Sparkle's EdDSA public key (`generate_keys -p`); the private one is the SPARKLE_PRIVATE_KEY secret.
         # While this is the placeholder, Release builds fail and other builds run without updates.
-        SPARKLE_PUBLIC_KEY: __SPARKLE_PUBLIC_KEY__
+        SPARKLE_PUBLIC_KEY: Xn45sRz8QJbcwXyaAomJU1WzAuSNYe+uc7l+yUdggMk=
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
