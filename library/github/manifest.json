@@ -1,0 +1,12 @@
+{
+  "id": "github",
+  "name": "GitHub",
+  "version": "0.1.0",
+  "description": "Review requests, your pull requests with their checks, and the issues assigned to you.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}
