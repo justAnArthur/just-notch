@@ -1,0 +1,51 @@
+{
+  "valid": ["api.github.com", "*.youtrack.cloud", "host:8443", "localhost", "*.acme.co.uk:443", "a-b.c1.io"],
+  "invalid": ["*", "*.com", "*.", "**.x.com", "a.*.com", "https://api.github.com", "api.github.com/path", "API.github.com", "host:0", "host:70000", "host:", "host:80:80", "", "-a.com", "a..com", "a_b.com"],
+  "allowed": [
+    [["api.github.com"], "https://api.github.com/user", true],
+    [["api.github.com"], "https://API.GitHub.com/user", true],
+    [["api.github.com"], "https://github.com/", false],
+    [["api.github.com"], "https://evil.api.github.com/", false],
+    [["api.github.com"], "https://api.github.com.evil.com/", false],
+    [["api.github.com"], "https://api.github.com:8443/", true],
+    [["*.youtrack.cloud"], "https://acme.youtrack.cloud/api", true],
+    [["*.youtrack.cloud"], "https://a.b.youtrack.cloud/api", true],
+    [["*.youtrack.cloud"], "https://youtrack.cloud/api", false],
+    [["*.youtrack.cloud"], "https://evilyoutrack.cloud/", false],
+    [["host:8443"], "https://host:8443/", true],
+    [["host:8443"], "https://host/", false],
+    [["host:443"], "https://host/", true],
+    [["host:80"], "http://host/", true],
+    [["*.com"], "https://evil.com/", false],
+    [["*"], "https://evil.com/", false],
+    [[], "https://api.github.com/", false],
+    [["api.github.com", "*.youtrack.cloud"], "https://x.youtrack.cloud/", true],
+    [["api.github.com"], "not a url", false]
+  ],
+  "local": [
+    ["localhost", true],
+    ["app.localhost", true],
+    ["printer.local", true],
+    ["127.0.0.1", true],
+    ["10.1.2.3", true],
+    ["172.16.0.1", true],
+    ["172.31.255.255", true],
+    ["172.32.0.1", false],
+    ["192.168.1.10", true],
+    ["192.169.1.10", false],
+    ["8.8.8.8", false],
+    ["[::1]", true],
+    ["[fd00::1]", true],
+    ["[2001:db8::1]", false],
+    ["api.github.com", false],
+    ["local", false]
+  ],
+  "scheme": [
+    ["https://api.github.com/", true],
+    ["http://api.github.com/", false],
+    ["http://localhost:5173/", true],
+    ["http://192.168.1.10/", true],
+    ["ftp://localhost/", false],
+    ["file:///etc/passwd", false]
+  ]
+}

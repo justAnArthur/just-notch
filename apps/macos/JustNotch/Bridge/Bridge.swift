@@ -22,10 +22,16 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     /// Subscription counts per web view, so a reloaded page releases what its previous instance held.
     private var subscriptions: [ObjectIdentifier: [String: Int]] = [:]
     private let hotKeys = HotKeys()
+    private let net: NetAccess
+    private let proxy = HTTPProxy(version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0")
+    private let secrets = SecretsStore()
+    /// `net.fetch`es in flight per web view, cancelled when the page goes away.
+    private var fetches: [ObjectIdentifier: [UUID: Task<NetResponse, Error>]] = [:]
 
     init(plugins: PluginStore, events: EventDispatcher) {
         self.plugins = plugins
         self.events = events
+        net = NetAccess(plugins: plugins)
         super.init()
     }
 
@@ -131,6 +137,36 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             events.send("storage.changed", payload: changed, key: "storage.changed:\(plugin)/\(key)", to: app.webViews)
             return nil
 
+        case "net.fetch":
+            return try await fetch(try NetRequest(json: params), plugin: plugin, from: webView).json()
+
+        case "net.requestHost":
+            let p = try decode(RequestHostParams.self, params)
+            return GrantedResult(granted: try net.requestHost(plugin: plugin, url: p.url, reason: p.reason)).json()
+
+        case "net.hosts":
+            return HostsResult(manifest: net.manifestHosts(plugin), granted: net.granted(plugin)).json()
+
+        case "net.revokeHost":
+            let p = try decode(RevokeHostParams.self, params)
+            net.revoke(plugin: p.plugin, host: p.host)
+            return nil
+
+        case "secrets.get":
+            return SecretResult(value: try await secrets.get(plugin: plugin, key: try decode(KeyParams.self, params).key)).json()
+
+        case "secrets.set":
+            let p = try decode(SecretSetParams.self, params)
+            try await secrets.set(plugin: plugin, key: p.key, value: p.value)
+            secretChanged(plugin: plugin, key: p.key)
+            return nil
+
+        case "secrets.delete":
+            let key = try decode(KeyParams.self, params).key
+            try await secrets.delete(plugin: plugin, key: key)
+            secretChanged(plugin: plugin, key: key)
+            return nil
+
         case "system.openUrl":
             let raw = try decode(UrlParams.self, params).url
             guard let url = URL(string: raw), Self.openSchemes.contains(url.scheme?.lowercased() ?? "") else {
@@ -188,7 +224,11 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
 
     /// The runtime (which renders the settings page too) is trusted; a plugin needs its manifest's permissions.
     private func authorize(plugin: String, method: String, params: Data, from webView: WKWebView) throws {
-        if plugin == Self.runtime { return }
+        if plugin == Self.runtime {
+            // `runtime` skips every check, so it must not reach a plugin's hosts or Keychain entries.
+            if Schema.pluginOnly.contains(method) { throw ServiceError("\(method) is for plugins only") }
+            return
+        }
         guard let manifest = plugins.manifest(plugin) else { throw ServiceError("unknown plugin \(plugin)") }
         if Schema.runtimeOnly.contains(method) { throw ServiceError("\(method) is reserved for the runtime") }
 
@@ -203,6 +243,24 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
                 throw ServiceError("\(plugin) needs the \(permission.rawValue) permission for \(topic)")
             }
         }
+    }
+
+    // MARK: net and secrets
+
+    private func fetch(_ request: NetRequest, plugin: String, from webView: WKWebView) async throws -> NetResponse {
+        let patterns = net.allowed(plugin)
+        let page = ObjectIdentifier(webView), id = UUID()
+        let task = Task { [proxy] in
+            try await proxy.fetch(request, plugin: plugin) { HostPattern.allowed(patterns, url: $0) }
+        }
+        fetches[page, default: [:]][id] = task
+        defer { fetches[page]?[id] = nil }
+        return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+    }
+
+    /// Never carries the value: a page that wants it asks with `secrets.get`.
+    private func secretChanged(plugin: String, key: String) {
+        events.send("secrets.changed", SecretsChangedPayload(plugin: plugin, key: key), key: "secrets.changed:\(plugin)/\(key)", to: app.webViews)
     }
 
     // MARK: subscriptions
@@ -226,6 +284,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
     /// Drops every subscription a web view holds (page reload, crash, panel closed).
     func release(_ webView: WKWebView) {
         hotKeys.release(owner: ObjectIdentifier(webView))
+        fetches.removeValue(forKey: ObjectIdentifier(webView))?.values.forEach { $0.cancel() }
         guard let held = subscriptions.removeValue(forKey: ObjectIdentifier(webView)) else { return }
         for topic in held.keys where total(topic) == 0 {
             service(for: topic)?.stop(topic: topic)

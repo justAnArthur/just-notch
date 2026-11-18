@@ -225,6 +225,10 @@ async function loadPlugins(): Promise<InstalledPlugin[]> {
   }))
 }
 
+function unavailable(): never {
+  throw 'not in the mock host'
+}
+
 type Handlers = { [M in keyof Methods]: (params: Methods[M]['params'], plugin: string) => Methods[M]['result'] | Promise<Methods[M]['result']> }
 
 const handlers: Handlers = {
@@ -343,6 +347,13 @@ const handlers: Handlers = {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.id !== path) })
     return null
   },
+  'net.fetch': unavailable,
+  'net.requestHost': unavailable,
+  'net.hosts': unavailable,
+  'net.revokeHost': unavailable,
+  'secrets.get': unavailable,
+  'secrets.set': unavailable,
+  'secrets.delete': unavailable,
   'storage.get': ({ key }, plugin) => {
     const raw = localStorage.getItem(storageKey(plugin, key))
     return raw === null ? null : JSON.parse(raw)

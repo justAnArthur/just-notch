@@ -33,6 +33,8 @@ enum Permission: String, Codable {
     case weatherRead = "weather.read"
     case clipboard
     case filesRecent = "files.recent"
+    case net
+    case secrets
 }
 
 struct PluginManifest: Codable, Equatable {
@@ -47,6 +49,7 @@ struct PluginManifest: Codable, Equatable {
     var entry: String
     var style: String?
     var permissions: [Permission]
+    var hosts: [String]?
     var engines: Engines
 }
 
@@ -131,6 +134,13 @@ enum Schema {
         "files.copy": .files,
         "files.trash": .files,
         "clipboard.readText": .clipboard,
+        "net.fetch": .net,
+        "net.requestHost": .net,
+        "net.hosts": .net,
+        "net.revokeHost": .net,
+        "secrets.get": .secrets,
+        "secrets.set": .secrets,
+        "secrets.delete": .secrets,
     ]
 
     static let runtimeOnly: Set<String> = [
@@ -146,6 +156,17 @@ enum Schema {
         "deepLinks.initial",
         "updater.check",
         "updater.install",
+        "net.revokeHost",
+    ]
+
+    /// Methods that act for one plugin (its hosts, its Keychain entries): never as `runtime`.
+    static let pluginOnly: Set<String> = [
+        "net.fetch",
+        "net.requestHost",
+        "net.hosts",
+        "secrets.get",
+        "secrets.set",
+        "secrets.delete",
     ]
 }
 
@@ -247,6 +268,43 @@ struct DraggingPayload: Encodable {
 
 struct PluginsChangedPayload: Encodable {
     var plugins: [InstalledPlugin]
+}
+
+// `net.fetch` params and result are `NetRequest` / `NetResponse` in NotchServices (Plugins/HTTPProxy.swift).
+
+struct RequestHostParams: Decodable {
+    var url: String
+    var reason: String?
+}
+
+struct HostsResult: Encodable {
+    var manifest: [String]
+    var granted: [String]
+}
+
+struct RevokeHostParams: Decodable {
+    var plugin: String
+    var host: String
+}
+
+struct SecretSetParams: Decodable {
+    var key: String
+    var value: String
+}
+
+/// `{ value: string | null }`: the key is always there.
+struct SecretResult: Encodable {
+    var value: String?
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(["value": value])
+    }
+}
+
+struct SecretsChangedPayload: Encodable {
+    var plugin: String
+    var key: String
 }
 
 struct HapticParams: Decodable {

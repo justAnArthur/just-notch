@@ -36,6 +36,10 @@ export type Permission =
   | 'weather.read'
   | 'clipboard'
   | 'files.recent'
+  /** `net.*`: HTTP(S) to the manifest's `hosts` and hosts the user granted. */
+  | 'net'
+  /** `secrets.*`: per-plugin strings in the Keychain (tokens, passwords). */
+  | 'secrets'
 
 /** `manifest.json` at a plugin's root. */
 export interface PluginManifest {
@@ -49,6 +53,12 @@ export interface PluginManifest {
   /** Optional stylesheet relative to the plugin root (UnoCSS output of `notch build`). */
   style?: string
   permissions: Permission[]
+  /**
+   * Hostnames `net.fetch` may reach without asking, such as `api.github.com`, `*.youtrack.cloud` or
+   * `host:8443`: no scheme, no path. `*.` matches subdomains only, and needs at least two labels after it.
+   * Needs the `net` permission.
+   */
+  hosts?: string[]
   engines: { notch: string }
 }
 
@@ -338,6 +348,107 @@ export type MediaCommand =
   | { command: 'repeat'; repeat: MediaRepeat }
   | { command: 'like'; liked: boolean }
 
+// ── Net: HTTP(S) on a plugin's behalf, without CORS ──
+
+export type NetMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
+
+export interface NetRequest {
+  /** `https:`; `http:` only for local hosts (localhost, `*.local`, private IPs). */
+  url: string
+  /** @default 'GET' */
+  method?: NetMethod
+  /** `Host`, `Content-Length`, `Connection` and `Cookie` are dropped. */
+  headers?: Record<string, string>
+  body?: string
+  /** Sent as JSON with `content-type: application/json` (unless set); exclusive with `body`. */
+  json?: unknown
+  /** @default 15000, clamped to 1000–60000 */
+  timeoutMs?: number
+  /** @default 'text' for text, JSON and XML content types, else 'base64' */
+  responseType?: 'text' | 'base64'
+}
+
+export interface NetResponse {
+  status: number
+  /** The final URL, after redirects. */
+  url: string
+  /** Lowercased names. */
+  headers: Record<string, string>
+  body: string
+  encoding: 'text' | 'base64'
+}
+
+/** A larger response rejects; it is never truncated. */
+export const NET_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+export const NET_DEFAULT_TIMEOUT_MS = 15_000
+export const NET_DROPPED_HEADERS = ['host', 'content-length', 'connection', 'cookie']
+
+export function netTimeout(timeoutMs: number | undefined): number {
+  return Math.min(60_000, Math.max(1_000, timeoutMs ?? NET_DEFAULT_TIMEOUT_MS))
+}
+
+/** The response type a content type defaults to. */
+export function netResponseType(contentType: string | null | undefined): 'text' | 'base64' {
+  const type = (contentType ?? '').toLowerCase()
+  return type.startsWith('text/') || type.includes('json') || type.includes('xml') ? 'text' : 'base64'
+}
+
+const WILDCARD = '*.'
+const LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
+
+/** `host`, `host:port` or `*.domain.tld[:port]`, lowercase; a wildcard needs two labels after `*.`. */
+export function validHostPattern(pattern: string): boolean {
+  const [host, port, ...rest] = pattern.split(':')
+  if (rest.length > 0 || (port !== undefined && !/^[1-9]\d{0,4}$/.test(port))) return false
+  if (port !== undefined && Number(port) > 65_535) return false
+  const wildcard = host.startsWith(WILDCARD)
+  const labels = (wildcard ? host.slice(WILDCARD.length) : host).split('.')
+  if (wildcard && labels.length < 2) return false
+  return labels.every((label) => LABEL.test(label))
+}
+
+/** localhost, `*.localhost`, `*.local`, loopback and private IPv4, IPv6 loopback and unique-local. */
+export function isLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true
+  if (host === '::1' || /^f[cd][0-9a-f]{2}:/.test(host)) return true
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false
+  const [a, b] = host.split('.').map(Number)
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
+
+/** `https:`, or `http:` to a local host. */
+export function netSchemeAllowed(url: URL): boolean {
+  return url.protocol === 'https:' || (url.protocol === 'http:' && isLocalHost(url.hostname))
+}
+
+/** The `host[:port]` a grant is stored under (`url.host`, lowercased; default ports left out). */
+export function netHostKey(url: URL): string {
+  return url.host.toLowerCase()
+}
+
+/**
+ * Whether `url`'s host matches one of `patterns` (see `PluginManifest.hosts`). A pattern without a port
+ * matches any port; invalid patterns match nothing.
+ */
+export function hostAllowed(patterns: readonly string[], url: string | URL): boolean {
+  let parsed: URL
+  try {
+    parsed = typeof url === 'string' ? new URL(url) : url
+  } catch {
+    return false
+  }
+  const host = parsed.hostname.toLowerCase()
+  const port = parsed.port || (parsed.protocol === 'https:' ? '443' : parsed.protocol === 'http:' ? '80' : '')
+  return patterns.some((pattern) => {
+    if (!validHostPattern(pattern)) return false
+    const [patternHost, patternPort] = pattern.split(':')
+    if (patternPort !== undefined && patternPort !== port) return false
+    if (!patternHost.startsWith(WILDCARD)) return host === patternHost
+    return host.endsWith(patternHost.slice(1))
+  })
+}
+
 export interface Methods {
   /** Sent once by the runtime after it has installed `window.__notch`. */
   'host.ready': { params: Record<string, never>; result: HostInfo }
@@ -402,6 +513,19 @@ export interface Methods {
   'files.copy': { params: { paths: string[] }; result: null }
   /** Moves the file to the Trash. */
   'files.trash': { params: { path: string }; result: null }
+
+  /** HTTP(S) to a host in the manifest's `hosts` or one the user granted (`net.requestHost`); no cookies, no cache. */
+  'net.fetch': { params: NetRequest; result: NetResponse }
+  /** Asks the user, in a native dialog, to let the plugin reach `url`'s exact host[:port]; the grant persists. */
+  'net.requestHost': { params: { url: string; reason?: string }; result: { granted: boolean } }
+  /** The caller's hosts: its manifest's patterns and the hosts the user granted. */
+  'net.hosts': { params: Record<string, never>; result: { manifest: string[]; granted: string[] } }
+  'net.revokeHost': { params: { plugin: string; host: string }; result: null }
+
+  /** Per-plugin strings in the Keychain; `null` when unset. Keys match `^[A-Za-z0-9._-]{1,64}$`, values ≤ 64 KB. */
+  'secrets.get': { params: { key: string }; result: { value: string | null } }
+  'secrets.set': { params: { key: string; value: string }; result: null }
+  'secrets.delete': { params: { key: string }; result: null }
 
   /** Per-plugin JSON storage persisted by the host. */
   'storage.get': { params: { key: string }; result: unknown }
@@ -487,6 +611,13 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'files.copy': 'files',
   'files.trash': 'files',
   'clipboard.readText': 'clipboard',
+  'net.fetch': 'net',
+  'net.requestHost': 'net',
+  'net.hosts': 'net',
+  'net.revokeHost': 'net',
+  'secrets.get': 'secrets',
+  'secrets.set': 'secrets',
+  'secrets.delete': 'secrets',
 }
 
 /** Methods only the runtime (`plugin: 'runtime'`) may call. */
@@ -503,7 +634,11 @@ export const RUNTIME_ONLY: Method[] = [
   'deepLinks.initial',
   'updater.check',
   'updater.install',
+  'net.revokeHost',
 ]
+
+/** Methods the runtime may NOT call as `runtime`: they act for one plugin, under its grants and Keychain entries. */
+export const PLUGIN_ONLY: Method[] = ['net.fetch', 'net.requestHost', 'net.hosts', 'secrets.get', 'secrets.set', 'secrets.delete']
 
 // ── Events: Swift → JS ──
 
@@ -521,6 +656,8 @@ export interface Events {
   'power.plugged': { pluggedIn: boolean }
   /** A `storage.set` by any web view (island or settings), so both stay in sync. Delivered to every web view. */
   'storage.changed': { plugin: string; key: string; value: unknown }
+  /** A secret was set or deleted. Never carries the value: read it again with `secrets.get`. */
+  'secrets.changed': { plugin: string; key: string }
   'plugins.changed': { plugins: InstalledPlugin[] }
   /** After `window.endGesture`: the fingers touched the trackpad again, so the next wheel events are a new gesture. */
   'gesture.touch': Record<string, never>
