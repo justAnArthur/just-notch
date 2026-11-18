@@ -3,14 +3,18 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 import { netProxy } from './net-proxy.ts'
-import { servePlugins, serveDir } from './plugin-files.ts'
+import { type PluginRoot, servePlugins, serveDir } from './plugin-files.ts'
 import { buildShared } from './shared-build.ts'
 import { DEV_SHARED_MODULES, importMap, SHARED_BASE, SHARED_MODULES } from './shared-modules.ts'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const repo = resolve(root, '../..')
 const sdkSource = join(repo, 'packages/sdk/src')
-const pluginRoots = [join(repo, 'plugins'), ...(process.env.NOTCH_FIXTURES === '1' ? [join(root, 'fixtures')] : [])]
+const pluginRoots: PluginRoot[] = [
+  { dir: join(repo, 'plugins'), builtIn: true },
+  { dir: join(repo, 'library'), builtIn: false },
+  ...(process.env.NOTCH_FIXTURES === '1' ? [{ dir: join(root, 'fixtures'), builtIn: true }] : []),
+]
 
 /**
  * One instance of each shared module for the runtime and every plugin:

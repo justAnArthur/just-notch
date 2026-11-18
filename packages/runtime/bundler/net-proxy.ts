@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import { type NetRequest, type PluginManifest, validHostPattern } from '@just-notch/bridge-schema'
 import { performNetFetch } from '../src/host/net.ts'
-import { pluginFolders } from './plugin-files.ts'
+import { type PluginRoot, pluginFolders } from './plugin-files.ts'
 
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024
 const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1']
@@ -34,7 +34,7 @@ function readBody(req: IncomingMessage): Promise<string> {
  * Never an open proxy: loopback callers from the dev page only, and only to hosts in the calling
  * plugin's manifest or granted to it.
  */
-export function netProxy(roots: string[]) {
+export function netProxy(roots: PluginRoot[]) {
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     if (req.method !== 'POST') return next()
     const send = (status: number, body: unknown) => {
@@ -56,7 +56,7 @@ export function netProxy(roots: string[]) {
     } catch {
       return send(400, { error: 'invalid JSON' })
     }
-    const folder = typeof body.plugin === 'string' ? pluginFolders(roots).get(body.plugin) : undefined
+    const folder = typeof body.plugin === 'string' ? pluginFolders(roots).get(body.plugin)?.folder : undefined
     if (!folder) return send(404, { error: `unknown plugin ${body.plugin}` })
     const manifest: PluginManifest = JSON.parse(readFileSync(join(folder, 'manifest.json'), 'utf8'))
     if (!manifest.permissions.includes('net')) return send(403, { error: `${manifest.id} needs the net permission for net.fetch` })

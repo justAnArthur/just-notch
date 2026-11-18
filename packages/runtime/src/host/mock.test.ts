@@ -25,7 +25,7 @@ vi.stubGlobal('window', { confirm, __notch: { dispatch: (e: HostEvent[]) => even
 vi.stubGlobal(
   'fetch',
   vi.fn(async (url: string, init?: RequestInit) => {
-    if (url === '/plugins/index.json') return Response.json([manifest])
+    if (url === '/plugins/index.json') return Response.json([{ manifest, builtIn: false }])
     if (url === '/__notch/net') {
       proxied.push(JSON.parse(String(init?.body)))
       return Response.json({ status: 200, url: 'https://acme.youtrack.cloud/api', headers: {}, body: '[]', encoding: 'text' })
@@ -42,6 +42,11 @@ const tick = () => new Promise((resolve) => setTimeout(resolve))
 
 beforeAll(async () => {
   await host('runtime', 'host.ready', {})
+})
+
+test('index.json tags library plugins as not built in', async () => {
+  const info = (await host('runtime', 'host.ready', {})) as { plugins: { builtIn: boolean }[] }
+  expect(info.plugins.map((p) => p.builtIn)).toEqual([false])
 })
 
 describe('mock secrets', () => {

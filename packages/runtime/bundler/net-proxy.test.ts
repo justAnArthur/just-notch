@@ -20,7 +20,7 @@ let port = 0
 
 beforeAll(async () => {
   vi.stubGlobal('fetch', upstream)
-  const proxy = netProxy([root])
+  const proxy = netProxy([{ dir: root, builtIn: true }])
   server = createServer((req, res) => proxy(req, res, () => ((res.statusCode = 404), res.end())))
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   port = (server.address() as AddressInfo).port

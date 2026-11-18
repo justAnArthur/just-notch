@@ -32,13 +32,19 @@ export function serveDir(dir: () => string) {
   }
 }
 
-export function pluginFolders(roots: string[]) {
-  const folders = new Map<string, string>()
-  for (const root of roots) {
-    if (!existsSync(root)) continue
-    for (const id of readdirSync(root)) {
-      const folder = join(root, id)
-      if (existsSync(join(folder, 'manifest.json'))) folders.set(id, folder)
+/** A folder of plugin folders; `builtIn: false` for `library/*`, which the app doesn't bundle. */
+export interface PluginRoot {
+  dir: string
+  builtIn: boolean
+}
+
+export function pluginFolders(roots: PluginRoot[]) {
+  const folders = new Map<string, { folder: string; builtIn: boolean }>()
+  for (const { dir, builtIn } of roots) {
+    if (!existsSync(dir)) continue
+    for (const id of readdirSync(dir)) {
+      const folder = join(dir, id)
+      if (existsSync(join(folder, 'manifest.json'))) folders.set(id, { folder, builtIn })
     }
   }
   return folders
@@ -46,21 +52,21 @@ export function pluginFolders(roots: string[]) {
 
 /**
  * Workspace plugins at `/plugins/<id>/…`, and `/plugins/index.json` listing
- * their manifests for the mock host. Served raw, so their bare imports stay
- * for the import map.
+ * `{ manifest, builtIn }` for the mock host. Served raw, so their bare imports
+ * stay for the import map.
  */
-export function servePlugins(roots: string[]) {
+export function servePlugins(roots: PluginRoot[]) {
   return (req: IncomingMessage, res: ServerResponse, next: Next) => {
     const path = (req.url ?? '/').split('?')[0]
     const folders = pluginFolders(roots)
     if (path === '/index.json') {
-      const manifests = [...folders.values()].map((folder) => JSON.parse(readFileSync(join(folder, 'manifest.json'), 'utf8')))
+      const entries = [...folders.values()].map(({ folder, builtIn }) => ({ manifest: JSON.parse(readFileSync(join(folder, 'manifest.json'), 'utf8')), builtIn }))
       res.setHeader('Content-Type', 'application/json')
       res.setHeader('Cache-Control', 'no-cache')
-      return res.end(JSON.stringify(manifests))
+      return res.end(JSON.stringify(entries))
     }
     const [, id] = path.split('/')
-    const folder = folders.get(id)
+    const folder = folders.get(id)?.folder
     if (!folder) return next()
     return serveDir(() => folder)({ ...req, url: path.slice(id.length + 1) } as IncomingMessage, res, next)
   }

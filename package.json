@@ -12,11 +12,13 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "plugins/*"
+    "plugins/*",
+    "library/*"
   ],
   "scripts": {
     "check": "bun run --filter '*' check",
     "build": "bun run --filter '@just-notch/runtime' build && bun run --filter './plugins/*' build",
+    "build:library": "bun run --filter './library/*' build",
     "notch": "bun packages/cli/src/cli.ts"
   },
   "devDependencies": {

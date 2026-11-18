@@ -255,12 +255,12 @@ function preferences(): AppPreferences {
 
 async function loadPlugins(): Promise<InstalledPlugin[]> {
   const response = await fetch('/plugins/index.json').catch(() => null)
-  const manifests: PluginManifest[] = response?.ok ? await response.json().catch(() => []) : []
-  return manifests.map((manifest) => ({
+  const entries: { manifest: PluginManifest; builtIn: boolean }[] = response?.ok ? await response.json().catch(() => []) : []
+  return entries.map(({ manifest, builtIn }) => ({
     manifest,
     baseUrl: new URL(`/plugins/${manifest.id}/`, location.href).href,
     enabled: localStorage.getItem(enabledKey(manifest.id)) !== 'false',
-    builtIn: true,
+    builtIn,
   }))
 }
 
