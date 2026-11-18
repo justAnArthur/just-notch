@@ -73,6 +73,27 @@ describe('validateManifest', () => {
     expect(result.warnings).toEqual(['duplicate permissions: hud', 'unknown field "main" is ignored'])
   })
 
+  test('accepts hosts with the net permission', () => {
+    const result = validateManifest({ ...valid, permissions: ['net', 'secrets'], hosts: ['api.github.com', '*.youtrack.cloud', 'host:8443'] })
+    expect(result.errors).toEqual([])
+    expect(result.warnings).toEqual([])
+    expect(result.manifest?.hosts).toEqual(['api.github.com', '*.youtrack.cloud', 'host:8443'])
+  })
+
+  test.each(['https://api.github.com', 'api.github.com/x', '*.com', '*', 'API.github.com', 42])('rejects host %p', (host) => {
+    expect(validateManifest({ ...valid, permissions: ['net'], hosts: [host] }).errors[0]).toStartWith(`invalid host ${JSON.stringify(host)}`)
+  })
+
+  test('hosts without net is an error; net without hosts a warning', () => {
+    expect(validateManifest({ ...valid, hosts: ['api.github.com'] }).errors).toEqual(['"hosts" needs the "net" permission'])
+    expect(validateManifest({ ...valid, permissions: ['net'], hosts: 'api.github.com' }).errors).toEqual([
+      '"hosts" must be an array of hostnames like "api.github.com"',
+    ])
+    const bare = validateManifest({ ...valid, permissions: ['net'] })
+    expect(bare.errors).toEqual([])
+    expect(bare.warnings).toEqual(['"net" without "hosts": every host must be granted by the user through ctx.net.requestHost'])
+  })
+
   test('requires engines.notch to be a range', () => {
     expect(validateManifest({ ...valid, engines: {} }).errors).toEqual(['"engines.notch" must be a semver range like "^0.1.0"'])
     expect(validateManifest({ ...valid, engines: { notch: 'latest' } }).errors).toEqual([

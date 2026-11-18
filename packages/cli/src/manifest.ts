@@ -1,4 +1,4 @@
-import type { Permission, PluginManifest } from '@just-notch/bridge-schema'
+import { type Permission, type PluginManifest, validHostPattern } from '@just-notch/bridge-schema'
 
 /** Every bridge-schema `Permission`; the check below fails to compile when the union grows. */
 export const PERMISSIONS = [
@@ -23,7 +23,7 @@ export const PERMISSIONS = [
 const exhaustive: [Exclude<Permission, (typeof PERMISSIONS)[number]>] extends [never] ? true : never = true
 void exhaustive
 
-const KNOWN_FIELDS = ['id', 'name', 'version', 'description', 'entry', 'style', 'permissions', 'engines']
+const KNOWN_FIELDS = ['id', 'name', 'version', 'description', 'entry', 'style', 'permissions', 'hosts', 'engines']
 
 export const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -98,6 +98,22 @@ export function validateManifest(value: unknown, options: { folder?: string } = 
     const duplicates = new Set(permissions.filter((p, i) => permissions.indexOf(p) !== i))
     if (duplicates.size > 0) warnings.push(`duplicate permissions: ${[...duplicates].join(', ')}`)
   }
+
+  const hosts = m.hosts
+  const net = Array.isArray(permissions) && permissions.includes('net')
+  if (hosts !== undefined) {
+    if (!Array.isArray(hosts)) errors.push('"hosts" must be an array of hostnames like "api.github.com"')
+    else {
+      for (const h of hosts)
+        if (typeof h !== 'string' || !validHostPattern(h))
+          errors.push(
+            `invalid host ${JSON.stringify(h)}: use a lowercase hostname like "api.github.com", "*.youtrack.cloud" or "host:8443" (no scheme or path; a wildcard needs two labels after "*.")`,
+          )
+      if (!net) errors.push('"hosts" needs the "net" permission')
+    }
+  }
+  if (net && (!Array.isArray(hosts) || hosts.length === 0))
+    warnings.push('"net" without "hosts": every host must be granted by the user through ctx.net.requestHost')
 
   const engines = m.engines as Record<string, unknown> | undefined
   if (typeof engines !== 'object' || engines === null || typeof engines.notch !== 'string')
