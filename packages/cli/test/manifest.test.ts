@@ -58,6 +58,15 @@ describe('validateManifest', () => {
     ])
   })
 
+  test('icon is an optional relative .png or .svg', () => {
+    expect(validateManifest({ ...valid, icon: 'icon.png' }).errors).toEqual([])
+    expect(validateManifest({ ...valid, icon: 'assets/icon.svg' }).errors).toEqual([])
+    expect(validateManifest({ ...valid, icon: '../icon.png' }).errors).toEqual([
+      '"icon" must be a relative path inside the plugin, like "icon.png" (got "../icon.png")',
+    ])
+    expect(validateManifest({ ...valid, icon: 'icon.gif' }).errors).toEqual(['"icon" must point at a .png or .svg file (got "icon.gif")'])
+  })
+
   test('rejects unknown permissions and a missing array', () => {
     expect(validateManifest({ ...valid, permissions: ['media.read', 'camera'] }).errors[0]).toStartWith(
       'unknown permission "camera"',

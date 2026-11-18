@@ -94,8 +94,11 @@ export function formatError(error: unknown): string {
   return `[notch] error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`
 }
 
-/** Builds once, then rebuilds on every change under src/ or to manifest.json. Resolves never. */
-export async function watchPlugin(root: string): Promise<never> {
+/**
+ * Builds once, then rebuilds on every change under src/ or to manifest.json, calling `after` on each
+ * successful build. Resolves never.
+ */
+export async function watchPlugin(root: string, after?: (result: BuildResult) => Promise<void>): Promise<never> {
   await mkdir(join(root, 'src'), { recursive: true })
   let timer: Timer | undefined
   let running = Promise.resolve()
@@ -103,7 +106,9 @@ export async function watchPlugin(root: string): Promise<never> {
   const rebuild = () => {
     running = running.then(async () => {
       try {
-        console.log(formatResult(await buildPlugin(root)))
+        const result = await buildPlugin(root)
+        console.log(formatResult(result))
+        await after?.(result)
       } catch (error) {
         console.error(formatError(error))
       }

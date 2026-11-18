@@ -52,6 +52,8 @@ export interface PluginManifest {
   entry: string
   /** Optional stylesheet relative to the plugin root (UnoCSS output of `notch build`). */
   style?: string
+  /** Optional icon (`.png` or `.svg`) relative to the plugin root, outside `dist/`; shipped in the `.notchplugin`. */
+  icon?: string
   permissions: Permission[]
   /**
    * Hostnames `net.fetch` may reach without asking, such as `api.github.com`, `*.youtrack.cloud` or

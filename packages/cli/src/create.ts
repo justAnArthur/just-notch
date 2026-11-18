@@ -4,6 +4,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { ID } from './manifest'
 import { CliError, ENTRY, STYLE } from './plugin'
 
+// TODO(phase 3): derive from the SDK's API_VERSION instead of the range every built-in plugin declares.
+export const ENGINES_NOTCH = '^0.1.0'
+
 const { version: CLI_VERSION } = (await Bun.file(join(import.meta.dir, '../package.json')).json()) as { version: string }
 
 /** The just-notch monorepo root above `from`, if any. */
@@ -89,13 +92,19 @@ function json(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
-/** Scaffolds `<parent>/<id>`; returns the plugin folder. */
+/**
+ * Scaffolds `<parent>/<id>`; returns the plugin folder. In the monorepo's `library/` the package also gets
+ * its own release scope (`properties.gitCommitScopeRelatedNames`), so it is versioned and tagged on its own.
+ */
 export async function createPlugin(id: string, parent: string): Promise<string> {
   if (!ID.test(id)) throw new CliError(`plugin id must be kebab-case like "my-plugin" (got "${id}")`)
   const root = join(resolve(parent), id)
   if (existsSync(root)) throw new CliError(`${root} already exists`)
 
   const repo = findMonorepo(parent)
+  const taken = repo && ['plugins', 'library'].find((folder) => existsSync(join(repo, folder, id)))
+  if (taken) throw new CliError(`id "${id}" is taken by ${taken}/${id}`)
+  const library = repo !== undefined && resolve(parent) === join(repo, 'library')
   const range = `^${CLI_VERSION}`
   const name = title(id)
 
@@ -112,6 +121,7 @@ export async function createPlugin(id: string, parent: string): Promise<string> 
       '@just-notch/cli': repo ? 'workspace:*' : range,
       ...(repo ? {} : { typescript: '^5.9.0', '@types/react': '^19.2.0' }),
     },
+    ...(library ? { properties: { gitCommitScopeRelatedNames: id } } : {}),
   }
 
   const tsconfig = repo
@@ -125,7 +135,7 @@ export async function createPlugin(id: string, parent: string): Promise<string> 
     entry: ENTRY,
     style: STYLE,
     permissions: [],
-    engines: { notch: '^0.1.0' },
+    engines: { notch: ENGINES_NOTCH },
   }
 
   await mkdir(join(root, 'src'), { recursive: true })

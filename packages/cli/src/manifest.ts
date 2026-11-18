@@ -23,7 +23,7 @@ export const PERMISSIONS = [
 const exhaustive: [Exclude<Permission, (typeof PERMISSIONS)[number]>] extends [never] ? true : never = true
 void exhaustive
 
-const KNOWN_FIELDS = ['id', 'name', 'version', 'description', 'entry', 'style', 'permissions', 'hosts', 'engines']
+const KNOWN_FIELDS = ['id', 'name', 'version', 'description', 'entry', 'style', 'icon', 'permissions', 'hosts', 'engines']
 
 export const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -45,11 +45,12 @@ export function isSemverRange(value: string): boolean {
   return sets.every((set) => HYPHEN.test(set) || (set !== '' && set.split(/\s+/).every((c) => COMPARATOR.test(c))))
 }
 
-function pathError(field: string, value: unknown, extension: string): string | undefined {
+function pathError(field: string, value: unknown, ...extensions: string[]): string | undefined {
+  const example = field === 'icon' ? 'icon.png' : `dist/index${extensions[0]}`
   if (typeof value !== 'string' || value === '') return `"${field}" must be a non-empty string`
   if (value.startsWith('/') || value.includes('\\') || value.split('/').some((s) => s === '..' || s === '.'))
-    return `"${field}" must be a relative path inside the plugin, like "dist/index${extension}" (got "${value}")`
-  if (!value.endsWith(extension)) return `"${field}" must point at a ${extension} file (got "${value}")`
+    return `"${field}" must be a relative path inside the plugin, like "${example}" (got "${value}")`
+  if (!extensions.some((e) => value.endsWith(e))) return `"${field}" must point at a ${extensions.join(' or ')} file (got "${value}")`
 }
 
 export interface ManifestResult {
@@ -88,6 +89,9 @@ export function validateManifest(value: unknown, options: { folder?: string } = 
 
   const style = m.style === undefined ? undefined : pathError('style', m.style, '.css')
   if (style) errors.push(style)
+
+  const icon = m.icon === undefined ? undefined : pathError('icon', m.icon, '.png', '.svg')
+  if (icon) errors.push(icon)
 
   const permissions = m.permissions
   if (!Array.isArray(permissions)) errors.push('"permissions" must be an array (use [] for none)')
