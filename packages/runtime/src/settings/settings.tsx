@@ -1,13 +1,17 @@
-import type { AppPreferences, Methods, UpdateState } from '@just-notch/bridge-schema'
-import { Button } from '@justanarthur/modo-ui'
+import type { AppPreferences, InstalledPlugin, LibraryEntry, Methods, UpdateState } from '@just-notch/bridge-schema'
+import { Badge, Button, List } from '@justanarthur/modo-ui'
 import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
-import { useEffect, useState } from 'react'
+import { Library } from 'lucide-react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call } from '../host/client'
 import { useHostInfo, useInstalled } from '../host/session'
 import { subscribeTopic } from '../host/topics'
 import { usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
+import LibraryPage, { useLibrary } from './library'
+import { entryState, updateCount } from './library-state'
+import { setSettingsTarget, useSettingsTarget } from './target'
 
 type SystemPermission = Methods['permissions.status']['params']['permission']
 const PRIVACY = 'x-apple.systempreferences:com.apple.preference.security?Privacy_'
@@ -98,6 +102,50 @@ function useGranted() {
   return granted
 }
 
+/** A plugin row's label: why it doesn't run, a newer version in the library, or where it came from. */
+function pluginBadge(plugin: InstalledPlugin, entry: LibraryEntry | undefined, apiVersion: string): ReactNode {
+  if (plugin.incompatible && !(entry && entryState(entry, plugin, apiVersion).status === 'update-available'))
+    return (
+      <Badge size="compact" color="amber">
+        Incompatible
+      </Badge>
+    )
+  if (entry && entryState(entry, plugin, apiVersion).status === 'update-available')
+    return (
+      <Badge size="compact" color="blue">
+        Update
+      </Badge>
+    )
+  if (plugin.source === 'library') return <Badge size="compact">Library</Badge>
+}
+
+/**
+ * The hosts the user let a plugin reach beyond its manifest (`net.requestHost`), each with Revoke. Read as the
+ * plugin, as its own context does: `net.hosts` answers for the caller only.
+ */
+function HostGrants({ plugin }: { plugin: string }) {
+  const [granted, setGranted] = useState<string[]>([])
+  useEffect(() => {
+    void call(plugin, 'net.hosts', {}).then((hosts) => setGranted(hosts.granted), () => {})
+  }, [plugin])
+  if (granted.length === 0) return null
+  const revoke = (host: string) =>
+    void call('runtime', 'net.revokeHost', { plugin, host }).then(() => setGranted((hosts) => hosts.filter((h) => h !== host)))
+  return (
+    <List>
+      <List.Section title="Allowed hosts">
+        {granted.map((host) => (
+          <List.Row key={host} label={host} description="You let it connect here.">
+            <Button variant="secondary" size="compact" onClick={() => revoke(host)}>
+              Revoke
+            </Button>
+          </List.Row>
+        ))}
+      </List.Section>
+    </List>
+  )
+}
+
 /**
  * The settings page inside the open island, on its tall snap: the kit's General, Plugins, Permissions and
  * About, and each running plugin's own page. A disabled plugin isn't loaded, so it lists without a page.
@@ -108,17 +156,59 @@ export default function Settings() {
   const loaded = usePlugins()
   const [preferences, setPreferences] = usePreferences()
   const granted = useGranted()
+  const library = useLibrary()
+  const target = useSettingsTarget()
+  const apiVersion = info?.apiVersion ?? '0.0.0'
 
-  const plugins = installed.map(({ manifest }) => {
+  // Opening the Library asks for a fresh catalog.
+  useEffect(() => {
+    if (target.page === 'library') void library.refresh()
+  }, [target.page === 'library'])
+
+  const plugins = installed.map((plugin) => {
+    const { manifest, source } = plugin
     const definition = loaded.find((p) => p.installed.manifest.id === manifest.id)?.definition
+    const entry = library.catalog?.plugins.find((e) => e.id === manifest.id)
     return {
       id: manifest.id,
       name: manifest.name,
-      description: manifest.description,
+      description: plugin.incompatible ?? manifest.description,
       icon: definition?.widget?.icon,
-      settings: definition?.settings && <PluginView plugin={manifest.id} view={definition.settings} />,
+      badge: pluginBadge(plugin, entry, apiVersion),
+      actions: source !== 'builtIn' && (
+        <Button variant="ghost" size="compact" onClick={() => library.uninstall(manifest.id)}>
+          Uninstall
+        </Button>
+      ),
+      settings: definition?.settings && (
+        <>
+          <PluginView plugin={manifest.id} view={definition.settings} />
+          {manifest.permissions.includes('net') && <HostGrants plugin={manifest.id} />}
+        </>
+      ),
     }
   })
+
+  const updates = updateCount(library.catalog?.plugins, installed, apiVersion)
+  const pages = [
+    {
+      id: 'library',
+      label: 'Library',
+      lead: 'Plugins to install from the Just Notch library.',
+      icon: Library,
+      after: 'plugins',
+      badge: updates > 0 ? String(updates) : undefined,
+      content: (
+        <LibraryPage
+          library={library}
+          installed={installed}
+          apiVersion={apiVersion}
+          open={target.library}
+          onOpen={(id) => setSettingsTarget({ page: 'library', library: id })}
+        />
+      ),
+    },
+  ]
 
   const about = info
     ? [
@@ -140,6 +230,9 @@ export default function Settings() {
         name="Just Notch"
         flush
         className="size-full"
+        value={target.page}
+        onValueChange={(page) => setSettingsTarget({ page })}
+        pages={pages}
         preferences={preferences}
         onPreferencesChange={setPreferences}
         plugins={plugins}
