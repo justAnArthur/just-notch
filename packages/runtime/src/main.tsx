@@ -9,6 +9,7 @@ import { ready, useGeometry } from './host/session'
 import { createSwiftHost } from './host/swift-host'
 import Island from './island/island'
 import { syncPlugins } from './plugins/loader'
+import { followDeepLinks } from './settings/deep-link'
 
 const isMock = !window.webkit
 if (isMock) {
@@ -43,4 +44,5 @@ const host = createSwiftHost({ name: 'just-notch', version: info.version })
 if (isMock) Object.assign(window, { __notchHost: host })
 on('plugins.changed', ({ plugins }) => void syncPlugins(plugins))
 void syncPlugins(info.plugins)
+followDeepLinks()
 createRoot(document.getElementById('root') as HTMLElement).render(<App />)
