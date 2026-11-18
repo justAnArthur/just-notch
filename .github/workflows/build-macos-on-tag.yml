@@ -1,7 +1,7 @@
 # build-macos-on-tag.yml
 # ---
 # builds Just Notch for a release tag (`just-notch@x.y.z`) and attaches the zipped app to that tag's
-# GitHub release (created by release-on-tag.yml from the same tag).
+# GitHub release (created by release-on-tag.yml from the same tag), versioned and as a stable `JustNotch.zip`.
 #
 # notch builds only inside the just-apps platform (`@just-apps/host-contract` by path), so this checks
 # out just-apps and puts this repo at apps/notch. the PLATFORM_TOKEN secret is a fine-grained token
@@ -84,3 +84,6 @@ jobs:
           # release-on-tag.yml creates the release from the same tag, possibly after this build starts.
           for _ in $(seq 1 30); do gh release view "$TAG" > /dev/null 2>&1 && break; sleep 10; done
           gh release upload "$TAG" "${{ steps.pkg.outputs.zip }}" --clobber
+          # a stable name for the site's Download button: releases/latest/download/JustNotch.zip
+          cp "${{ steps.pkg.outputs.zip }}" JustNotch.zip
+          gh release upload "$TAG" JustNotch.zip --clobber
