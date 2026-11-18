@@ -9,7 +9,7 @@
 #
 #   jobs:
 #     bump:
-#       uses: justAnArthur/just-github-actions-n-workflows/.github/workflows/bump-version.yml@2c5f418ae51c16f6f0c68db8db28706a76118ec0
+#       uses: justAnArthur/just-github-actions-n-workflows/.github/workflows/bump-version.yml@50d102c9ff6ea0299b9a4975daa00396f37d2105
 #       with:
 #         bump_type: "minor:canary"
 #
@@ -42,7 +42,7 @@
 #              deletes the prerelease images instead of GITHUB_TOKEN when set
 # ---
 
-# toolkit-ref: @justanarthur/just-github-actions-n-workflows@1.7.0
+# toolkit-ref: @justanarthur/just-github-actions-n-workflows@1.7.0-canary.3
 name: bump-version
 run-name: >-
   ${{
@@ -130,17 +130,17 @@ jobs:
           lfs: true
 
       - name: Fetch all tags and history
-        uses: justAnArthur/just-github-actions-n-workflows/actions/fetch-tags@2c5f418ae51c16f6f0c68db8db28706a76118ec0
+        uses: justAnArthur/just-github-actions-n-workflows/actions/fetch-tags@50d102c9ff6ea0299b9a4975daa00396f37d2105
 
       - name: Configure git user
         id: git_user
-        uses: justAnArthur/just-github-actions-n-workflows/actions/configure-git-user@2c5f418ae51c16f6f0c68db8db28706a76118ec0
+        uses: justAnArthur/just-github-actions-n-workflows/actions/configure-git-user@50d102c9ff6ea0299b9a4975daa00396f37d2105
         with:
           mode: ${{ github.event_name == 'push' && 'push' || 'dispatch' }}
 
       - name: Bump version
         id: bump
-        uses: justAnArthur/just-github-actions-n-workflows/actions/bump-version@2c5f418ae51c16f6f0c68db8db28706a76118ec0
+        uses: justAnArthur/just-github-actions-n-workflows/actions/bump-version@50d102c9ff6ea0299b9a4975daa00396f37d2105
         with:
           bump_to_calculated_stable: ${{ inputs.bump_to_calculated_stable || 'false' }}
           bump_type_and_channel: ${{ inputs.bump_type || '' }}
@@ -153,7 +153,7 @@ jobs:
 
       - name: Dispatch tag-triggered workflows
         if: ${{ !cancelled() && steps.bump.outputs.tags != '' }}
-        uses: justAnArthur/just-github-actions-n-workflows/actions/dispatch-tag-workflows@2c5f418ae51c16f6f0c68db8db28706a76118ec0
+        uses: justAnArthur/just-github-actions-n-workflows/actions/dispatch-tag-workflows@50d102c9ff6ea0299b9a4975daa00396f37d2105
         with:
           tags: ${{ steps.bump.outputs.tags }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
