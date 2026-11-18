@@ -1,4 +1,5 @@
 import type { AppPreferences, Methods } from '@just-notch/bridge-schema'
+import { Button } from '@justanarthur/modo-ui'
 import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
 import { useEffect, useState } from 'react'
 import { call } from '../host/client'
@@ -9,6 +10,15 @@ import PluginView from '../plugins/plugin-view'
 
 type SystemPermission = Methods['permissions.status']['params']['permission']
 const PRIVACY = 'x-apple.systempreferences:com.apple.preference.security?Privacy_'
+const REPO = 'https://github.com/justAnArthur/just-notch'
+
+function Link({ url, children }: { url: string; children: string }) {
+  return (
+    <Button variant="link" size="compact" onClick={() => void call('runtime', 'system.openUrl', { url })}>
+      {children}
+    </Button>
+  )
+}
 
 const PERMISSIONS: (Omit<SettingsPermission, 'granted'> & { pane: string; status?: SystemPermission })[] = [
   { id: 'calendar', status: 'calendar', pane: 'Calendars', label: 'Calendar', description: 'Shows your events and a countdown to the next one.' },
@@ -67,6 +77,9 @@ export default function Settings() {
         { label: 'Version', value: info.version },
         { label: 'Mode', value: info.devMode ? `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` : 'Release' },
         { label: 'Screen', value: info.geometry.hasNotch ? 'Hardware notch' : 'Virtual notch' },
+        { label: 'Website', value: <Link url="https://justanarthur.github.io/just-notch/">justanarthur.github.io/just-notch</Link> },
+        { label: 'Source', value: <Link url={REPO}>github.com/justAnArthur/just-notch</Link> },
+        { label: 'License', value: <Link url={`${REPO}/blob/main/LICENSE.md`}>FSL-1.1-MIT</Link> },
       ]
     : []
 
