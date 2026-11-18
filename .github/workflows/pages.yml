@@ -1,0 +1,57 @@
+# pages.yml
+# ---
+# builds the landing page in site/ and deploys it to GitHub Pages:
+# https://justanarthur.github.io/just-notch/
+#
+# site/ is its own package with its own bun.lock (not a root workspace), so the
+# root install, which needs the just-apps checkout, never runs here.
+#
+# one-time setup: Settings → Pages → Source: GitHub Actions.
+# ---
+
+name: pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'site/**'
+      - 'assets/brand/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      # Vite 8 needs Node 20.19+ or 22.12+.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: pages
+        uses: actions/configure-pages@v6
+      - run: bun install --frozen-lockfile
+        working-directory: site
+      - run: bun run build
+        working-directory: site
+        env:
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}/
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+      - id: deployment
+        uses: actions/deploy-pages@v5

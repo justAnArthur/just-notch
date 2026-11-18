@@ -1,0 +1,676 @@
+/*
+ * Just Notch landing page. modo-ui supplies the tokens (colours, Inter, motion) and the components;
+ * this file adds the page: three fields, a display type scale and the island on the top edge.
+ */
+
+:root {
+  /* The three fields. --screen is modo's dark surface-2: the same grey the runtime's mock page
+     uses behind the island, so the screenshots sit on it without a seam. */
+  --screen: oklch(0.235 0 0);
+  --island: var(--ink); /* true black, modo's hardware token */
+  --gutter: clamp(16px, 3.2vw, 48px);
+  --section: clamp(104px, 13vw, 200px);
+  --measure: 1360px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --hairline: oklch(1 0 0 / 0.14);
+  --quiet: oklch(0.72 0 0);
+
+  /* modo's app-sized text steps, floored at 13px for a reading page. */
+  --text-caption: 13px;
+  --text-micro: 13px;
+  --text-body-compact: 13px;
+  --text-caption-compact: 13px;
+  --text-micro-compact: 13px;
+}
+
+html {
+  background: var(--island);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  background: var(--island);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent-brand);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Fields ── */
+
+.field-screen {
+  background: var(--screen);
+  color: oklch(0.97 0 0);
+}
+
+.field-ink {
+  background: var(--island);
+  color: oklch(0.97 0 0);
+}
+
+.field-light {
+  background: var(--background);
+  color: var(--foreground);
+  --hairline: oklch(0 0 0 / 0.12);
+  --quiet: oklch(0.45 0 0);
+}
+
+/* ── Type: one family, three working sizes ── */
+
+.display {
+  margin: 0;
+  font-size: clamp(44px, 8vw, 124px);
+  font-weight: 640;
+  line-height: 0.94;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.headline {
+  margin: 0;
+  font-size: clamp(36px, 5vw, 76px);
+  font-weight: 620;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.lede {
+  margin: 0;
+  max-width: 34ch;
+  font-size: clamp(18px, 1.55vw, 22px);
+  line-height: 1.42;
+  letter-spacing: -0.01em;
+}
+
+.body {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.text-link {
+  font-size: 17px;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 5px;
+  transition: text-decoration-color 160ms ease;
+}
+
+.text-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.inline-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The brand's action: modo's primary Button, filled with the one accent. */
+.brand-action {
+  /* A step deeper than the accent itself so the white label holds 4.5:1. */
+  --primary: color-mix(in oklab, var(--accent-brand), black 24%);
+  --primary-foreground: oklch(1 0 0);
+  /* The fill on the link itself as well as on modo's inner layer, so the action reads as a
+     solid button to anything that measures the element (and with the inner layer pressed). */
+  background-color: var(--primary);
+}
+
+/* ── Hero: the browser window is the screen, the island hangs from its top edge ── */
+
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* On a landscape screen the hero is one full screen, headline at its foot. */
+@media (min-aspect-ratio: 1/1) {
+  .hero {
+    min-height: max(100svh, 760px);
+  }
+}
+
+.menubar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 44px;
+  padding: 0 var(--gutter);
+  background: var(--island);
+  font-size: 14px;
+}
+
+.menubar-side {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 2vw, 28px);
+}
+
+.menubar-link {
+  color: oklch(0.97 0 0 / 0.72);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.menubar-link:hover {
+  color: oklch(0.97 0 0);
+}
+
+.menubar-home {
+  text-decoration: none;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.wordmark-mark {
+  color: oklch(0.97 0 0);
+}
+
+.island-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+}
+
+/* Every plugin's screenshot in one grid cell; the chosen one shows. The clip opens from the notch. */
+.island {
+  display: grid;
+  width: min(780px, calc(100% - 2 * var(--gutter)));
+  clip-path: inset(0 37% calc(100% - 12px) 37% round 0 0 12px 12px);
+  transition: clip-path 1000ms var(--ease-out);
+}
+
+.island.is-open {
+  clip-path: inset(0 0 0 0 round 0);
+}
+
+.island > img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: auto;
+  align-self: start;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.985);
+  transform-origin: 50% 0;
+  transition:
+    opacity 360ms ease,
+    transform 520ms var(--ease-out);
+}
+
+.island > img.on {
+  opacity: 1;
+  transform: none;
+}
+
+.hero-switch {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(16px, 2.4vw, 32px);
+  padding: 0 var(--gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hero-switch::-webkit-scrollbar {
+  display: none;
+}
+
+.hero-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 32px;
+  margin-top: auto;
+  padding: clamp(56px, 6vw, 96px) var(--gutter) clamp(32px, 4vw, 56px);
+}
+
+.hero-copy {
+  display: grid;
+  gap: clamp(20px, 2vw, 28px);
+}
+
+.capsule {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 6px 6px 20px;
+  border-radius: 14px;
+  background: oklch(0.29 0 0);
+}
+
+/* The one action, at a size a thumb can't miss. */
+.cta {
+  min-height: 44px;
+  padding-inline: 18px;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.capsule-note {
+  font-size: 17px;
+  color: oklch(0.97 0 0 / 0.72);
+  white-space: nowrap;
+}
+
+/* ── Plugins: the ledger ── */
+
+.ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(40px, 5vw, 96px);
+  padding: var(--section) var(--gutter);
+}
+
+.ledger-head {
+  position: sticky;
+  top: 48px;
+  align-self: start;
+  display: grid;
+  gap: 24px;
+}
+
+.ledger-figure {
+  margin: 24px 0 0;
+}
+
+/* The screenshot's own grey corners trimmed away: on true black the island needs no edge. */
+.ledger-figure img {
+  width: 100%;
+  height: auto;
+  clip-path: inset(0 1.94% 1.67% 1.94% round 0 0 5.1% 5.1% / 0 0 6.5% 6.5%);
+}
+
+.ledger-figure figcaption {
+  margin-top: 12px;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--quiet);
+}
+
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.ledger-table thead th {
+  padding: 0 24px 14px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--quiet);
+  text-align: left;
+}
+
+.ledger-table tbody th,
+.ledger-table td {
+  padding: 22px 24px 22px 0;
+  border-top: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ledger-table tbody th {
+  width: 9.5em;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+.ledger-table td:last-child {
+  width: 15em;
+  padding-right: 0;
+}
+
+.ledger-perms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ledger-none {
+  color: var(--quiet);
+}
+
+/* ── Tall snaps: islands hang from one top edge ── */
+
+.tall {
+  padding-bottom: var(--section);
+}
+
+.tall-edge {
+  height: 10px;
+  background: var(--island);
+}
+
+.tall-row {
+  display: flex;
+  gap: clamp(16px, 2vw, 28px);
+  margin: 0;
+  padding: 0 var(--gutter) 8px;
+  list-style: none;
+}
+
+.tall-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tall-item img {
+  width: 100%;
+  height: auto;
+}
+
+.tall-caption {
+  margin: 16px 0 0;
+  max-width: 40ch;
+  font-size: 17px;
+  line-height: 1.45;
+  color: oklch(0.97 0 0 / 0.72);
+}
+
+.tall-caption strong {
+  font-weight: 600;
+  color: oklch(0.97 0 0);
+}
+
+.tall-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(32px, 5vw, 96px);
+  align-items: end;
+  margin-top: clamp(72px, 8vw, 128px);
+  padding: 0 var(--gutter);
+}
+
+/* ── Install: the one light field ── */
+
+.install {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  column-gap: clamp(40px, 5vw, 96px);
+  row-gap: 64px;
+  padding: var(--section) var(--gutter);
+}
+
+.steps {
+  display: grid;
+  gap: 48px;
+  margin: 0;
+  grid-template-columns: minmax(0, 1fr);
+  list-style: decimal outside;
+  padding: 0 0 0 1.4em;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.steps > li {
+  display: list-item;
+  min-width: 0;
+  padding-left: 0.3em;
+}
+
+.steps > li > * + * {
+  margin-top: 18px;
+}
+
+.steps > li::marker {
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.step-text {
+  margin: 0;
+  max-width: 24ch;
+  line-height: 1.15;
+}
+
+.steps .body {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.step-copy {
+  width: min(100%, 560px);
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.install-faq {
+  grid-column: 2;
+}
+
+.faq {
+  width: 100%;
+  /* modo's app-sized text, raised to the page's reading size inside the FAQ. */
+  --text-body: 17px;
+  --leading-body: 1.5;
+}
+
+/* ── Build ── */
+
+.build {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(40px, 5vw, 96px);
+  align-items: start;
+  padding: var(--section) var(--gutter);
+}
+
+.build-copy {
+  display: grid;
+  justify-items: start;
+  gap: 28px;
+}
+
+.build-command {
+  width: min(100%, 420px);
+}
+
+.build-code {
+  min-width: 0;
+}
+
+.build-code {
+  --text-caption: 14px;
+}
+
+.build-code .code {
+  margin-top: 16px;
+}
+
+/* ── Footer ── */
+
+.footer {
+  padding: clamp(80px, 9vw, 140px) var(--gutter) clamp(24px, 3vw, 40px);
+}
+
+.footer-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.footer-note {
+  max-width: 46ch;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+}
+
+.footer-links a {
+  color: oklch(0.97 0 0 / 0.72);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.footer-links a:hover {
+  color: oklch(0.97 0 0);
+}
+
+.footer-name {
+  margin: clamp(64px, 8vw, 120px) 0 0;
+}
+
+.footer-wordmark {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: oklch(0.97 0 0);
+}
+
+/* ── Entrances: rise once, staggered; still for reduced motion ── */
+
+.rv-ready [data-rv] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 700ms ease,
+    transform 900ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 75ms);
+}
+
+.rv-ready [data-rv].in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .rv-ready [data-rv] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .island,
+  .island > img {
+    transition: none;
+  }
+}
+
+/* ── Tablet ── */
+
+@media (max-width: 1100px) {
+  .menubar-link:not(.keep) {
+    display: none;
+  }
+  .hero-foot {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+  }
+  .ledger,
+  .install,
+  .build,
+  .tall-copy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ledger-head {
+    position: static;
+  }
+  .ledger-figure {
+    max-width: 560px;
+  }
+  .install-faq {
+    grid-column: auto;
+  }
+  .hero-switch {
+    justify-content: flex-start;
+  }
+  .hero-switch > * {
+    margin-inline: auto;
+  }
+}
+
+/* ── Phone ── */
+
+@media (max-width: 640px) {
+  .island {
+    width: calc(100% - 8px);
+  }
+  .hero-foot {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  .capsule {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    justify-items: start;
+  }
+  .capsule .cta {
+    width: 100%;
+  }
+  .ledger-table thead {
+    display: none;
+  }
+  .ledger-table,
+  .ledger-table tbody,
+  .ledger-table tr,
+  .ledger-table th,
+  .ledger-table td {
+    display: block;
+    width: auto;
+  }
+  .ledger-table tr {
+    padding: 20px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .ledger-table tbody th,
+  .ledger-table td {
+    padding: 0;
+    border: 0;
+  }
+  .ledger-table td {
+    margin-top: 8px;
+  }
+  .steps {
+    gap: 40px;
+  }
+  .tall-row {
+    flex-direction: column;
+    gap: 48px;
+  }
+}

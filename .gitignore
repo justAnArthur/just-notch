@@ -7,3 +7,6 @@ DerivedData
 .build
 .swiftpm
 tmp
+
+# landing page: the art-direction skill's working files
+.taste-skill/

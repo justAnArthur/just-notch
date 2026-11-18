@@ -1,0 +1,12 @@
+/*
+ * The brand's single accent. Everything blue on the page reads this one variable:
+ * modo's --brand (the Download button, focus rings, the Copy field's highlight) is pointed at it.
+ * It is modo's own brand blue until the logo work settles on a colour.
+ */
+:root,
+.light,
+.dark {
+  --accent-brand: oklch(0.693 0.16 265);
+  --brand: var(--accent-brand);
+  --brand-hover: color-mix(in oklab, var(--accent-brand), black 8%);
+}
