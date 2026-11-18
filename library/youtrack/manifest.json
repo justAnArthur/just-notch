@@ -1,0 +1,13 @@
+{
+  "id": "youtrack",
+  "name": "YouTrack",
+  "version": "0.1.0",
+  "description": "Search YouTrack and see your issues: saved searches as tabs, each issue one click from the browser.",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": ["net", "secrets"],
+  "hosts": ["*.youtrack.cloud"],
+  "engines": {
+    "notch": "^0.1.0"
+  }
+}
