@@ -64,8 +64,9 @@ targets:
         com.apple.security.automation.apple-events: true
         com.apple.security.personal-information.calendars: true
         com.apple.security.personal-information.location: true
-        # Ad-hoc signing has no Team ID, so the hardened runtime's library validation would refuse the
-        # embedded (re-signed) Sparkle.framework. A Developer ID build could drop this.
+        # Neither ad-hoc nor the self-signed release certificate has a Team ID, so the hardened runtime's
+        # library validation refuses the embedded Sparkle.framework even when it's signed with the same
+        # certificate (dyld: "different Team IDs"). A Developer ID build could drop this.
         com.apple.security.cs.disable-library-validation: true
     settings:
       base:

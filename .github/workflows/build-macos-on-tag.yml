@@ -10,8 +10,12 @@
 # bump-version.yml dispatches this workflow for every new tag that matches `push.tags`, passing the
 # tag as the `tag` input — keep that input.
 #
-# the app is ad-hoc signed, not notarized: first launch needs right-click → Open, or
-# `xattr -dr com.apple.quarantine JustNotch.app`.
+# code signing: the app is signed with a long-lived self-signed certificate ("Just Notch Self-Signed",
+# from apps/macos/scripts/make-signing-cert.sh), base64 in the MACOS_CERT_P12 secret, its password in
+# MACOS_CERT_PASSWORD. That makes the designated requirement `identifier … and certificate leaf = H"…"`,
+# the same for every build, so privacy permissions (TCC) and Keychain access survive updates. Without the
+# secret the build falls back to ad-hoc signing (warning), whose cdhash requirement changes every build.
+# Not notarized either way: first launch needs right-click → Open, or `xattr -dr com.apple.quarantine JustNotch.app`.
 #
 # in-app updates (Sparkle): the zip is signed with the EdDSA private key from the SPARKLE_PRIVATE_KEY
 # secret (`generate_keys -x`), and an `appcast.xml` naming this release is attached too; the app reads
@@ -76,13 +80,54 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_OUTPUT"
 
+      - name: Signing keychain
+        id: signing
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERT_P12" ]; then
+            echo "::warning title=Ad-hoc signed::the MACOS_CERT_P12 secret is missing, so this build is ad-hoc signed and users lose privacy permissions and Keychain access when they update to it"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -hex 24)"
+          security create-keychain -p "$password" "$keychain"
+          echo "keychain=$keychain" >> "$GITHUB_OUTPUT"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          p12="$RUNNER_TEMP/cert.p12"
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$p12"
+          security import "$p12" -k "$keychain" -f pkcs12 -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -p codesigning "$keychain"
+
       - name: Build the app
         working-directory: apps/notch/apps/macos
+        env:
+          KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+          IDENTITY: Just Notch Self-Signed
         run: |
+          signing=()
+          if [ -n "$KEYCHAIN" ]; then
+            signing=(CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN")
+          fi
           xcodegen
           xcodebuild -project JustNotch.xcodeproj -scheme JustNotch -configuration Release \
             -derivedDataPath build build \
-            MARKETING_VERSION="${{ steps.version.outputs.version }}" CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}"
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
+            ${signing[@]+"${signing[@]}"}
+          app=build/Build/Products/Release/JustNotch.app
+          # Code Sign On Copy re-signs Sparkle.framework but leaves its helpers ad-hoc; sign those too (and verify).
+          if [ -n "$KEYCHAIN" ]; then scripts/sign-nested.sh "$app" "$IDENTITY" "$KEYCHAIN"; fi
+          requirement="$(codesign -dr - "$app" 2>&1)"
+          echo "$requirement"
+          if [ -n "$KEYCHAIN" ] && ! grep -q 'designated => identifier "com.justanarthur.justnotch" and certificate leaf = H' <<< "$requirement"; then
+            echo "::error title=Unstable signature::the designated requirement isn't certificate-based, so permissions wouldn't survive this update"
+            exit 1
+          fi
 
       - name: Package
         id: pkg
@@ -126,3 +171,7 @@ jobs:
           gh release upload "$TAG" JustNotch.zip --clobber
           # the feed the app reads: releases/latest/download/appcast.xml
           if [ -n "${{ steps.appcast.outputs.appcast }}" ]; then gh release upload "$TAG" appcast.xml --clobber; fi
+
+      - name: Delete the signing keychain
+        if: always() && steps.signing.outputs.keychain != ''
+        run: security delete-keychain "${{ steps.signing.outputs.keychain }}"
