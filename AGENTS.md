@@ -10,6 +10,7 @@ A modular macOS notch app. A thin Swift host owns the window and system services
 - `packages/runtime/src/host/swift-host.ts` — `createSwiftHost()`: the just-apps platform `Host` (`@just-apps/host-contract`, kind `swift`) over the bridge, as the runtime. The mock host backs it in a browser. Clipboard text, notifications (`notifications.send`), global shortcuts (Carbon hot keys, no Accessibility; released with the page), deep links (`justnotch://`), opening a file with a named app and the updater (`updater.check` / `updater.install`, Sparkle) all go through the bridge.
 - `packages/cli` — `notch create | dev | build | pack | check` for plugins. At the root: `bun run notch <command> --cwd plugins/<id>` (not `bunx notch`, an unrelated npm package).
 - `plugins/<id>` — default plugins, written only against the public SDK.
+- `library/<id>` — optional plugins: same rules, a workspace too, but not bundled into the app (`copy-web.sh` copies `plugins/*` only). The dev server serves them with `builtIn: false`; `bun run build:library` builds them. Their ids are not release scopes.
 - `apps/macos` — Swift 6, macOS 14+, XcodeGen `project.yml`. `Packages/NotchServices` — system services as a SwiftPM package (protocol in `Service.swift`).
 - `assets/brand` — brand masters (logo, app icon, menu bar glyph, lockups, wordmark), text outlined. `apps/macos/scripts/make-icon.sh` renders `icon-1024.png` into the `AppIcon` set; the status item's `StatusIcon` PDF comes from `menubar.svg` (`rsvg-convert -f pdf -d 72 -p 72`).
 - `site` — the website (Vite + modo-ui), deployed to GitHub Pages by `pages.yml`.
@@ -25,6 +26,15 @@ just-notch is `apps/notch` in the just-apps monorepo and builds only inside a ju
 - Plugin UI comes from the notch kit (`@justanarthur/modo-ui-notch`): a plugin maps host topics onto a kit block and its parts (`.Leading` / `.Trailing` / `.Minimal` / flash). New visuals go into the kit in the modo repo, not into a plugin.
 - A plugin folder: `manifest.json` (bridge-schema `PluginManifest`), `dist/index.js` (default export = `definePlugin(...)`), optional `dist/index.css` (UnoCSS with `@justanarthur/modo-ui/unocss` preset over the plugin's sources).
 - The island is always on true black: the `--island` token (runtime `tokens/island.css`) and the `.island` scope pin dark and lift the modo-ui surface ladder from it.
+
+## net and secrets
+
+- `net`: `ctx.fetch(url, { method, headers, body | json, timeoutMs })` resolves with a real `Response` (any status) from the host's URLSession (`NotchServices/Plugins/HTTPProxy.swift`): no cookies, cache or CORS, `User-Agent: JustNotch/<version>`, at most 6 in flight per plugin, responses over 5 MiB reject. `https:` only, `http:` for local hosts.
+- Hosts allowlist: the manifest's `hosts` (`api.github.com`, `*.youtrack.cloud` for subdomains only, `host:8443`; lowercase, no scheme or path; a wildcard needs two labels after `*.`) plus exact hosts the user granted through `ctx.net.requestHost(url, reason?)`, a native dialog (UserDefaults `plugins.hosts`; a denial sticks for the session). Every redirect hop is re-checked; `Authorization` is dropped once a redirect leaves the original host. One matcher in two languages: bridge-schema `hostAllowed` and `HostPattern.swift`, both run `packages/bridge-schema/test/host-cases.json`.
+- `secrets`: `ctx.secrets.get / set(key, value | null) / subscribe`, `useSecret(key)`. All plugins' secrets are ONE Keychain generic-password item (service `com.justanarthur.justnotch.secrets`, account `plugins`) holding `{pluginId: {key: value}}`: the app is ad-hoc signed and not sandboxed, so it uses the legacy file keychain, whose access lists are bound to the code hash and prompt again after every update — once per item, so one item. `secrets.changed` never carries the value (unlike `storage.changed`, which every web view receives with it). Never put tokens in `ctx.storage`.
+- The runtime (`plugin: 'runtime'`) skips permission checks, so the host refuses it `net.fetch`, `net.requestHost`, `net.hosts` and `secrets.*` (`PLUGIN_ONLY`).
+- Isolation caveat: plugins share one JS realm and the `plugin` id on a bridge request is self-asserted, so permissions and host lists stop mistakes, not hostile code. Install only plugins you trust.
+- Dev: the mock host keeps secrets and grants in localStorage (`notch:mock:secret:<id>:<key>`, `window.confirm`) and sends `net.fetch` through the dev server's `/__notch/net` (Node fetch; loopback, same-origin callers only; only to the calling plugin's manifest hosts or exact grants).
 
 ## styling
 
