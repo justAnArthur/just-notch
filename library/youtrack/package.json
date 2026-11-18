@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@justanarthur/modo-ui": "^2.2.0",
-    "@justanarthur/modo-ui-notch": "^0.4.3",
+    "@justanarthur/modo-ui-notch": "^0.5.0",
     "@just-notch/cli": "workspace:*",
     "@types/bun": "^1.3.0",
     "@types/react": "^19.2.0",
