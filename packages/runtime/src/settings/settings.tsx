@@ -1,7 +1,8 @@
-import type { AppPreferences, Methods } from '@just-notch/bridge-schema'
+import type { AppPreferences, Methods, UpdateState } from '@just-notch/bridge-schema'
 import { Button } from '@justanarthur/modo-ui'
 import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
 import { useEffect, useState } from 'react'
+import { on } from '../host/bus'
 import { call } from '../host/client'
 import { useHostInfo, useInstalled } from '../host/session'
 import { subscribeTopic } from '../host/topics'
@@ -17,6 +18,53 @@ function Link({ url, children }: { url: string; children: string }) {
     <Button variant="link" size="compact" onClick={() => void call('runtime', 'system.openUrl', { url })}>
       {children}
     </Button>
+  )
+}
+
+function updateText(state: UpdateState, checked: boolean) {
+  switch (state.kind) {
+    case 'idle':
+      return checked ? 'Up to date' : undefined
+    case 'checking':
+      return 'Checking…'
+    case 'available':
+      return `${state.version} is available`
+    case 'downloading':
+      return 'Downloading…'
+    case 'ready':
+      return `Installing ${state.version}…`
+    case 'error':
+      return state.message
+  }
+}
+
+/** Sparkle checks here; installing opens its own window, whose steps (and the menu's, and scheduled checks') come back as `updater.state`. */
+function Updates() {
+  const [state, setState] = useState<UpdateState>({ kind: 'idle' })
+  const [checked, setChecked] = useState(false)
+  useEffect(() => on('updater.state', setState), [])
+
+  const check = async () => {
+    setState({ kind: 'checking' })
+    setState(await call('runtime', 'updater.check', {}).catch((error) => ({ kind: 'error', message: String(error) }) as const))
+    setChecked(true)
+  }
+  const install = () => void call('runtime', 'updater.install', {}).catch((error) => setState({ kind: 'error', message: String(error) }))
+  const text = updateText(state, checked)
+
+  return (
+    <span className="flex items-center gap-2">
+      {text && <span className="text-muted-foreground">{text}</span>}
+      {state.kind === 'available' ? (
+        <Button variant="link" size="compact" onClick={install}>
+          Install…
+        </Button>
+      ) : (
+        <Button variant="link" size="compact" loading={state.kind === 'checking'} disabled={state.kind === 'downloading' || state.kind === 'ready'} onClick={() => void check()}>
+          Check for updates
+        </Button>
+      )}
+    </span>
   )
 }
 
@@ -75,6 +123,7 @@ export default function Settings() {
   const about = info
     ? [
         { label: 'Version', value: info.version },
+        { label: 'Updates', value: <Updates /> },
         { label: 'Mode', value: info.devMode ? `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` : 'Release' },
         { label: 'Screen', value: info.geometry.hasNotch ? 'Hardware notch' : 'Virtual notch' },
         { label: 'Website', value: <Link url="https://justanarthur.github.io/just-notch/">justanarthur.github.io/just-notch</Link> },
