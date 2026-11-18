@@ -28,6 +28,25 @@
         "react": ">=19",
       },
     },
+    "library/youtrack": {
+      "name": "@just-notch/plugin-youtrack",
+      "version": "0.1.0",
+      "dependencies": {
+        "@just-notch/sdk": "workspace:*",
+        "lucide-react": "^1.72.0",
+      },
+      "devDependencies": {
+        "@just-notch/cli": "workspace:*",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.4.3",
+        "@types/bun": "^1.3.0",
+        "@types/react": "^19.2.0",
+        "react": "^19.2.0",
+      },
+      "peerDependencies": {
+        "react": ">=19",
+      },
+    },
     "packages/bridge-schema": {
       "name": "@just-notch/bridge-schema",
       "version": "0.1.0",
@@ -328,6 +347,8 @@
     "@just-notch/plugin-system": ["@just-notch/plugin-system@workspace:plugins/system"],
 
     "@just-notch/plugin-weather": ["@just-notch/plugin-weather@workspace:plugins/weather"],
+
+    "@just-notch/plugin-youtrack": ["@just-notch/plugin-youtrack@workspace:library/youtrack"],
 
     "@just-notch/runtime": ["@just-notch/runtime@workspace:packages/runtime"],
 
