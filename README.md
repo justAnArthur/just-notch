@@ -23,6 +23,10 @@ The app is ad-hoc signed, not notarized, so open it the first time with right-cl
 xattr -dr com.apple.quarantine /Applications/JustNotch.app
 ```
 
+### Updates
+
+The app updates itself with [Sparkle](https://sparkle-project.org): it checks once a day, and on demand from the menu bar icon's **Check for Updates…** or Settings › About. Updates are verified with an EdDSA signature, then installed and relaunched; no second right-click → Open.
+
 ## How it works
 
 The Swift host puts one transparent panel over the notch and loads the runtime into its web view. Plugins never touch the system: they ask the runtime, the runtime posts the request over the bridge, and the host checks it against the plugin's manifest before a service in `NotchServices` runs it. State comes back as topic events.
@@ -92,6 +96,18 @@ site                     the website (GitHub Pages)
 ## Releases
 
 Versioning and GitHub releases run via [just-github-actions-n-workflows](https://github.com/justAnArthur/just-github-actions-n-workflows). A Conventional Commit on `main` scoped to the app (`app`, `macos`, `runtime`, `island`, a plugin id, …) bumps the version in the root `package.json` and tags `just-notch@x.y.z`; the tag builds the app and attaches `JustNotch-x.y.z.zip` and `JustNotch.zip` to the release.
+
+Updates: the build signs the zip with Sparkle's EdDSA private key (the `SPARKLE_PRIVATE_KEY` repository secret) and attaches `appcast.xml`, which installed apps read through `releases/latest/download/`. The matching public key is `SPARKLE_PUBLIC_KEY` in [`apps/macos/project.yml`](apps/macos/project.yml). One-time setup, with [Sparkle's tools](https://github.com/sparkle-project/Sparkle/releases):
+
+```bash
+./bin/generate_keys                     # creates the key in your login keychain, prints the public key
+# put the public key into SPARKLE_PUBLIC_KEY in apps/macos/project.yml
+./bin/generate_keys -x sparkle-private-key
+gh secret set SPARKLE_PRIVATE_KEY -R justAnArthur/just-notch < sparkle-private-key
+rm sparkle-private-key
+```
+
+Keep the key: losing it means users can't update past that release without downloading by hand.
 
 ## License
 
