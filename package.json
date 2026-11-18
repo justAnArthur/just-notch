@@ -2,6 +2,12 @@
   "name": "just-notch",
   "version": "0.4.3",
   "description": "A modular Dynamic Island for the MacBook notch: a native Swift host, a React + modo-ui island, plugins for everything else.",
+  "license": "FSL-1.1-MIT",
+  "homepage": "https://justanarthur.github.io/just-notch/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justAnArthur/just-notch.git"
+  },
   "private": true,
   "type": "module",
   "workspaces": [
