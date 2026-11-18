@@ -49,8 +49,7 @@ enum Consent {
         alert.informativeText = text.joined(separator: "\n\n")
         alert.addButton(withTitle: update ? "Update" : "Install")
         alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        return alert.runModal() == .alertFirstButtonReturn
+        return run(alert)
     }
 
     /// Whether to uninstall, and whether to drop the plugin's data too (unchecked by default).
@@ -66,8 +65,7 @@ enum Consent {
         alert.suppressionButton?.state = .off
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        let confirmed = alert.runModal() == .alertFirstButtonReturn
+        let confirmed = run(alert)
         return (confirmed, confirmed && alert.suppressionButton?.state == .on)
     }
 
@@ -77,7 +75,14 @@ enum Consent {
         alert.informativeText = reason ?? ""
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Don’t Allow")
+        return run(alert)
+    }
+
+    /// Above the island's panel (`NotchPanel`, mainMenu + 3), which otherwise covers the dialog and its buttons.
+    private static func run(_ alert: NSAlert) -> Bool {
         NSApp.activate()
+        alert.layout()
+        alert.window.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 4)
         return alert.runModal() == .alertFirstButtonReturn
     }
 }
