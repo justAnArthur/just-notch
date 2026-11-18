@@ -38,6 +38,15 @@ jobs:
         run: bun run --filter @just-notch/cli test
       - name: Build the runtime and plugins
         run: bun run build
+      # library/* is released on its own (build-library-on-tag.yml); notch check also enforces its release
+      # rules. `bun run check` above typechecks it too, but skips a folder that isn't a workspace package.
+      - name: Check and build library plugins
+        run: |
+          shopt -s nullglob
+          plugins=(library/*/)
+          if [ ${#plugins[@]} -eq 0 ]; then echo "no library plugins"; exit 0; fi
+          for dir in "${plugins[@]}"; do bun run notch check --cwd "$dir"; done
+          bun run build:library
 
   macos:
     runs-on: macos-26
