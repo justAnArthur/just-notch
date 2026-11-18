@@ -411,6 +411,96 @@ a:focus-visible {
   padding: 0 var(--gutter);
 }
 
+/* ── Library: the catalog's plugins, in the ledger's rules ── */
+
+.library {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(40px, 5vw, 96px);
+  padding: var(--section) var(--gutter);
+}
+
+.library-head {
+  align-self: start;
+  display: grid;
+  justify-items: start;
+  gap: 24px;
+}
+
+.library-body {
+  min-height: 120px;
+}
+
+.library-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-entry {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 8px 20px;
+  align-items: start;
+  padding: 24px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.library-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: oklch(1 0 0 / 0.06);
+}
+
+.library-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.library-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.library-name .library-meta {
+  margin-left: 6px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.library-description {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.library-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 0;
+}
+
+.library-meta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--quiet);
+}
+
+.library-soon {
+  margin: 0;
+  padding-top: 22px;
+  border-top: 1px solid var(--hairline);
+  font-size: 17px;
+  color: var(--quiet);
+}
+
 /* ── Install: the one light field ── */
 
 .install {
@@ -602,6 +692,7 @@ a:focus-visible {
     justify-items: start;
   }
   .ledger,
+  .library,
   .install,
   .build,
   .tall-copy {
@@ -665,6 +756,13 @@ a:focus-visible {
   }
   .ledger-table td {
     margin-top: 8px;
+  }
+  .library-entry {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .library-open {
+    grid-column: 2;
+    justify-self: start;
   }
   .steps {
     gap: 40px;

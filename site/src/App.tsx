@@ -3,6 +3,7 @@ import { Build } from './sections/Build'
 import { Footer } from './sections/Footer'
 import { Hero } from './sections/Hero'
 import { Install } from './sections/Install'
+import { Library } from './sections/Library'
 import { Plugins } from './sections/Plugins'
 import { Tall } from './sections/Tall'
 
@@ -34,6 +35,7 @@ export function App() {
       <main>
         <Plugins />
         <Tall />
+        <Library />
         <Install />
         <Build />
       </main>

@@ -47,6 +47,7 @@ export function Hero() {
             <Wordmark />
           </a>
           <a className="menubar-link" href="#plugins">Plugins</a>
+          <a className="menubar-link" href="#library">Library</a>
           <a className="menubar-link" href="#install">Install</a>
         </div>
         <div className="menubar-side menubar-end">

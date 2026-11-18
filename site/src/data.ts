@@ -6,6 +6,9 @@ export const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE.md`
 export const MODO_URL = 'https://github.com/justAnArthur/modo'
 export const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine /Applications/JustNotch.app'
 export const CREATE_COMMAND = 'bun run notch create my-plugin'
+export const LIBRARY_GUIDE_URL = `${REPO_URL}/tree/main/library#readme`
+/** Written by scripts/library-catalog.ts (pages.yml); the app reads the same file. */
+export const CATALOG_URL = `${import.meta.env.BASE_URL}library/index.json`
 
 const shot = (name: string) => `${import.meta.env.BASE_URL}shots/${name}.png`
 
@@ -21,6 +24,8 @@ const PERMISSION: Record<string, string> = {
   clipboard: 'Clipboard',
   'files.recent': 'Recent files',
   files: 'Opening files',
+  net: 'The network',
+  secrets: 'Keychain secrets',
 }
 
 interface Plugin {
