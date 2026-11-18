@@ -144,6 +144,8 @@ enum Schema {
         "shortcuts.register",
         "shortcuts.unregister",
         "deepLinks.initial",
+        "updater.check",
+        "updater.install",
     ]
 }
 
@@ -213,6 +215,21 @@ struct DeepLinkResult: Encodable {
         var container = encoder.singleValueContainer()
         try container.encode(["url": url])
     }
+}
+
+/// `UpdateState`: the kind plus the fields it carries (nil ones are left out).
+struct UpdateState: Encodable {
+    var kind: String
+    var version: String?
+    var notes: String?
+    var progress: Double?
+    var message: String?
+
+    static let idle = UpdateState(kind: "idle")
+    static func available(_ version: String, notes: String?) -> Self { .init(kind: "available", version: version, notes: notes) }
+    static func downloading(_ progress: Double) -> Self { .init(kind: "downloading", progress: progress) }
+    static func ready(_ version: String) -> Self { .init(kind: "ready", version: version) }
+    static func error(_ message: String) -> Self { .init(kind: "error", message: message) }
 }
 
 struct GrantedResult: Encodable {

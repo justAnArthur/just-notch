@@ -20,6 +20,7 @@ const ACTIONS: { label: string; run: () => void }[] = [
   { label: 'Next track', run: mock.nextTrack },
   { label: 'Stop media', run: mock.stopMedia },
   { label: 'Start media', run: mock.startMedia },
+  { label: 'Publish update', run: () => mock.update() },
 ]
 
 /** Mock mode only, outside the island: fires what the real host would. */

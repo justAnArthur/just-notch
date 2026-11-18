@@ -3,7 +3,7 @@ import ServiceManagement
 import WebKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// `NOTCH_DEV_URL` (e.g. http://localhost:5174): load the runtime and plugins from the Vite dev server.
     let devServer: URL? = ProcessInfo.processInfo.environment["NOTCH_DEV_URL"]
         .flatMap { URL(string: $0.hasSuffix("/") ? String($0.dropLast()) : $0) }
@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var lifecycle = WebLifecycle(origin: origin)
     private lazy var plugins = PluginStore(origin: origin)
     private lazy var bridge = Bridge(plugins: plugins, events: events)
+    private(set) lazy var updater = Updater()
 
     private var panels: [String: PanelController] = [:]
     private var statusItem: NSStatusItem?
@@ -39,6 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lifecycle.onTerminate = { [weak self] webView in self?.bridge.release(webView) }
         plugins.onChange = { [weak self] in self?.pluginsChanged() }
         plugins.watch()
+        updater.onState = { [weak self] state in
+            guard let self else { return }
+            events.send("updater.state", state, key: "updater.state", to: webViews)
+        }
 
         NSApp.mainMenu = MainMenu.make()
         installStatusItem()
@@ -186,6 +191,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = image
         let menu = NSMenu()
         menu.addItem(withTitle: "About Just Notch", action: #selector(showAbout), keyEquivalent: "").target = self
+        let update = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        update.target = self
+        updater.menuItem = update
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Reload UI", action: #selector(reloadUIAction), keyEquivalent: "r").target = self
@@ -207,6 +215,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [.credits: Self.aboutCredits()])
+    }
+
+    /// Also reached from the app menu through the responder chain.
+    @objc func checkForUpdates() {
+        updater.install()
     }
 
     private static func aboutCredits() -> NSAttributedString {
@@ -234,6 +247,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             log.error("launch at login: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action != #selector(checkForUpdates) || updater.canCheck
     }
 
     // MARK: preferences

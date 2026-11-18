@@ -7,6 +7,10 @@ options:
 packages:
   NotchServices:
     path: Packages/NotchServices
+  # Keep in step with SPARKLE_VERSION in .github/workflows/build-macos-on-tag.yml (sign_update).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -24,6 +28,7 @@ targets:
         product: NotchMediaBridge
         link: false
         embed: true
+      - package: Sparkle
     info:
       path: JustNotch/Info.plist
       properties:
@@ -46,6 +51,10 @@ targets:
         NSLocationWhenInUseUsageDescription: Just Notch shows the weather where you are.
         NSDownloadsFolderUsageDescription: Just Notch shows your recent downloads.
         NSDesktopFolderUsageDescription: Just Notch shows your recent screenshots.
+        SUFeedURL: https://github.com/justAnArthur/just-notch/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
         CFBundleURLTypes:
           - CFBundleURLName: com.justanarthur.justnotch
             CFBundleURLSchemes: [justnotch]
@@ -55,6 +64,9 @@ targets:
         com.apple.security.automation.apple-events: true
         com.apple.security.personal-information.calendars: true
         com.apple.security.personal-information.location: true
+        # Ad-hoc signing has no Team ID, so the hardened runtime's library validation would refuse the
+        # embedded (re-signed) Sparkle.framework. A Developer ID build could drop this.
+        com.apple.security.cs.disable-library-validation: true
     settings:
       base:
         PRODUCT_NAME: JustNotch
@@ -62,6 +74,9 @@ targets:
         # Local builds only; release builds pass the root package.json version (.github/workflows/build-macos-on-tag.yml).
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
+        # Sparkle's EdDSA public key (`generate_keys -p`); the private one is the SPARKLE_PRIVATE_KEY secret.
+        # While this is the placeholder, Release builds fail and other builds run without updates.
+        SPARKLE_PUBLIC_KEY: __SPARKLE_PUBLIC_KEY__
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
@@ -70,6 +85,14 @@ targets:
         DEVELOPMENT_TEAM: ""
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+    preBuildScripts:
+      - name: Require the Sparkle key in Release
+        script: |
+          if [ "$CONFIGURATION" = Release ] && [ "$SPARKLE_PUBLIC_KEY" = __SPARKLE_PUBLIC_KEY__ ]; then
+            echo "error: SPARKLE_PUBLIC_KEY in apps/macos/project.yml is still the placeholder: set it to the output of Sparkle's generate_keys -p"
+            exit 1
+          fi
+        basedOnDependencyAnalysis: false
     postCompileScripts:
       - name: Copy web runtime and plugins
         script: '"$SRCROOT/scripts/copy-web.sh"'

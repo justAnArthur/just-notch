@@ -7,6 +7,7 @@ const call = vi.fn(async (_plugin: string, method: string, params: { key: string
   if (method === 'shortcuts.register') return { id: 's1' }
   if (method === 'clipboard.readText') return { text: 'copied' }
   if (method === 'deepLinks.initial') return { url: null }
+  if (method === 'updater.check') return { kind: 'available', version: '1.1.0' }
   return null
 })
 vi.mock('./client', () => ({ call, log: vi.fn() }))
@@ -89,8 +90,24 @@ describe('swift host', () => {
     expect(seen).toEqual(['justnotch://settings'])
   })
 
+  test('the updater asks Sparkle and follows an install until it settles', async () => {
+    expect(await host.updater.check()).toEqual({ kind: 'available', version: '1.1.0' })
+    expect(call).toHaveBeenLastCalledWith('runtime', 'updater.check', {})
+    const seen: unknown[] = []
+    await host.updater.install((state) => seen.push(state))
+    expect(call).toHaveBeenLastCalledWith('runtime', 'updater.install', {})
+    dispatch([
+      { type: 'updater.state', payload: { kind: 'downloading', progress: 0 } },
+      { type: 'updater.state', payload: { kind: 'ready', version: '1.1.0' } },
+      { type: 'updater.state', payload: { kind: 'idle' } },
+    ])
+    expect(seen).toEqual([
+      { kind: 'downloading', progress: 0 },
+      { kind: 'ready', version: '1.1.0' },
+    ])
+  })
+
   test('what a notch panel lacks does nothing', async () => {
-    expect(await host.updater.check()).toEqual({ kind: 'idle' })
     await host.window.minimize()
   })
 })

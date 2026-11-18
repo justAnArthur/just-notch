@@ -419,6 +419,10 @@ export interface Methods {
   'shortcuts.unregister': { params: { id: string }; result: null }
   /** The `justnotch://` URL the app was launched with, if any. */
   'deepLinks.initial': { params: Record<string, never>; result: { url: string | null } }
+  /** Asks the appcast without any UI: `available`, `idle` when up to date, or `error` (also in builds without a Sparkle key). */
+  'updater.check': { params: Record<string, never>; result: UpdateState }
+  /** Starts Sparkle's own install flow in its window; `updater.state` events follow. */
+  'updater.install': { params: Record<string, never>; result: null }
   'permissions.status': {
     params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' }
     result: { granted: boolean }
@@ -428,6 +432,16 @@ export interface Methods {
   'app.preferences': { params: Record<string, never>; result: AppPreferences }
   'app.setPreferences': { params: Partial<AppPreferences>; result: AppPreferences }
 }
+/** An update as Sparkle sees it: the platform's `UpdateState` (`@just-apps/host-contract`). */
+export type UpdateState =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'available'; version: string; notes?: string }
+  /** `progress` runs 0–1; Sparkle's own window shows the bytes, the bridge only start (0) and end (1). */
+  | { kind: 'downloading'; progress: number }
+  | { kind: 'ready'; version: string }
+  | { kind: 'error'; message: string }
+
 export interface AppPreferences {
   launchAtLogin: boolean
   /** `notched`: only the notched (else built-in, else main) screen; `all`: every screen. */
@@ -487,6 +501,8 @@ export const RUNTIME_ONLY: Method[] = [
   'shortcuts.register',
   'shortcuts.unregister',
   'deepLinks.initial',
+  'updater.check',
+  'updater.install',
 ]
 
 // ── Events: Swift → JS ──
@@ -514,6 +530,8 @@ export interface Events {
   shortcut: { id: string }
   /** A `justnotch://` URL was opened while the app runs. */
   'deepLink.open': { url: string }
+  /** A step of an update session, wherever it started (Sparkle's scheduled check, the menu, `updater.install`). */
+  'updater.state': UpdateState
 }
 export type EventName = keyof Events
 

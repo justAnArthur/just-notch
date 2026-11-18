@@ -153,6 +153,13 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         case "deepLinks.initial":
             return DeepLinkResult(url: app.initialDeepLink).json()
 
+        case "updater.check":
+            return await app.updater.check().json()
+
+        case "updater.install":
+            app.updater.install()
+            return nil
+
         case "plugins.setEnabled":
             let p = try decode(SetEnabledParams.self, params)
             guard plugins.manifest(p.id) != nil else { throw ServiceError("unknown plugin \(p.id)") }

@@ -4,7 +4,6 @@ import { on } from './bus'
 import { call } from './client'
 
 const noop: Unsubscribe = () => {}
-const unsupported = (what: string) => Promise.reject(new Error(`${what}: not supported by the notch host`))
 
 /**
  * The platform's `Host` over the notch bridge, as the runtime (`plugin: 'runtime'`).
@@ -88,10 +87,19 @@ export function createSwiftHost(app: Host['app']): Host {
         }
       },
     },
-    // Updates ship as releases of the app, not through an in-app updater.
+    // Sparkle installs in its own window; the page follows its steps until the session settles.
     updater: {
-      check: async () => ({ kind: 'idle' }),
-      install: () => unsupported('in-app updates'),
+      check: () => call('runtime', 'updater.check', {}),
+      install: async (onState) => {
+        const stop = on('updater.state', (state) => {
+          onState(state)
+          if (state.kind !== 'downloading' && state.kind !== 'checking') stop()
+        })
+        await call('runtime', 'updater.install', {}).catch((error) => {
+          stop()
+          throw error
+        })
+      },
     },
     deepLinks: {
       initialUrl: async () => (await call('runtime', 'deepLinks.initial', {})).url ?? undefined,

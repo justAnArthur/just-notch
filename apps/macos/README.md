@@ -16,7 +16,9 @@ The build copies `packages/runtime/dist/` into `Resources/Web` and every `plugin
 
 `project.yml` is the source of truth; `JustNotch.xcodeproj`, `JustNotch/Info.plist` and `JustNotch/JustNotch.entitlements` are generated from it.
 
-Debug builds are signed ad hoc, and Xcode drops the hardened runtime for ad hoc signing; it applies once a real identity signs the app.
+Debug builds are signed ad hoc, and Xcode drops the hardened runtime for them. Release builds keep it, so they carry `com.apple.security.cs.disable-library-validation`: an ad-hoc signature has no Team ID, and library validation would otherwise refuse the embedded Sparkle.framework at launch.
+
+Release builds also need `SPARKLE_PUBLIC_KEY` in `project.yml` (see Releases in the root README); while it's the placeholder they fail, and other builds run with updates off.
 
 ## dev mode
 

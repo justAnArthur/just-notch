@@ -149,6 +149,8 @@ let pasteboard = ''
 /** Registered shortcuts: id → accelerator. */
 const shortcuts = new Map<string, string>()
 let shortcutIds = 0
+/** The version `mock.update()` published, which `updater.check` then finds. */
+let update: string | undefined
 export const hitRegions: { rects: Rect[]; focusable: boolean } = { rects: [], focusable: false }
 
 function emit(...events: HostEvent[]) {
@@ -373,6 +375,18 @@ const handlers: Handlers = {
     return null
   },
   'deepLinks.initial': () => ({ url: null }),
+  'updater.check': () => (update ? { kind: 'available', version: update } : { kind: 'idle' }),
+  'updater.install': () => {
+    if (!update) {
+      emit({ type: 'updater.state', payload: { kind: 'idle' } })
+      return null
+    }
+    const version = update
+    emit({ type: 'updater.state', payload: { kind: 'downloading', progress: 0 } })
+    setTimeout(() => emit({ type: 'updater.state', payload: { kind: 'downloading', progress: 1 } }), 600)
+    setTimeout(() => emit({ type: 'updater.state', payload: { kind: 'ready', version } }), 1200)
+    return null
+  },
   'permissions.status': ({ permission }) => ({ granted: permission !== 'accessibility' }),
   'plugins.setEnabled': ({ id, enabled }) => {
     localStorage.setItem(enabledKey(id), String(enabled))
@@ -405,6 +419,10 @@ export const mock = {
     if (id) emit({ type: 'shortcut', payload: { id } })
   },
   deepLink: (url: string) => emit({ type: 'deepLink.open', payload: { url } }),
+  /** Publishes a release for `updater.check` to find. */
+  update(version = '9.9.9') {
+    update = version
+  },
   charger() {
     const pluggedIn = !values.power.pluggedIn
     publish('power', { ...values.power, pluggedIn, charging: pluggedIn })
