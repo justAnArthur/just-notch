@@ -38,6 +38,7 @@ enum Permission: String, Codable {
     case filesSearch = "files.search"
     case net
     case secrets
+    case windows
 }
 
 struct PluginManifest: Codable, Equatable {
@@ -166,6 +167,8 @@ enum Schema {
         "secrets.get": .secrets,
         "secrets.set": .secrets,
         "secrets.delete": .secrets,
+        "windows.front": .windows,
+        "windows.setFrame": .windows,
     ]
 
     static let runtimeOnly: Set<String> = [

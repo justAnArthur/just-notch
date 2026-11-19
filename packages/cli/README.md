@@ -20,7 +20,7 @@ Run inside a plugin folder (its `build` / `dev` / `check` scripts call `notch`),
 
 - `package.json`: `@just-notch/plugin-<id>`, private, scripts `build` / `dev` / `check`. Inside the monorepo the SDK and CLI are `workspace:*`; outside they take a version range, plus `typescript` and `@types/react`.
 - `tsconfig.json`: extends the repo's `tsconfig.base.json` inside the monorepo, else inlines the same options.
-- `manifest.json`: `entry: dist/index.js`, `style: dist/index.css`, `permissions: []`, `engines.notch: ^<API_VERSION>`, today's plugin API from bridge-schema (`^1.3.0`).
+- `manifest.json`: `entry: dist/index.js`, `style: dist/index.css`, `permissions: []`, `engines.notch: ^<API_VERSION>`, today's plugin API from bridge-schema (`^1.4.0`).
 - In `library/`: `properties.gitCommitScopeRelatedNames: "<id>"` in `package.json`.
 - `src/index.tsx`: a `definePlugin` with an activity (compact leading / trailing) and a widget, using modo-ui components and token utilities.
 - `.gitignore`: `dist`, `*.notchplugin`.

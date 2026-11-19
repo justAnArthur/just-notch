@@ -25,6 +25,7 @@ enum Consent {
         case "files.search": "Find your files and folders by name"
         case "net": hosts.isEmpty ? "Connect to the internet, to sites you allow" : "Connect to the internet: \(hosts.joined(separator: ", "))"
         case "secrets": "Keep passwords and tokens in your Keychain"
+        case "windows": "Move and resize your windows"
         default: "Use “\(permission)”"
         }
     }

@@ -21,6 +21,17 @@ export interface Rect {
   h: number
 }
 
+/** `windows.front`. */
+export interface FrontWindow {
+  app: string
+  pid: number
+  title: string
+  frame: Rect
+  /** Index in `screens` of the screen holding most of the window. */
+  screen: number
+  screens: Rect[]
+}
+
 export type Permission =
   | 'media.read'
   | 'media.control'
@@ -46,6 +57,8 @@ export type Permission =
   | 'net'
   /** `secrets.*`: per-plugin strings in the Keychain (tokens, passwords). */
   | 'secrets'
+  /** `windows.*`: moves and resizes the front window (needs Accessibility). */
+  | 'windows'
 
 /** `manifest.json` at a plugin's root. */
 export interface PluginManifest {
@@ -111,9 +124,9 @@ export interface ScreenGeometry {
  * What plugins are written against: the bridge's methods, topics and events and the SDK. Bump the minor for
  * an addition, the major for a break; user and library plugins whose `engines.notch` doesn't match aren't loaded.
  * 1.0 is the surface plugins first shipped against, 1.1 adds `net` and `secrets`, 1.2 the launcher's `search`, 1.3
- * its result previews.
+ * its result previews, 1.4 `windows`.
  */
-export const API_VERSION = '1.3.0'
+export const API_VERSION = '1.4.0'
 
 interface Version {
   major: number
@@ -753,6 +766,15 @@ export interface Methods {
   'actions.runShortcut': { params: { name: string }; result: null }
   'actions.system': { params: { action: SystemAction }; result: null }
 
+  /**
+   * The front app's focused window: its frame, and every screen's visible frame (without the menu bar and Dock).
+   * Global points, origin at the main screen's top left, y down. Needs Accessibility; without it, asks once and
+   * fails.
+   */
+  'windows.front': { params: Record<string, never>; result: FrontWindow }
+  /** Moves and resizes the front app's focused window, in the same space as `windows.front`. */
+  'windows.setFrame': { params: { frame: Rect }; result: null }
+
   /** Hides a source's current files from `recentFiles`; nothing is deleted. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
   /** Asks the user for a folder to watch for the source, then rescans; `null` when they cancel. */
@@ -911,6 +933,8 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'secrets.get': 'secrets',
   'secrets.set': 'secrets',
   'secrets.delete': 'secrets',
+  'windows.front': 'windows',
+  'windows.setFrame': 'windows',
 }
 
 /** Methods only the runtime (`plugin: 'runtime'`) may call. */

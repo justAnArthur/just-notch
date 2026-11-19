@@ -29,6 +29,7 @@ const PERMISSION: Record<string, string> = {
   files: 'Opening files',
   net: 'The network',
   secrets: 'Keychain secrets',
+  windows: 'Moving windows',
 }
 
 interface Plugin {
@@ -103,6 +104,7 @@ export const LAUNCHER_FINDS = [
   { name: 'Files', note: 'From the Spotlight index, with a Quick Look preview.' },
   { name: 'Actions', note: 'Sleep, Turn Off Display, Start Screen Saver, Empty Trash, Toggle Dark Mode and your Shortcuts.' },
   { name: 'Clipboard', note: 'Your history: Return pastes straight into the app in front.' },
+  { name: 'Window Management', note: 'Halves, quarters, thirds, sixths, maximize and the next display for the window in front.' },
   { name: 'Web', note: 'A web search when nothing else fits.' },
 ]
 

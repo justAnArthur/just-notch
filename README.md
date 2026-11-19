@@ -7,9 +7,9 @@
 
 A modular Dynamic Island for the MacBook notch. A thin native Swift host owns the window and the system services; everything you see is React + [`@justanarthur/modo-ui`](https://github.com/justAnArthur/modo/tree/main/ui) in one transparent web view; plugins add the rest.
 
-Seven default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard and Recent files. More, such as GitHub and YouTrack, install from the [library](library/README.md).
+Eight default plugins, built on the `@justanarthur/modo-ui-notch` kit: Now Playing, Calendar, Weather, Clock (with Pomodoro), System, Clipboard, Recent files and Window Management. More, such as GitHub and YouTrack, install from the [library](library/README.md).
 
-Press ⌥Space for the [launcher](#launcher): search drops out of the notch to find apps, files, actions and your clipboard, and answers sums, conversions and time zones inline.
+Press ⌥Space for the [launcher](#launcher): search drops out of the notch to find apps, files, actions and your clipboard, snap the window in front to halves, quarters, thirds or sixths, and answers sums, conversions and time zones inline.
 
 **[Download for Mac →](https://github.com/justAnArthur/just-notch/releases/latest/download/JustNotch.zip)** · [Website](https://justanarthur.github.io/just-notch/)
 
@@ -41,10 +41,10 @@ What it finds as you type:
 - **Answers**, inline: maths, unit conversions, currencies (ECB rates), time zones (`time in tokyo`), dates and number bases.
 - **Files**, from the Spotlight index.
 - **Actions**: Sleep, Turn Off Display, Start Screen Saver, Empty Trash, Toggle Dark Mode, and your Shortcuts.
-- **Plugin scopes**, such as Clipboard.
+- **Plugin scopes**, such as Clipboard and Window Management: `right` offers Right Half, the right quarters and thirds; ↩ moves the window in front (Just Notch asks for Accessibility the first time).
 - A web search when nothing else fits.
 
-The round buttons beside the bar are scopes: Applications, Files, Actions, then the plugins' (Clipboard). ⌘1, ⌘2, … enter them in order, and so does a keyword and a space: `app `, `file `, `action `, `clip `.
+The round buttons beside the bar are scopes: Applications, Files, Actions, then the plugins' (Clipboard, Window Management). ⌘1, ⌘2, … enter them in order, and so does a keyword and a space: `app `, `file `, `action `, `clip `, `win `.
 
 | Key | Does |
 | --- | --- |
@@ -97,7 +97,7 @@ cd apps/macos && xcodegen && xcodebuild -scheme JustNotch -configuration Debug -
 
 Live reload: `bun run dev` in `packages/runtime`, then launch the app with `NOTCH_DEV_URL=http://localhost:5174`. A browser at that URL runs the whole island against a mock host.
 
-Write a plugin: `bun run notch create <id>`, then `bun run notch build --cwd plugins/<id>`. The scaffold asks for today's plugin API, `"engines": { "notch": "^1.3.0" }`. See [`packages/sdk`](packages/sdk/src/index.ts) and [`packages/cli`](packages/cli/README.md).
+Write a plugin: `bun run notch create <id>`, then `bun run notch build --cwd plugins/<id>`. The scaffold asks for today's plugin API, `"engines": { "notch": "^1.4.0" }`. See [`packages/sdk`](packages/sdk/src/index.ts) and [`packages/cli`](packages/cli/README.md).
 
 More plugins live in the [library](library/README.md): optional, released one by one, listed on the [website](https://justanarthur.github.io/just-notch/#library) and installed from Settings › Library after a native consent dialog. Start one with `bun run notch create <id> --library`; [`library/README.md`](library/README.md) covers the manifest, the release flow and the review checklist.
 
@@ -108,6 +108,8 @@ just-notch is `apps/notch` in the just-apps monorepo and builds only inside a ju
 A plugin adds a scope to the launcher with `search` on `definePlugin` (plugin API 1.2): a round button beside the bar, a keyword to enter it and, unless `root` is `false`, a few rows (3 by default) under its title in every search. `provide(query, { ctx, signal })` runs on every keystroke and returns `SearchItem`s, or a promise of them; the query is empty inside the scope before anything is typed, so show the newest, and `signal` aborts when a newer query replaces it. A result's first action runs on ↩, its second on ⌘↩, its third on ⇧↩, and ⌘K lists them all. Its `id` must stay the same across searches: the launcher remembers picks by it.
 
 Plugin API 1.3 adds `preview`: what the preview pane shows for the selected result, an `image` (`data:` or `https:`) or some `text` (`mono` for a monospace face), then `details`, label and value lines. A plugin that sets it should ask for `"engines": { "notch": "^1.3.0" }`.
+
+Plugin API 1.4 adds the `windows` permission: `windows.front` reads the front app's focused window and every screen's visible frame, `windows.setFrame` moves and resizes it. Both need Accessibility; [`plugins/windows`](plugins/windows/src/layouts.ts) builds its layouts on them.
 
 ```tsx
 import { definePlugin, type PluginContext, type SearchItem } from '@just-notch/sdk'

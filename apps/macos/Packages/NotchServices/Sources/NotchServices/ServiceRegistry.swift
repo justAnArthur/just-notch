@@ -17,6 +17,7 @@ public enum ServiceRegistry {
             FileSearchService(),
             RatesService(),
             ActionsService(),
+            WindowsService(),
             RecentFilesService(),
             SystemService(),
         ]

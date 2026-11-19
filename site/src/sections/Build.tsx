@@ -15,7 +15,7 @@ const MANIFEST = `{
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [],
-  "engines": { "notch": "^1.3.0" }
+  "engines": { "notch": "^1.4.0" }
 }`
 
 const SOURCE = `import { Button } from '@justanarthur/modo-ui'

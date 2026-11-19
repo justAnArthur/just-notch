@@ -36,7 +36,7 @@ The usual fields (`id`, `name`, `version`, `description`, `entry`, `style`, `per
 - `hosts`: the hosts `ctx.fetch` may reach without asking, such as `api.github.com`, `*.youtrack.cloud` (subdomains only) or `host:8443`: lowercase, no scheme or path. Needs `net`. Name the exact API host; for a host only the user knows (a self-hosted server), call `ctx.net.requestHost(url, reason)` instead of a wildcard, and the user is asked natively.
 - `secrets`: tokens and passwords go through `ctx.secrets` / `useSecret(key)` into the Keychain, never into `ctx.storage`.
 - `icon`: a `.svg` or `.png` relative to the plugin root and outside `dist/` (which `notch build` clears), such as `assets/icon.svg`. `notch pack` ships it. Draw it in the island's line style: a 24 px lucide-like glyph, 1.5 px strokes, round caps, on a dark tile.
-- `engines.notch`: the plugin API range, `^<API_VERSION>` as scaffolded (`^1.3.0` today; 1.2 added the launcher's `search`, 1.3 its previews). The app lists a plugin it doesn't admit as incompatible and never loads it.
+- `engines.notch`: the plugin API range, `^<API_VERSION>` as scaffolded (`^1.4.0` today; 1.2 added the launcher's `search`, 1.3 its previews, 1.4 `windows`). The app lists a plugin it doesn't admit as incompatible and never loads it.
 
 `version` in `manifest.json` should match `package.json`; `notch pack` stamps the `package.json` one in, and `notch check` warns when they differ.
 

@@ -479,6 +479,9 @@ function libraryUninstall(id: string) {
 /** The host's wording (PluginStore.swift). */
 const incompatibility = (range: string) => `Needs plugin API ${range}; this Just Notch has ${API_VERSION}.`
 
+/** The mock's front window, which `windows.setFrame` moves. */
+let mockWindow = { x: 200, y: 120, w: 900, h: 600 }
+
 type Handlers = { [M in keyof Methods]: (params: Methods[M]['params'], plugin: string) => Methods[M]['result'] | Promise<Methods[M]['result']> }
 
 const handlers: Handlers = {
@@ -595,6 +598,11 @@ const handlers: Handlers = {
   },
   'actions.system': ({ action }) => {
     actions.push(`system ${action}`)
+    return null
+  },
+  'windows.front': () => ({ app: 'Safari', pid: 1, title: 'Just Notch', frame: { ...mockWindow }, screen: 0, screens: [{ x: 0, y: 33, w: 1512, h: 949 }] }),
+  'windows.setFrame': ({ frame }) => {
+    mockWindow = frame
     return null
   },
   'recentFiles.clear': ({ source }) => {
