@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 import Testing
 @testable import NotchServices
 
@@ -456,5 +457,52 @@ struct SystemServiceTests {
         _ = try await service.handle(method: "clipboard.writeText", params: Data(#"{"text":"notch ✓"}"#.utf8))
         let read = try #require(try await service.handle(method: "clipboard.readText", params: Data("{}".utf8)))
         #expect(String(decoding: read, as: UTF8.self) == #"{"text":"notch ✓"}"#)
+    }
+}
+
+@Suite("launcher services") @MainActor
+struct LauncherServiceTests {
+    @Test func shapes() throws {
+        let hit = FileHit(path: "/a", name: "a", kind: .pdf, modified: "m", lastUsed: "l", size: 1)
+        #expect(try keys(hit) == ["path", "name", "kind", "modified", "lastUsed", "size"])
+        #expect(try keys(CurrencyRates(base: "EUR", date: "2026-11-19", rates: [:])) == ["base", "date", "rates"])
+    }
+
+    @Test func ecbRates() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gesmes:Envelope xmlns:gesmes="http://www.gesmes.org/xml/2002-08-01" xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref">
+        <Cube><Cube time='2026-11-19'><Cube currency='USD' rate='1.0812'/><Cube currency='CZK' rate='25.12'/></Cube></Cube>
+        </gesmes:Envelope>
+        """
+        let rates = try #require(ECBParser.parse(Data(xml.utf8)))
+        #expect(rates == CurrencyRates(base: "EUR", date: "2026-11-19", rates: ["USD": 1.0812, "CZK": 25.12]))
+        #expect(ECBParser.parse(Data("<html/>".utf8)) == nil)
+    }
+
+    @Test func fileExclusions() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        #expect(!FileSearch.excluded("\(home)/Documents/report.pdf"))
+        #expect(!FileSearch.excluded("\(home)/Library/Mobile Documents/com~apple~CloudDocs/notes.txt"))
+        #expect(FileSearch.excluded("\(home)/Library/Caches/x.txt"))
+        #expect(FileSearch.excluded("\(home)/.config/x.txt"))
+        #expect(FileSearch.excluded("\(home)/Applications/Thing.app"))
+        #expect(FileSearch.excluded("\(home)/Applications/Thing.app/Contents/Info.plist"))
+        #expect(FileSearch.excluded("\(home)/Pictures/Photos Library.photoslibrary/originals/a.jpg"))
+    }
+
+    @Test func fileKinds() {
+        #expect(FileSearch.kind(.folder) == .folder)
+        #expect(FileSearch.kind(.applicationBundle) == .application)
+        #expect(FileSearch.kind(.png) == .image)
+        #expect(FileSearch.kind(.pdf) == .pdf)
+        #expect(FileSearch.kind(.plainText) == .document)
+        #expect(FileSearch.kind(.zip) == .other)
+        #expect(FileSearch.kind(nil) == .other)
+    }
+
+    @Test func emptyQueryFindsNothing() async throws {
+        let data = try #require(try await FileSearchService().handle(method: "files.search", params: Data(#"{"query":"  * "}"#.utf8)))
+        #expect(String(decoding: data, as: UTF8.self) == "[]")
     }
 }

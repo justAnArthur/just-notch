@@ -35,6 +35,7 @@ enum Permission: String, Codable {
     case filesRecent = "files.recent"
     case appsRead = "apps.read"
     case appsLaunch = "apps.launch"
+    case filesSearch = "files.search"
     case net
     case secrets
 }
@@ -144,6 +145,8 @@ enum Schema {
         "apps.index": .appsRead,
         "apps.icons": .appsRead,
         "apps.launch": .appsLaunch,
+        "files.search": .filesSearch,
+        "clipboard.paste": .clipboard,
         "recentFiles.clear": .filesRecent,
         "recentFiles.chooseFolder": .filesRecent,
         "recentFiles.resetFolder": .filesRecent,
@@ -183,6 +186,10 @@ enum Schema {
         "library.catalog",
         "library.install",
         "library.uninstall",
+        "rates.currency",
+        "actions.shortcuts",
+        "actions.runShortcut",
+        "actions.system",
     ]
 
     /// Methods that act for one plugin (its hosts, its Keychain entries): never as `runtime`.

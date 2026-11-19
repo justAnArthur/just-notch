@@ -14,6 +14,9 @@ public enum ServiceRegistry {
             WeatherService(),
             ClipboardService(),
             AppsService(),
+            FileSearchService(),
+            RatesService(),
+            ActionsService(),
             RecentFilesService(),
             SystemService(),
         ]

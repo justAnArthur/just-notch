@@ -45,7 +45,7 @@
 		<true/>
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Just Notch controls media playback in your music apps.</string>
+	<string>Just Notch controls media playback in your music apps and runs the launcher’s system actions (empty the Trash, dark mode).</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Just Notch shows your Bluetooth devices and their battery.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

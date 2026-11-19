@@ -1,5 +1,5 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
-import { AppWindow, Clipboard, Folder, Layers, type LucideIcon, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { AnimatePresence, animate, motion, type MotionValue, useMotionValue, useTransform } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { present } from '../activity/reducer'
@@ -9,15 +9,15 @@ import { call } from '../host/client'
 import { EXPANDED } from '../island/geometry'
 import { setLauncherRegions } from '../island/hit-regions'
 import { useReduceMotion } from '../island/motion'
-import { type AppResult, searchApps, useAppIndex, useFrecency } from './apps'
 import { bridgePath, type Circle } from './metaball'
-import { Note, Results, type Section, SHEET_RADIUS, sectionsHeight } from './results'
+import { MAX_SCOPES, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
+import { Note, Results, SHEET_RADIUS, sectionsHeight } from './results'
+import type { Row } from './rows'
 import { setLauncherOpen } from './state'
 
 const PILL_H = 52
 const BUTTON = 52
 const GAP = 10
-const BUTTONS_W = 4 * (GAP + BUTTON)
 /** The drop as it falls, and the bud it leaves the notch from. */
 const DROP = 34
 const BUD = 18
@@ -26,27 +26,10 @@ const HANG = 26
 const RESULTS_GAP = 8
 /** The results sheet grows with its rows up to this, then scrolls. */
 const RESULTS_MAX = 420
-/** Results on the root search; a scope lists more. */
-const ROOT_LIMIT = 8
-const SCOPE_LIMIT = 50
 /** A note's height, for a scope that isn't built yet or nothing found. */
 const NOTE_H = 56
 /** How far the liquid between the pill's end and a button stretches before it snaps, in button radii: under the gap (10 pt), so none stays joined at rest. */
 const BUTTON_REACH = 0.3
-
-interface Scope {
-  id: string
-  title: string
-  icon: LucideIcon
-}
-
-/** Apps works; later phases fill the rest, and plugins add their own. */
-const SCOPES: Scope[] = [
-  { id: 'apps', title: 'Applications', icon: AppWindow },
-  { id: 'files', title: 'Files', icon: Folder },
-  { id: 'actions', title: 'Actions', icon: Layers },
-  { id: 'clipboard', title: 'Clipboard', icon: Clipboard },
-]
 
 type Phase = 'closed' | 'opening' | 'open' | 'closing'
 
@@ -64,11 +47,11 @@ interface Layout {
   buttonCx: (index: number) => number
 }
 
-function layoutOf(geometry: ScreenGeometry, top: number): Layout {
+function layoutOf(geometry: ScreenGeometry, top: number, buttons: number): Layout {
   const cx = geometry.notch.x + geometry.notch.w / 2
   const rowW = Math.min(EXPANDED.w, geometry.panel.w - 28)
   const rowLeft = Math.round(cx - rowW / 2)
-  const pillW = rowW - BUTTONS_W
+  const pillW = rowW - buttons * (GAP + BUTTON)
   return {
     cx,
     notchBottom: geometry.notch.h,
@@ -162,8 +145,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<number>()
   const [selected, setSelected] = useState(0)
-  const apps = useAppIndex(phase === 'opening')
-  const [frecency, launched] = useFrecency()
+  const scopes = useScopes()
+  const scopesRef = useRef(scopes)
+  scopesRef.current = scopes
   const input = useRef<HTMLInputElement>(null)
   const run = useRef(0)
   const phaseRef = useRef<Phase>('closed')
@@ -171,7 +155,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
 
   const drop = useBody()
   const bud = { x: useMotionValue(0), y: useMotionValue(0), r: useMotionValue(0) }
-  const buttons = [0, 1, 2, 3].map(() => ({ x: useMotionValue(0), r: useMotionValue(0) }))
+  const buttons = Array.from({ length: MAX_SCOPES }, () => ({ x: useMotionValue(0), r: useMotionValue(0) }))
   /** How far the notch ↔ drop neck stretches before it snaps (in the drop's radii): long while it hangs. */
   const reach = useMotionValue(2.5)
   /** The little satellite drop that follows the big one when the neck snaps. */
@@ -180,7 +164,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const fade = useMotionValue(1)
   const fadeScale = useTransform(() => 0.97 + 0.03 * fade.get())
 
-  const layout = layoutOf(geometry, top)
+  const layout = layoutOf(geometry, top, scopes.length)
   const layoutRef = useRef(layout)
   layoutRef.current = layout
 
@@ -205,7 +189,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       set(drop, { x, w, h: PILL_H })
       buttons.forEach((b, i) => {
         b.x.set(l.buttonCx(i))
-        b.r.set(alone ? 0 : BUTTON / 2)
+        b.r.set(alone || i >= scopesRef.current.length ? 0 : BUTTON / 2)
       })
       setButtonsShown(!alone)
       return Promise.resolve()
@@ -216,7 +200,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       // They sit under the pill's end already, so as it draws back each one is left behind with a neck that snaps.
       buttons.forEach((b, i) => {
         b.x.set(l.buttonCx(i))
-        b.r.set(BUTTON / 2)
+        b.r.set(i < scopesRef.current.length ? BUTTON / 2 : 0)
       })
       setTimeout(() => setButtonsShown(true), 90)
     }
@@ -340,7 +324,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       on('launcher', ({ open, top: next }) => {
         if (open) {
           setTop(next)
-          void openSequence(layoutOf(geometry, next))
+          void openSequence(layoutOf(geometry, next, scopesRef.current.length))
         } else void closeSequence()
       }),
     [geometry],
@@ -363,25 +347,41 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     if (phase === 'open') void arrange(layoutRef.current, typing)
   }, [typing, phase === 'open'])
 
-  const active = scope === undefined ? undefined : SCOPES[scope]
-  const view = resultsFor(query, active?.id, apps, frecency)
-  const flat = view.sections.flatMap((s) => s.results)
+  const active: Scope | undefined = scope === undefined ? undefined : scopes[scope]
+  const view = useSearch(query, active, scopes, phase === 'opening' || phase === 'open')
+  const flat = view.sections.flatMap((s) => s.rows)
   const sheetH = view.note ? NOTE_H : Math.min(sectionsHeight(view.sections), RESULTS_MAX)
   const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
 
   // A new query or scope starts at the top.
   useEffect(() => setSelected(0), [query, scope])
 
+  // A scope's keyword and a space enter it: `clip `, `file `.
+  useEffect(() => {
+    if (scope !== undefined) return
+    const hit = scopeByKeyword(query, scopes)
+    if (!hit) return
+    setScope(scopes.indexOf(hit.scope))
+    setQuery(hit.rest)
+  }, [query])
+
   useEffect(() => {
     if (phase === 'open') regions(layout, showResults ? sheetH : 0)
   }, [phase, showResults, sheetH, top])
 
-  const runResult = (result: AppResult | undefined, reveal = false) => {
-    if (!result) return
-    launched(result.id)
-    void closeSequence()
-    if (reveal) void call('runtime', 'files.reveal', { path: result.app.path }).catch(() => {})
-    else void call('runtime', 'apps.launch', { path: result.app.path }).catch(() => {})
+  /** Closes first, so what the action opens or pastes into comes forward over a clean screen with the keyboard. */
+  const runRow = async (row: Row | undefined, action = 0) => {
+    const run = row?.actions[action] ?? row?.actions[0]
+    if (!row || !run) return
+    view.record(row.id)
+    await closeSequence()
+    // The host lets the keyboard go on `launcher.closed`; give the app in front a moment to take it back.
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    try {
+      await run.run()
+    } catch (error) {
+      console.error(error)
+    }
   }
 
   useEffect(() => {
@@ -395,10 +395,10 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         else void closeSequence()
         return
       }
-      if (event.metaKey && /^[1-4]$/.test(event.key)) {
+      if (event.metaKey && /^[1-9]$/.test(event.key)) {
         event.preventDefault()
         const next = Number(event.key) - 1
-        setScope(scope === next ? undefined : next)
+        if (next < scopes.length) setScope(scope === next ? undefined : next)
         return
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -410,18 +410,23 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       }
       if (event.key === 'Enter') {
         event.preventDefault()
-        runResult(flat[selected], event.metaKey)
+        void runRow(flat[selected], event.metaKey ? 1 : event.shiftKey ? 2 : 0)
+        return
+      }
+      if (event.key === 'Backspace' && query === '' && scope !== undefined) {
+        event.preventDefault()
+        setScope(undefined)
         return
       }
       if (event.key === 'Tab' && !event.shiftKey) {
         event.preventDefault()
-        const name = flat[selected]?.app.name
-        if (name) setQuery(name)
+        const row = flat[selected]
+        if (row && !row.answer && row.id !== 'web') setQuery(row.title)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, query, scope, selected, flat])
+  }, [phase, query, scope, selected, flat, scopes])
 
   if (phase === 'closed') return null
 
@@ -469,7 +474,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         )}
       </motion.label>
 
-      {SCOPES.map((s, i) => (
+      {scopes.map((s, i) => (
         <motion.button
           key={s.id}
           type="button"
@@ -510,37 +515,11 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             {view.note ? (
               <Note>{view.note}</Note>
             ) : (
-              <Results sections={view.sections} selected={selected} onSelect={setSelected} onRun={(i) => runResult(flat[i])} />
+              <Results sections={view.sections} selected={selected} onSelect={setSelected} onRun={(i) => void runRow(flat[i])} />
             )}
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
   )
-}
-
-/** What the sheet shows for a query in a scope: sections of results, or one note. */
-function resultsFor(
-  query: string,
-  scope: string | undefined,
-  apps: Parameters<typeof searchApps>[1],
-  frecency: Parameters<typeof searchApps>[2],
-): { sections: Section[]; note?: string } {
-  const typed = query.trim() !== ''
-  if (scope === 'files' || scope === 'actions' || scope === 'clipboard') {
-    const later = { files: 'File search', actions: 'Actions', clipboard: 'Clipboard search' }[scope]
-    return { sections: [], note: `${later} arrives in a later update.` }
-  }
-  if (scope === 'apps') {
-    if (!typed) {
-      const all = apps.filter((a) => a.path).map((app) => ({ id: `app:${app.bundleId}`, app: { ...app, path: app.path ?? '' }, score: 0 }))
-      return { sections: all.length ? [{ title: 'Applications', results: all }] : [] }
-    }
-    const results = searchApps(query, apps, frecency, SCOPE_LIMIT)
-    return results.length ? { sections: [{ title: 'Applications', results }] } : { sections: [], note: `No apps match “${query.trim()}”.` }
-  }
-  if (!typed) return { sections: [] }
-  const [top, ...rest] = searchApps(query, apps, frecency, ROOT_LIMIT)
-  if (!top) return { sections: [], note: `No results for “${query.trim()}”.` }
-  return { sections: [{ title: 'Top Hit', results: [top] }, ...(rest.length ? [{ title: 'Applications', results: rest }] : [])] }
 }

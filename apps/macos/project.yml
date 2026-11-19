@@ -45,7 +45,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSCalendarsFullAccessUsageDescription: Just Notch shows your upcoming events in the notch.
-        NSAppleEventsUsageDescription: Just Notch controls media playback in your music apps.
+        NSAppleEventsUsageDescription: Just Notch controls media playback in your music apps and runs the launcher’s system actions (empty the Trash, dark mode).
         NSBluetoothAlwaysUsageDescription: Just Notch shows your Bluetooth devices and their battery.
         NSLocationUsageDescription: Just Notch shows the weather where you are.
         NSLocationWhenInUseUsageDescription: Just Notch shows the weather where you are.

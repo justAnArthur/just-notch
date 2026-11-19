@@ -162,6 +162,30 @@ public struct AppInfo: Codable, Equatable, Sendable {
     public var keywords: [String]?
 }
 
+public struct FileHit: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable { case folder, application, image, pdf, document, other }
+    public var path: String
+    public var name: String
+    public var kind: Kind
+    /// ISO 8601.
+    public var modified: String?
+    /// ISO 8601.
+    public var lastUsed: String?
+    /// Bytes; folders leave it out.
+    public var size: Int?
+}
+
+public struct CurrencyRates: Codable, Equatable, Sendable {
+    public var base: String
+    /// `YYYY-MM-DD`.
+    public var date: String
+    public var rates: [String: Double]
+}
+
+public enum SystemAction: String, Codable, Sendable {
+    case sleep, displaySleep, screenSaver, emptyTrash, toggleDarkMode
+}
+
 public struct RecentFile: Codable, Equatable, Sendable {
     public enum Source: String, Codable, Sendable { case downloads, screenshots }
     public var id: String
@@ -265,6 +289,11 @@ struct PinParams: Decodable { var id: String; var pinned: Bool }
 struct PausedParams: Decodable { var paused: Bool }
 struct AppsParams: Decodable { var apps: [String] }
 struct SourceParams: Decodable { var source: RecentFile.Source }
+struct FileSearchParams: Decodable { var query: String; var limit: Int? }
+struct PasteParams: Decodable { var id: String; var plain: Bool? }
+struct PastedResult: Encodable { var pasted: Bool }
+struct NameParams: Decodable { var name: String }
+struct SystemActionParams: Decodable { var action: SystemAction }
 
 func decode<T: Decodable>(_ type: T.Type, _ params: Data) throws -> T {
     do { return try JSONDecoder().decode(type, from: params) } catch { throw ServiceError("invalid params: \(error)") }

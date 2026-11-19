@@ -23,6 +23,7 @@ export const PERMISSION_INFO: Record<Permission, LibraryPermission> = {
   'files.recent': { label: 'Recent files', description: 'Sees your recent downloads and screenshots.' },
   'apps.read': { label: 'Apps', description: 'Sees your installed apps.' },
   'apps.launch': { label: 'Opening apps', description: 'Opens your apps.' },
+  'files.search': { label: 'File search', description: 'Finds your files and folders by name.' },
   net: { label: 'Internet', description: 'Connects to the hosts listed below, and to others only if you allow them.' },
   secrets: { label: 'Keychain', description: 'Keeps passwords and tokens in your Keychain, out of the plugin’s files.' },
 }

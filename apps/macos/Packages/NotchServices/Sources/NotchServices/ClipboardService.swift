@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import CryptoKit
 
 /// `clipboard` topic: a history of what the user copies. The pasteboard is
@@ -8,7 +9,7 @@ import CryptoKit
 @MainActor
 public final class ClipboardService: NotchService {
     public let topics = ["clipboard"]
-    public let methods = ["clipboard.copy", "clipboard.delete", "clipboard.pin", "clipboard.clear", "clipboard.setPaused", "clipboard.setIgnoredApps"]
+    public let methods = ["clipboard.copy", "clipboard.paste", "clipboard.delete", "clipboard.pin", "clipboard.clear", "clipboard.setPaused", "clipboard.setIgnoredApps"]
     public weak var sink: ServiceSink?
 
     static let interval: TimeInterval = 0.5
@@ -56,6 +57,10 @@ public final class ClipboardService: NotchService {
         switch method {
         case "clipboard.copy":
             try copy(try clip(try decode(IdParams.self, params).id))
+        case "clipboard.paste":
+            let p = try decode(PasteParams.self, params)
+            try copy(try clip(p.id), plain: p.plain ?? false)
+            return PastedResult(pasted: await paste()).json()
         case "clipboard.delete":
             let id = try decode(IdParams.self, params).id
             change { $0.clips.removeAll { $0.id == id } }
@@ -197,10 +202,13 @@ public final class ClipboardService: NotchService {
         return clip
     }
 
-    private func copy(_ clip: Clip) throws {
+    /// `plain` writes only a string: a file clip's paths instead of the files.
+    private func copy(_ clip: Clip, plain: Bool = false) throws {
         pasteboard.clearContents()
         let written: Bool = switch clip.kind {
         case .text, .link, .color:
+            pasteboard.setString(clip.content, forType: .string)
+        case .file where plain:
             pasteboard.setString(clip.content, forType: .string)
         case .file:
             pasteboard.writeObjects(clip.content.split(separator: "\n").map { URL(fileURLWithPath: String($0)) as NSURL })
@@ -212,6 +220,28 @@ public final class ClipboardService: NotchService {
         var moved = clip
         moved.copiedAt = nowMs()
         record(moved)
+    }
+
+    private static var askedForAccessibility = false
+
+    /// ⌘V into the app in front, which needs Accessibility; without it, asks once per run and leaves the clip copied.
+    private func paste() async -> Bool {
+        guard AXIsProcessTrusted() else {
+            if !Self.askedForAccessibility {
+                Self.askedForAccessibility = true
+                AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            }
+            return false
+        }
+        // The launcher has just closed: give the target app the keyboard back first.
+        try? await Task.sleep(for: .milliseconds(60))
+        let source = CGEventSource(stateID: .combinedSessionState)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
+            event?.flags = .maskCommand
+            event?.post(tap: .cghidEventTap)
+        }
+        return true
     }
 
     // MARK: state

@@ -1,0 +1,31 @@
+import type { IconProps } from '@just-notch/sdk'
+import type { ComponentType } from 'react'
+import type { InlineAnswer } from './engines'
+
+/** Something a row does: the first runs on ↩, the second on ⌘↩, the third on ⇧↩. */
+export interface RowAction {
+  title: string
+  run(): void | Promise<void>
+}
+
+/** What draws a row's icon: a file's or app's own icon (by path), an image, or a glyph. */
+export type RowIcon = { path: string } | { src: string } | { glyph: ComponentType<IconProps> }
+
+/** One result, from any provider. */
+export interface Row {
+  /** Stable across searches; frecency is kept by it. */
+  id: string
+  title: string
+  subtitle?: string
+  icon?: RowIcon
+  /** Short text at the row's end while it isn't selected (a kind, a date). */
+  accessory?: string
+  actions: RowAction[]
+  /** The inline answer card (maths, conversions) instead of a plain row. */
+  answer?: InlineAnswer
+}
+
+export interface Section {
+  title: string
+  rows: Row[]
+}

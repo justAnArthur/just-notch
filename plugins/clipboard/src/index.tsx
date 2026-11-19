@@ -1,6 +1,6 @@
 import { type ClipboardClip, ClipboardHistory } from '@justanarthur/modo-ui-notch'
 import { Button, Combobox, List } from '@justanarthur/modo-ui'
-import { type AppInfo, type Clip, definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
+import { type AppInfo, type Clip, definePlugin, type PluginContext, type SearchItem, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { ClipboardList, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -131,10 +131,57 @@ function Settings() {
   )
 }
 
+/** The latest history, for the launcher's search. */
+let history: Clip[] = []
+
+const ago = (at: number) => {
+  const minutes = Math.round((Date.now() - at) / 60_000)
+  if (minutes < 1) return 'Now'
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.round(minutes / 60)
+  return hours < 24 ? `${hours} h` : `${Math.round(hours / 24)} d`
+}
+
+const KIND: Record<Clip['kind'], string> = { text: 'Text', link: 'Link', image: 'Image', color: 'Color', file: 'File' }
+
+function clipItem(clip: Clip, ctx: PluginContext): SearchItem {
+  const title = clip.kind === 'image' ? `Image ${clip.content}` : clip.kind === 'file' ? (clip.detail ?? clip.content) : clip.content.replace(/\s+/g, ' ').trim()
+  return {
+    id: clip.id,
+    title: title.length > 120 ? `${title.slice(0, 120)}…` : title,
+    subtitle: [KIND[clip.kind], clip.app].filter(Boolean).join(' · '),
+    icon: clip.preview ?? (clip.kind === 'color' ? swatch(clip.content) : undefined),
+    accessory: clip.pinned ? 'Pinned' : ago(clip.copiedAt),
+    actions: [
+      { title: 'Paste', run: () => void ctx.call('clipboard.paste', { id: clip.id }) },
+      { title: 'Copy', run: () => void ctx.call('clipboard.copy', { id: clip.id }) },
+      { title: 'Paste as Plain Text', run: () => void ctx.call('clipboard.paste', { id: clip.id, plain: true }) },
+    ],
+  }
+}
+
+/** A colour clip's icon: a rounded square of the colour. */
+const swatch = (color: string) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect width="28" height="28" rx="7" fill="${color}"/></svg>`)}`
+
+/** The launcher's Clipboard scope: pinned clips, then the newest; every word of the query must appear. */
+function search(query: string, ctx: PluginContext): SearchItem[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  return history
+    .filter((clip) => {
+      const text = `${clip.content} ${clip.detail ?? ''} ${clip.app ?? ''}`.toLowerCase()
+      return words.every((w) => text.includes(w))
+    })
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.copiedAt - a.copiedAt)
+    .slice(0, 50)
+    .map((clip) => clipItem(clip, ctx))
+}
+
 /** The host records only while `clipboard` is subscribed, so the plugin holds it for as long as it runs. */
 function activate(ctx: PluginContext) {
   let newest: number | undefined
   return ctx.subscribe('clipboard', async (state) => {
+    history = state.clips
     const top = state.clips.reduce<Clip | undefined>((a, c) => (!a || c.copiedAt > a.copiedAt ? c : a), undefined)
     const fresh = top && newest !== undefined && top.copiedAt > newest
     newest = top?.copiedAt ?? newest ?? 0
@@ -148,4 +195,11 @@ export default definePlugin({
   activate,
   widget: { title: 'Clipboard', icon: ClipboardList, view: Widget },
   settings: Settings,
+  search: {
+    title: 'Clipboard',
+    icon: ClipboardList,
+    keywords: ['clip', 'clipboard', 'paste'],
+    root: { limit: 3 },
+    provide: (query, { ctx }) => search(query, ctx),
+  },
 })

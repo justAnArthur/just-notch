@@ -3,6 +3,8 @@ import {
   type AppPreferences,
   type BluetoothDevice,
   type Clip,
+  type CurrencyRates,
+  type FileHit,
   type HostEvent,
   type HostInfo,
   type HostRequest,
@@ -288,6 +290,59 @@ const MOCK_APPS: [string, string, string[]?][] = [
 ]
 const appPath = (name: string) => `/Applications/${name}.app`
 
+const DAY = 86_400_000
+/** What `files.search` finds in a typical home folder: [path, kind, days since last opened, size]. */
+const MOCK_FILES: [string, FileHit['kind'], number?, number?][] = [
+  ['/Users/me/Documents/Invoices', 'folder', 1],
+  ['/Users/me/Documents/Invoices/Invoice 2026-10.pdf', 'pdf', 2, 84_211],
+  ['/Users/me/Documents/Taxes 2025.numbers', 'document', 30, 412_804],
+  ['/Users/me/Documents/Resume.pages', 'document', 12, 1_203_442],
+  ['/Users/me/Downloads/Boarding pass.pdf', 'pdf', 0, 211_090],
+  ['/Users/me/Downloads/Screenshot 2026-11-18 at 10.42.13.png', 'image', 1, 1_840_221],
+  ['/Users/me/Desktop/Notch launcher sketch.png', 'image', 0, 640_118],
+  ['/Users/me/Desktop/Meeting notes.md', 'document', 3, 4_310],
+  ['/Users/me/Projects', 'folder', 0],
+  ['/Users/me/Projects/notch/README.md', 'document', 5, 9_874],
+  ['/Users/me/Pictures/Holiday 2026', 'folder', 60],
+  ['/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Recipes/Pancakes.pdf', 'pdf', 90, 120_448],
+  ['/Users/me/Music/Demo.m4a', 'other', undefined, 5_402_112],
+]
+
+const fold = (text: string) => text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
+
+function mockFiles(query: string, limit = 20): FileHit[] {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  const now = Date.now()
+  return MOCK_FILES.map(([path, kind, days, size], i): FileHit => ({
+    path,
+    name: path.slice(path.lastIndexOf('/') + 1),
+    kind,
+    modified: new Date(now - ((days ?? 120) + i) * DAY).toISOString(),
+    ...(days !== undefined && { lastUsed: new Date(now - days * DAY - i * 60_000).toISOString() }),
+    ...(size !== undefined && { size }),
+  }))
+    .filter((hit) => words.every((w) => fold(hit.name).includes(w)))
+    .sort((a, b) => (b.lastUsed ?? '').localeCompare(a.lastUsed ?? '') || (b.modified ?? '').localeCompare(a.modified ?? ''))
+    .slice(0, limit)
+}
+
+/** The ECB's daily reference rates, dated today. */
+function mockRates(): CurrencyRates {
+  return {
+    base: 'EUR',
+    date: new Date().toISOString().slice(0, 10),
+    rates: {
+      USD: 1.0812, JPY: 163.42, BGN: 1.9558, CZK: 25.118, DKK: 7.4742, GBP: 0.83581, HUF: 369.43, PLN: 4.2715, RON: 5.3473,
+      SEK: 11.284, CHF: 0.9412, ISK: 147.9, NOK: 10.6475, TRY: 55.4737, AUD: 1.6378, BRL: 6.4765, CAD: 1.5719, CNY: 7.7821,
+      HKD: 8.6239, IDR: 17_412.5, ILS: 3.6149, INR: 102.55, KRW: 1460.23, MXN: 20.7946, MYR: 4.5205, NZD: 1.989, PHP: 70.014,
+      SGD: 1.4176, THB: 37.218, ZAR: 18.9948,
+    },
+  }
+}
+
+const MOCK_SHORTCUTS = ['Start Pomodoro', 'Translate Clipboard', 'Morning Summary', 'Copy Timestamp', 'Resize Images']
+
 async function loadPlugins(): Promise<InstalledPlugin[]> {
   const response = await fetch('/plugins/index.json').catch(() => null)
   const entries: { manifest: PluginManifest; builtIn: boolean }[] = response?.ok ? await response.json().catch(() => []) : []
@@ -501,6 +556,10 @@ const handlers: Handlers = {
     return null
   },
   'clipboard.copy': () => null,
+  'clipboard.paste': ({ id, plain }) => {
+    actions.push(`paste ${id}${plain ? ' (plain)' : ''}`)
+    return { pasted: false }
+  },
   'clipboard.delete': ({ id }) => setClips(values.clipboard.clips.filter((c) => c.id !== id)),
   'clipboard.pin': ({ id, pinned }) => setClips(values.clipboard.clips.map((c) => (c.id === id ? { ...c, pinned } : c))),
   'clipboard.clear': () => setClips(values.clipboard.clips.filter((c) => c.pinned)),
@@ -524,6 +583,18 @@ const handlers: Handlers = {
     Object.fromEntries(paths.map((path) => [path, artwork(MOCK_APPS.findIndex(([, name]) => appPath(name) === path) + 3)])),
   'apps.launch': ({ path }) => {
     launched.push(path)
+    return null
+  },
+  'files.search': ({ query, limit }) => mockFiles(query, limit),
+  'rates.currency': mockRates,
+  'actions.shortcuts': () => MOCK_SHORTCUTS,
+  'actions.runShortcut': ({ name }) => {
+    if (!MOCK_SHORTCUTS.includes(name)) throw `no shortcut named ${name}`
+    actions.push(`shortcut ${name}`)
+    return null
+  },
+  'actions.system': ({ action }) => {
+    actions.push(`system ${action}`)
     return null
   },
   'recentFiles.clear': ({ source }) => {
@@ -669,6 +740,8 @@ function authorize({ plugin, method }: HostRequest) {
 let launcherOpen = false
 /** Paths `apps.launch` opened, newest last. */
 export const launched: string[] = []
+/** Pastes, shortcuts and system actions the launcher asked for, newest last. */
+export const actions: string[] = []
 
 /** Triggers for the dev toolbar: what the real host would send. */
 export const mock = {

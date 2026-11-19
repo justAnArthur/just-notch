@@ -131,6 +131,44 @@ export interface IconProps {
   className?: string
 }
 
+/** Something a search result does; a result's first action runs on ↩, its second on ⌘↩, its third on ⇧↩. */
+export interface SearchAction {
+  /** Shown beside the selected result and in its actions list: `Paste`, `Copy`, `Open in browser`. */
+  title: string
+  run(): void | Promise<void>
+}
+
+/** One row in the launcher's results. */
+export interface SearchItem {
+  /** Stable across searches: the launcher remembers what the user picks by it. */
+  id: string
+  title: string
+  subtitle?: string
+  /** A `data:` or `https:` image, or an icon component. */
+  icon?: string | ComponentType<IconProps>
+  /** Short text at the row's end, such as a date or a kind. */
+  accessory?: string
+  actions: SearchAction[]
+}
+
+/**
+ * A plugin's scope in the launcher: a round button beside the search bar (⌘1–⌘9 in Settings' order) and, unless
+ * `root` is false, a few rows under its title in every search.
+ */
+export interface SearchProvider {
+  title: string
+  icon?: ComponentType<IconProps>
+  /** Typing one of these and a space enters the scope: `clip `. */
+  keywords?: string[]
+  /** Rows in the root search, under the title; `false` keeps them inside the scope. Default 3. */
+  root?: { limit: number } | false
+  /**
+   * The results for `query` (empty inside the scope before typing: show the newest). Runs on every keystroke;
+   * `signal` aborts when a newer query replaces it. Slow providers are shown when they answer.
+   */
+  provide(query: string, env: { ctx: PluginContext; signal: AbortSignal }): SearchItem[] | Promise<SearchItem[]>
+}
+
 export interface PluginDefinition {
   /** Runs once when the plugin is enabled; return a cleanup for when it is disabled. */
   activate?(ctx: PluginContext): void | Unsubscribe | Promise<void | Unsubscribe>
@@ -138,6 +176,8 @@ export interface PluginDefinition {
   widget?: { title: string; icon?: ComponentType<IconProps>; view: ComponentType }
   /** A section in the settings window. */
   settings?: ComponentType
+  /** A scope in the launcher (plugin API 1.2). */
+  search?: SearchProvider
 }
 
 export function definePlugin(definition: PluginDefinition): PluginDefinition {

@@ -1,23 +1,21 @@
-import { AppWindow, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import type { AppResult } from './apps'
 import { useIcons } from './apps'
+import type { Row, RowIcon, Section } from './rows'
 
 export const ROW_H = 40
+/** The inline answer card: the result large, the expression and its source under it. */
+export const ANSWER_H = 68
 export const HEADER_H = 26
 export const SHEET_PAD = 6
 /** The sheet's corner radius; a row's is that less the padding, so the two curves stay concentric. */
 export const SHEET_RADIUS = 26
 const ROW_RADIUS = SHEET_RADIUS - SHEET_PAD
 
-export interface Section {
-  title: string
-  results: AppResult[]
-}
-
 /** The sheet's height for these sections, before it scrolls. */
 export const sectionsHeight = (sections: Section[]) =>
-  SHEET_PAD * 2 + sections.reduce((h, s) => h + HEADER_H + s.results.length * ROW_H, 0)
+  SHEET_PAD * 2 + sections.reduce((h, s) => h + HEADER_H + s.rows.reduce((r, row) => r + (row.answer ? ANSWER_H : ROW_H), 0), 0)
+
+const KEYS = ['↩', '⌘↩', '⇧↩']
 
 interface ResultsProps {
   sections: Section[]
@@ -26,9 +24,10 @@ interface ResultsProps {
   onRun: (index: number) => void
 }
 
-/** Grouped rows under the pill; the selected one shows its action. Indexes run across sections. */
+/** Grouped rows under the bar; the selected one shows its main action. Indexes run across sections. */
 export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
-  const icons = useIcons(sections.flatMap((s) => s.results.map((r) => r.app.path)))
+  const paths = sections.flatMap((s) => s.rows.flatMap((r) => (r.icon && 'path' in r.icon ? [r.icon.path] : [])))
+  const icons = useIcons(paths)
   const list = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -43,24 +42,24 @@ export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
           <p className="flex items-end px-3 pb-1 text-caption text-muted-foreground" style={{ height: HEADER_H }}>
             {section.title}
           </p>
-          {section.results.map((result) => {
+          {section.rows.map((row) => {
             const i = index++
             const active = i === selected
-            const icon = icons.get(result.app.path)
             return (
               <div
-                key={result.id}
+                key={row.id}
                 role="option"
                 aria-selected={active}
                 data-selected={active || undefined}
                 className="flex cursor-default items-center gap-3 px-3 aria-selected:bg-surface-3"
-                style={{ height: ROW_H, borderRadius: ROW_RADIUS }}
+                style={{ height: row.answer ? ANSWER_H : ROW_H, borderRadius: ROW_RADIUS }}
                 onPointerMove={() => !active && onSelect(i)}
                 onClick={() => onRun(i)}
               >
-                {icon ? <img src={icon} alt="" className="size-7 shrink-0" draggable={false} /> : <Glyph icon={AppWindow} />}
-                <span className="min-w-0 flex-1 truncate">{result.app.name}</span>
-                <span className="shrink-0 text-caption text-muted-foreground">{active ? 'Open ↩' : 'Application'}</span>
+                {row.answer ? <Answer row={row} /> : <Plain row={row} icon={row.icon} icons={icons} />}
+                <span className="shrink-0 text-caption text-muted-foreground">
+                  {active ? `${row.actions[0]?.title ?? ''} ${KEYS[0]}` : row.accessory}
+                </span>
               </div>
             )
           })}
@@ -70,15 +69,39 @@ export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
   )
 }
 
-function Glyph({ icon: Icon }: { icon: LucideIcon }) {
+function Plain({ row, icon, icons }: { row: Row; icon?: RowIcon; icons: Map<string, string> }) {
   return (
-    <span className="flex size-7 shrink-0 items-center justify-center text-muted-foreground">
-      <Icon className="size-5" />
+    <>
+      <Icon icon={icon} icons={icons} />
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="truncate">{row.title}</span>
+        {row.subtitle && <span className="truncate text-caption text-muted-foreground">{row.subtitle}</span>}
+      </span>
+    </>
+  )
+}
+
+function Answer({ row }: { row: Row }) {
+  const answer = row.answer!
+  return (
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className="truncate text-[24px] leading-tight">{answer.result}</span>
+      <span className="truncate text-caption text-muted-foreground">
+        {answer.expression}
+        {answer.detail && ` · ${answer.detail}`}
+      </span>
     </span>
   )
 }
 
-/** One line in place of results: nothing found, or a scope that isn't built yet. */
+function Icon({ icon, icons }: { icon?: RowIcon; icons: Map<string, string> }) {
+  const src = icon && ('src' in icon ? icon.src : 'path' in icon ? icons.get(icon.path) : undefined)
+  if (src) return <img src={src} alt="" className="size-7 shrink-0 rounded-md object-contain" draggable={false} />
+  const Glyph = icon && 'glyph' in icon ? icon.glyph : undefined
+  return <span className="flex size-7 shrink-0 items-center justify-center text-muted-foreground">{Glyph && <Glyph className="size-5" />}</span>
+}
+
+/** One line in place of results: nothing found, or a scope waiting for a query. */
 export function Note({ children }: { children: string }) {
   return <p className="px-5 py-4 text-muted-foreground">{children}</p>
 }

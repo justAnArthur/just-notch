@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'files.recent',
   'apps.read',
   'apps.launch',
+  'files.search',
   'net',
   'secrets',
 ] as const satisfies readonly Permission[]

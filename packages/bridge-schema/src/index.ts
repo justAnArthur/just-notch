@@ -40,6 +40,8 @@ export type Permission =
   | 'apps.read'
   /** `apps.launch`: opens an installed app. */
   | 'apps.launch'
+  /** `files.search`: finds files and folders by name through the Spotlight index. */
+  | 'files.search'
   /** `net.*`: HTTP(S) to the manifest's `hosts` and hosts the user granted. */
   | 'net'
   /** `secrets.*`: per-plugin strings in the Keychain (tokens, passwords). */
@@ -423,6 +425,32 @@ export interface AppInfo {
   keywords?: string[]
 }
 
+/** What `files.search` found: a file or folder the Spotlight index knows. */
+export interface FileHit {
+  path: string
+  /** As Finder shows it (localized, extension hidden or not as the user set). */
+  name: string
+  kind: 'folder' | 'application' | 'image' | 'pdf' | 'document' | 'other'
+  /** ISO 8601. */
+  modified?: string
+  /** When the user last opened it, ISO 8601; Spotlight ranks by it. */
+  lastUsed?: string
+  /** Bytes; folders leave it out. */
+  size?: number
+}
+
+/** Euro reference rates as the European Central Bank publishes them each working day. */
+export interface CurrencyRates {
+  base: 'EUR'
+  /** The ECB's date for these rates, `YYYY-MM-DD`. */
+  date: string
+  /** Units of each currency for 1 EUR, by ISO 4217 code (`USD`, `CZK`…). */
+  rates: Record<string, number>
+}
+
+/** System actions the launcher offers (its Actions scope). */
+export type SystemAction = 'sleep' | 'displaySleep' | 'screenSaver' | 'emptyTrash' | 'toggleDarkMode'
+
 export interface RecentFile {
   /** Also the absolute path. */
   id: string
@@ -706,6 +734,24 @@ export interface Methods {
   /** Opens the app at `path` and brings it forward. */
   'apps.launch': { params: { path: string }; result: null }
 
+  /**
+   * Files and folders whose name matches `query` (Spotlight's index: home folder and iCloud Drive), the ones the
+   * user opened most recently first, at most `limit` (default 20). Answers within about half a second with what
+   * the index found by then.
+   */
+  'files.search': { params: { query: string; limit?: number }; result: FileHit[] }
+  /** The ECB's latest euro rates, fetched at most every 12 hours and kept for offline use; `null` before the first fetch. */
+  'rates.currency': { params: Record<string, never>; result: CurrencyRates | null }
+  /**
+   * Puts a clip on the pasteboard and pastes it into the app in front (⌘V). `plain` drops formatting. Pasting
+   * needs Accessibility; without it the clip is only copied and `pasted` is false.
+   */
+  'clipboard.paste': { params: { id: string; plain?: boolean }; result: { pasted: boolean } }
+  /** The Shortcuts app's shortcuts, by name. */
+  'actions.shortcuts': { params: Record<string, never>; result: string[] }
+  'actions.runShortcut': { params: { name: string }; result: null }
+  'actions.system': { params: { action: SystemAction }; result: null }
+
   /** Hides a source's current files from `recentFiles`; nothing is deleted. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
   /** Asks the user for a folder to watch for the source, then rescans; `null` when they cancel. */
@@ -843,6 +889,8 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'apps.index': 'apps.read',
   'apps.icons': 'apps.read',
   'apps.launch': 'apps.launch',
+  'files.search': 'files.search',
+  'clipboard.paste': 'clipboard',
   'recentFiles.clear': 'files.recent',
   'recentFiles.chooseFolder': 'files.recent',
   'recentFiles.resetFolder': 'files.recent',
@@ -883,6 +931,10 @@ export const RUNTIME_ONLY: Method[] = [
   'library.catalog',
   'library.install',
   'library.uninstall',
+  'rates.currency',
+  'actions.shortcuts',
+  'actions.runShortcut',
+  'actions.system',
 ]
 
 /** Methods the runtime may NOT call as `runtime`: they act for one plugin, under its grants and Keychain entries. */

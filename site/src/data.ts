@@ -25,6 +25,7 @@ const PERMISSION: Record<string, string> = {
   'files.recent': 'Recent files',
   'apps.read': 'Your apps',
   'apps.launch': 'Opening apps',
+  'files.search': 'Finding files',
   files: 'Opening files',
   net: 'The network',
   secrets: 'Keychain secrets',
