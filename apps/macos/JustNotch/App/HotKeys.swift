@@ -9,6 +9,8 @@ final class HotKeys {
     private struct Entry {
         let ref: EventHotKeyRef
         let owner: ObjectIdentifier
+        /// The host's own shortcuts (the launcher's) run this instead of telling a page.
+        var action: (() -> Void)?
     }
 
     /// Carbon calls back with a numeric id; the bridge speaks strings.
@@ -22,6 +24,13 @@ final class HotKeys {
 
     init() {
         Self.shared = self
+    }
+
+    /// A shortcut of the host's own; no page owns it, so no reload releases it.
+    func register(_ accelerator: String, action: @escaping () -> Void) throws -> String {
+        let id = try register(accelerator, owner: ObjectIdentifier(HotKeys.self))
+        entries[UInt32(id)!]?.action = action
+        return id
     }
 
     func register(_ accelerator: String, owner: ObjectIdentifier) throws -> String {
@@ -66,6 +75,7 @@ final class HotKeys {
 
     private func pressed(_ id: UInt32) {
         guard let entry = entries[id] else { return }
+        if let action = entry.action { return action() }
         onPress?(String(id), entry.owner)
     }
 

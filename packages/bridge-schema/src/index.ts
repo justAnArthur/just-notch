@@ -656,6 +656,8 @@ export interface Methods {
   'window.setHitRegions': { params: { rects: Rect[] }; result: null }
   /** Lets the panel become key so text fields can take focus; the runtime sets it while expanded. */
   'window.setFocusable': { params: { focusable: boolean }; result: null }
+  /** The launcher's closing animation is done: the host shrinks the panel back and lets the keyboard go. */
+  'launcher.closed': { params: Record<string, never>; result: null }
   /** Opens the island on its settings page (the tall snap). */
   'window.openSettings': { params: Record<string, never>; result: null }
   /** The page took the current trackpad gesture as a swipe: the host holds back the rest of it (and its momentum) until the fingers touch down again. */
@@ -837,6 +839,7 @@ export const RUNTIME_ONLY: Method[] = [
   'window.setHitRegions',
   'window.setFocusable',
   'window.endGesture',
+  'launcher.closed',
   'plugins.setEnabled',
   'app.preferences',
   'app.setPreferences',
@@ -877,6 +880,11 @@ export interface Events {
   'gesture.touch': Record<string, never>
   /** The app menu's Settings…, or `window.openSettings`: the island opens on its settings page. */
   'settings.open': Record<string, never>
+  /**
+   * The launcher's shortcut: open it (the host has grown the panel and made it key) or animate it away, then
+   * call `launcher.closed`. `top` is where the pill rests, in panel coordinates.
+   */
+  launcher: { open: boolean; top: number }
   /** A shortcut from `shortcuts.register` was pressed; sent to the page that registered it. */
   shortcut: { id: string }
   /** A `justnotch://` URL was opened while the app runs. */

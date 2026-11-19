@@ -8,6 +8,7 @@ import { installMockHost, mock } from './host/mock'
 import { ready, useGeometry } from './host/session'
 import { createSwiftHost } from './host/swift-host'
 import Island from './island/island'
+import Launcher from './launcher/launcher'
 import { syncPlugins } from './plugins/loader'
 import { followDeepLinks } from './settings/deep-link'
 
@@ -28,6 +29,7 @@ function App() {
   const island = (
     <div className="relative shrink-0" style={{ width: geometry.panel.w, height: geometry.panel.h }}>
       <Island geometry={geometry} />
+      <Launcher geometry={geometry} />
     </div>
   )
   if (!isMock) return island

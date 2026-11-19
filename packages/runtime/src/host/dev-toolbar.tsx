@@ -5,6 +5,7 @@ import { useActivityState } from '../activity/store'
 import { mock } from './mock'
 
 const ACTIONS: { label: string; run: () => void }[] = [
+  { label: 'Launcher', run: () => mock.launcher() },
   { label: 'Hover in', run: () => mock.hover(true) },
   { label: 'Hover out', run: () => mock.hover(false) },
   { label: 'Charger', run: mock.charger },

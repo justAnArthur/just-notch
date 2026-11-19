@@ -35,7 +35,7 @@ import { performNetFetch } from './net'
  * run in a normal browser. Installed only when `window.webkit` is absent.
  */
 
-const PANEL = { w: 720, h: 620 }
+const PANEL = { w: 800, h: 620 }
 const NOTCH = { w: 185, h: 32 }
 
 const geometry: ScreenGeometry = {
@@ -422,6 +422,10 @@ const handlers: Handlers = {
     emit({ type: 'settings.open', payload: {} })
     return null
   },
+  'launcher.closed': () => {
+    launcherOpen = false
+    return null
+  },
   subscribe: ({ topic }) => {
     subscribed.add(topic)
     if (nullOnce.delete(topic)) return null
@@ -624,8 +628,16 @@ function authorize({ plugin, method }: HostRequest) {
   if (permission && !manifest?.permissions.includes(permission)) throw `${plugin} lacks ${permission} for ${method}`
 }
 
+let launcherOpen = false
+
 /** Triggers for the dev toolbar: what the real host would send. */
 export const mock = {
+  /** The launcher's shortcut: opens it, or asks it to close. The mock panel doesn't grow, so the pill sits high. */
+  launcher() {
+    const open = !launcherOpen
+    if (open) launcherOpen = true
+    emit({ type: 'launcher', payload: { open, top: 220 } })
+  },
   hover: (inside: boolean) => emit({ type: 'hover', payload: { inside } }),
   /** Presses the shortcut registered as `accelerator`, else the last one registered. */
   shortcut(accelerator?: string) {

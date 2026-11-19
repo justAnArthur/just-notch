@@ -157,6 +157,7 @@ enum Schema {
         "window.setHitRegions",
         "window.setFocusable",
         "window.endGesture",
+        "launcher.closed",
         "plugins.setEnabled",
         "app.preferences",
         "app.setPreferences",
@@ -191,6 +192,12 @@ struct LogParams: Decodable {
 
 struct HitRegionsParams: Decodable {
     var rects: [Rect]
+}
+
+struct LauncherPayload: Encodable {
+    var open: Bool
+    /// The pill's top edge in panel coordinates; the drop falls from the notch to here.
+    var top: Double
 }
 
 struct FocusableParams: Decodable {

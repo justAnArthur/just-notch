@@ -6,11 +6,12 @@ export const POPUP_SELECTOR = '[data-base-ui-portal]'
 const POSITIONER_SELECTOR = `${POPUP_SELECTOR} > [data-side]:not([data-closed])`
 
 let island: Rect[] = []
+let launcher: Rect[] = []
 let popups: Rect[] = []
 let sent = ''
 
 function send() {
-  const rects = [...island, ...popups]
+  const rects = [...island, ...launcher, ...popups]
   const key = JSON.stringify(rects)
   if (key === sent) return
   sent = key
@@ -20,6 +21,12 @@ function send() {
 /** The island's own regions; open popups are added to them. */
 export function setIslandRegions(rects: Rect[]) {
   island = rects
+  send()
+}
+
+/** The launcher's regions while it's open; empty once it has closed. */
+export function setLauncherRegions(rects: Rect[]) {
+  launcher = rects
   send()
 }
 

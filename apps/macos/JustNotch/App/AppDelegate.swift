@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private lazy var plugins = PluginStore(origin: origin)
     private lazy var bridge = Bridge(plugins: plugins, events: events)
     private(set) lazy var updater = Updater()
+    private(set) lazy var launcher = Launcher(events: events) { [unowned self] in Array(panels.values) }
 
     private var panels: [String: PanelController] = [:]
     private var statusItem: NSStatusItem?
@@ -49,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         installStatusItem()
         rebuildPanels()
         installPointerMonitors()
+        registerLauncherShortcut()
         #if DEBUG
         probe = DebugProbe { [weak self] in self?.panels.values.first?.webView }
         #endif
@@ -91,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// Keeps one panel per target screen: moves existing ones (sending `geometry`), adds and removes the rest.
     func rebuildPanels() {
+        launcher.reset()
         let screens = ScreenLayout.targetScreens()
         let ids = Set(screens.map(ScreenLayout.id))
         for (id, panel) in panels where !ids.contains(id) {
@@ -117,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func reloadUI() {
+        launcher.reset()
         plugins.reload()
         for webView in webViews {
             bridge.release(webView)
@@ -166,6 +170,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                     self.pressTimer = nil
                 }
             }
+        }
+    }
+
+    // MARK: launcher
+
+    private func registerLauncherShortcut() {
+        do {
+            _ = try bridge.registerHostShortcut(Launcher.shortcut) { [weak self] in self?.launcher.toggle() }
+        } catch {
+            log.error("launcher shortcut \(Launcher.shortcut, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 

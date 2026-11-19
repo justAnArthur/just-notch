@@ -53,6 +53,15 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         }
     }
 
+    /// The host's own global shortcut (the launcher's), outside any page's.
+    func registerHostShortcut(_ accelerator: String, action: @escaping () -> Void) throws -> String {
+        try hotKeys.register(accelerator, action: action)
+    }
+
+    func unregisterHostShortcut(_ id: String) {
+        hotKeys.unregister(id, owner: ObjectIdentifier(HotKeys.self))
+    }
+
     // MARK: ServiceSink
 
     func publish(topic: String, value: Data) {
@@ -107,6 +116,10 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
 
         case "window.setFocusable":
             app.panel(for: webView)?.panel.focusable = try decode(FocusableParams.self, params).focusable
+            return nil
+
+        case "launcher.closed":
+            app.launcher.closed()
             return nil
 
         case "window.openSettings":

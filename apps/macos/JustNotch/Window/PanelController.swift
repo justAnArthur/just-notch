@@ -32,8 +32,8 @@ final class PanelController {
         panel.orderFrontRegardless()
     }
 
-    func move(to screen: NSScreen) {
-        let layout = ScreenLayout.layout(screen)
+    func move(to screen: NSScreen, height: Double = ScreenLayout.panelSize.height) {
+        let layout = ScreenLayout.layout(screen, height: height)
         panel.setFrame(layout.frame, display: true)
         guard layout.geometry != geometry else { return }
         geometry = layout.geometry

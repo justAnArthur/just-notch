@@ -5,11 +5,14 @@ final class NotchPanel: NSPanel {
     /// Set by `window.setFocusable`: the runtime lets the panel become key while expanded.
     var focusable = false {
         didSet {
-            if !focusable, isKeyWindow { resignKey() }
+            if !focusable, !launcher, isKeyWindow { resignKey() }
         }
     }
 
-    override var canBecomeKey: Bool { focusable }
+    /// The launcher is open on this panel: it takes the keyboard whatever the island's state.
+    var launcher = false
+
+    override var canBecomeKey: Bool { focusable || launcher }
     override var canBecomeMain: Bool { false }
 
     init(frame: NSRect) {
@@ -33,20 +36,36 @@ final class NotchPanel: NSPanel {
 }
 
 enum ScreenLayout {
-    /// Room for the island's tall sheet (560) below the notch; the panel is transparent and lets clicks through outside the island.
-    static let panelSize = NSSize(width: 720, height: 620)
+    /// Room for the island's tall sheet (560) below the notch, and for the launcher's search row; the panel is
+    /// transparent and lets clicks through outside the island.
+    static let panelSize = NSSize(width: 800, height: 620)
+    /// The launcher's pill rests here, as Spotlight's does: a fraction of the screen's height from its top.
+    static let launcherTop = 0.26
+    /// Below the pill: its row (56) and the results sheet.
+    static let launcherBelow = 560.0
+
+    /// Where the launcher's pill sits on `screen`, in panel coordinates (from the screen's top edge).
+    static func launcherPillTop(_ screen: NSScreen) -> Double {
+        (screen.frame.height * launcherTop).rounded()
+    }
+
+    /// The panel's height while the launcher is open: from the screen's top past the results sheet.
+    static func launcherHeight(_ screen: NSScreen) -> Double {
+        max(panelSize.height, launcherPillTop(screen) + launcherBelow)
+    }
     static let virtualNotchWidth = 200.0
     static let virtualNotchHeight = 32.0
 
     /// The panel's frame on `screen` (centered on the notch, top edge flush) and its geometry.
-    static func layout(_ screen: NSScreen) -> (frame: NSRect, geometry: ScreenGeometry) {
+    static func layout(_ screen: NSScreen, height: Double = panelSize.height) -> (frame: NSRect, geometry: ScreenGeometry) {
         let frame = screen.frame
         let notch = notchRect(screen)
-        let origin = NSPoint(x: (notch.midX - panelSize.width / 2).rounded(), y: frame.maxY - panelSize.height)
-        let panelFrame = NSRect(origin: origin, size: panelSize)
+        let size = NSSize(width: panelSize.width, height: height)
+        let origin = NSPoint(x: (notch.midX - size.width / 2).rounded(), y: frame.maxY - size.height)
+        let panelFrame = NSRect(origin: origin, size: size)
         let hasNotch = screen.safeAreaInsets.top > 0
         let geometry = ScreenGeometry(
-            panel: .init(w: panelSize.width, h: panelSize.height),
+            panel: .init(w: size.width, h: size.height),
             notch: Rect(x: notch.minX - panelFrame.minX, y: 0, w: notch.width, h: notch.height),
             hasNotch: hasNotch,
             scale: screen.backingScaleFactor,
