@@ -213,13 +213,23 @@ public final class ClipboardService: NotchService {
         case .file:
             pasteboard.writeObjects(clip.content.split(separator: "\n").map { URL(fileURLWithPath: String($0)) as NSURL })
         case .image:
-            NSImage(contentsOf: imageFile(clip.id)).map { pasteboard.writeObjects([$0]) } ?? false
+            writeImage(imageFile(clip.id))
         }
         guard written else { throw ServiceError("couldn't copy the clip") }
         changeCount = pasteboard.changeCount
         var moved = clip
         moved.copiedAt = nowMs()
         record(moved)
+    }
+
+    /// PNG and TIFF both, as screenshots do: `NSImage` alone writes only TIFF, which Electron and Qt apps (Beeper,
+    /// Telegram, Slack…) don't paste.
+    private func writeImage(_ url: URL) -> Bool {
+        guard let png = try? Data(contentsOf: url) else { return false }
+        let item = NSPasteboardItem()
+        item.setData(png, forType: .png)
+        if let tiff = NSImage(data: png)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
+        return pasteboard.writeObjects([item])
     }
 
     private static var askedForAccessibility = false
