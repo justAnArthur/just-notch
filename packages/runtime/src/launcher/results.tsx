@@ -15,8 +15,6 @@ const ROW_RADIUS = SHEET_RADIUS - SHEET_PAD
 export const sectionsHeight = (sections: Section[]) =>
   SHEET_PAD * 2 + sections.reduce((h, s) => h + HEADER_H + s.rows.reduce((r, row) => r + (row.answer ? ANSWER_H : ROW_H), 0), 0)
 
-const KEYS = ['↩', '⌘↩', '⇧↩']
-
 interface ResultsProps {
   sections: Section[]
   selected: number
@@ -58,7 +56,14 @@ export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
               >
                 {row.answer ? <Answer row={row} /> : <Plain row={row} icon={row.icon} icons={icons} />}
                 <span className="shrink-0 text-caption text-muted-foreground">
-                  {active ? `${row.actions[0]?.title ?? ''} ${KEYS[0]}` : row.accessory}
+                  {active ? (
+                    <>
+                      {row.actions[0]?.title} ↩
+                      {row.actions.length > 1 && <span className="ml-2 rounded-md bg-surface-4 px-1.5 py-0.5">⌘K</span>}
+                    </>
+                  ) : (
+                    row.accessory
+                  )}
                 </span>
               </div>
             )

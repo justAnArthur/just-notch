@@ -10,8 +10,9 @@ import { EXPANDED } from '../island/geometry'
 import { setLauncherRegions } from '../island/hit-regions'
 import { useReduceMotion } from '../island/motion'
 import { bridgePath, type Circle } from './metaball'
+import { ActionPanel, filterActions, panelHeight } from './actions'
 import { MAX_SCOPES, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
-import { Note, Results, SHEET_RADIUS, sectionsHeight } from './results'
+import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
 import type { Row } from './rows'
 import { setLauncherOpen } from './state'
 
@@ -145,6 +146,8 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<number>()
   const [selected, setSelected] = useState(0)
+  /** The selected row's actions (⌘K), with what was typed into it and its own selection. */
+  const [panel, setPanel] = useState<{ filter: string; selected: number }>()
   const scopes = useScopes()
   const scopesRef = useRef(scopes)
   scopesRef.current = scopes
@@ -222,6 +225,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     setQuery('')
     setScope(undefined)
     setSelected(0)
+    setPanel(undefined)
     dispatch({ type: 'collapse' })
     regions(l, 0)
     for (const b of buttons) b.r.set(0)
@@ -350,11 +354,18 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const active: Scope | undefined = scope === undefined ? undefined : scopes[scope]
   const view = useSearch(query, active, scopes, phase === 'opening' || phase === 'open')
   const flat = view.sections.flatMap((s) => s.rows)
-  const sheetH = view.note ? NOTE_H : Math.min(sectionsHeight(view.sections), RESULTS_MAX)
+  const current = flat[selected]
+  const listed = panel && current ? filterActions(current.actions, panel.filter) : []
+  const panelOpen = panel !== undefined && current !== undefined && view.note === undefined
+  const listH = view.note ? NOTE_H : Math.min(sectionsHeight(view.sections), RESULTS_MAX)
+  // The sheet grows to hold the panel when it has fewer rows than the panel has actions.
+  const sheetH = panelOpen ? Math.max(listH, panelHeight(listed.length) + 2 * SHEET_PAD) : listH
   const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
 
   // A new query or scope starts at the top.
   useEffect(() => setSelected(0), [query, scope])
+  // The panel belongs to one row: another row, query or scope closes it.
+  useEffect(() => setPanel(undefined), [query, scope, selected])
 
   // A scope's keyword and a space enter it: `clip `, `file `.
   useEffect(() => {
@@ -388,6 +399,15 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     if (phase !== 'opening' && phase !== 'open') return
     const onKey = (event: KeyboardEvent) => {
       if (event.isComposing) return
+      if (event.metaKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setPanel((p) => (p || !current?.actions.length ? undefined : { filter: '', selected: 0 }))
+        return
+      }
+      if (panelOpen) {
+        onPanelKey(event)
+        return
+      }
       if (event.key === 'Escape') {
         event.preventDefault()
         if (query) setQuery('')
@@ -426,7 +446,33 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, query, scope, selected, flat, scopes])
+  }, [phase, query, scope, selected, flat, scopes, panel, panelOpen, listed])
+
+  /** While the panel is open it takes the keys: arrows, Return, Escape, and typing, which filters it. */
+  function onPanelKey(event: KeyboardEvent) {
+    if (!panel) return
+    const key = event.key
+    if (key === 'Escape') {
+      event.preventDefault()
+      setPanel((p) => (p?.filter ? { filter: '', selected: 0 } : undefined))
+    } else if (key === 'ArrowDown' || key === 'ArrowUp') {
+      event.preventDefault()
+      if (!listed.length) return
+      const step = key === 'ArrowDown' ? 1 : -1
+      setPanel((p) => p && { ...p, selected: (p.selected + step + listed.length) % listed.length })
+    } else if (key === 'Enter') {
+      event.preventDefault()
+      const pick = listed[panel.selected]
+      if (pick) void runRow(current, pick.index)
+    } else if (key === 'Backspace') {
+      event.preventDefault()
+      setPanel((p) => p && { filter: p.filter.slice(0, -1), selected: 0 })
+    } else if (key.length === 1 && !event.metaKey && !event.ctrlKey) {
+      // Kept out of the search field: it filters the panel instead.
+      event.preventDefault()
+      setPanel((p) => p && { filter: p.filter + key, selected: 0 })
+    } else if (key === 'Tab') event.preventDefault()
+  }
 
   if (phase === 'closed') return null
 
@@ -515,7 +561,17 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             {view.note ? (
               <Note>{view.note}</Note>
             ) : (
-              <Results sections={view.sections} selected={selected} onSelect={setSelected} onRun={(i) => void runRow(flat[i])} />
+              <Results sections={view.sections} selected={selected} onSelect={panelOpen ? () => {} : setSelected} onRun={(i) => void runRow(flat[i])} />
+            )}
+            {panelOpen && (
+              <ActionPanel
+                row={current}
+                listed={listed}
+                filter={panel.filter}
+                selected={panel.selected}
+                onSelect={(i) => setPanel({ ...panel, selected: i })}
+                onRun={(i) => void runRow(current, i)}
+              />
             )}
           </motion.div>
         )}

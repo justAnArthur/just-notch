@@ -155,6 +155,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
       actions: [
         { title: 'Open', run: () => void call('runtime', 'apps.launch', { path: app.path }) },
         { title: 'Show in Finder', run: () => void call('runtime', 'files.reveal', { path: app.path }) },
+        { title: 'Copy Path', run: () => void call('runtime', 'clipboard.writeText', { text: app.path }) },
       ],
     }))
 
