@@ -152,6 +152,7 @@ function clipItem(clip: Clip, ctx: PluginContext): SearchItem {
     subtitle: [KIND[clip.kind], clip.app].filter(Boolean).join(' · '),
     icon: clip.preview ?? (clip.kind === 'color' ? swatch(clip.content) : undefined),
     accessory: clip.pinned ? 'Pinned' : ago(clip.copiedAt),
+    preview: clipPreview(clip),
     actions: [
       { title: 'Paste', run: () => void ctx.call('clipboard.paste', { id: clip.id }) },
       { title: 'Copy', run: () => void ctx.call('clipboard.copy', { id: clip.id }) },
@@ -161,8 +162,23 @@ function clipItem(clip: Clip, ctx: PluginContext): SearchItem {
 }
 
 /** A colour clip's icon: a rounded square of the colour. */
-const swatch = (color: string) =>
-  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect width="28" height="28" rx="7" fill="${color}"/></svg>`)}`
+const swatch = (color: string, side = 28) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${side}" height="${side}"><rect width="${side}" height="${side}" rx="${side / 4}" fill="${color}"/></svg>`)}`
+
+/** The launcher's preview pane: the image, colour or whole text, then where and when it was copied. */
+function clipPreview(clip: Clip): SearchItem['preview'] {
+  const details = [
+    { label: 'Kind', value: KIND[clip.kind] },
+    ...(clip.kind === 'image' ? [{ label: 'Dimensions', value: clip.content }] : []),
+    ...(clip.kind === 'image' && clip.detail ? [{ label: 'Size', value: clip.detail }] : []),
+    ...(clip.kind === 'text' ? [{ label: 'Characters', value: clip.content.length.toLocaleString() }] : []),
+    ...(clip.app ? [{ label: 'Copied in', value: clip.app }] : []),
+    { label: 'Copied', value: new Date(clip.copiedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) },
+  ]
+  if (clip.kind === 'color') return { image: swatch(clip.content, 160), details }
+  if (clip.preview) return { image: clip.preview, details }
+  return { text: clip.content.length > 4000 ? `${clip.content.slice(0, 4000)}…` : clip.content, details }
+}
 
 /** The launcher's Clipboard scope: pinned clips, then the newest; every word of the query must appear. */
 function search(query: string, ctx: PluginContext): SearchItem[] {

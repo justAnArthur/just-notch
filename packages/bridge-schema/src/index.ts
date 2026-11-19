@@ -110,9 +110,10 @@ export interface ScreenGeometry {
 /**
  * What plugins are written against: the bridge's methods, topics and events and the SDK. Bump the minor for
  * an addition, the major for a break; user and library plugins whose `engines.notch` doesn't match aren't loaded.
- * 1.0 is the surface plugins first shipped against, 1.1 adds `net` and `secrets`.
+ * 1.0 is the surface plugins first shipped against, 1.1 adds `net` and `secrets`, 1.2 the launcher's `search`, 1.3
+ * its result previews.
  */
-export const API_VERSION = '1.2.0'
+export const API_VERSION = '1.3.0'
 
 interface Version {
   major: number

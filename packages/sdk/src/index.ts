@@ -149,6 +149,18 @@ export interface SearchItem {
   /** Short text at the row's end, such as a date or a kind. */
   accessory?: string
   actions: SearchAction[]
+  /** What the preview pane beside the results shows for it (API 1.3). */
+  preview?: SearchPreview
+}
+
+/** A result's preview: an image or some text, then label and value lines (`Kind`, `Image`). */
+export interface SearchPreview {
+  /** A `data:` or `https:` image, drawn to fit. */
+  image?: string
+  /** Shown as is, wrapped, in a monospace face when `mono`. */
+  text?: string
+  mono?: boolean
+  details?: { label: string; value: string }[]
 }
 
 /**

@@ -20,10 +20,12 @@ interface ResultsProps {
   selected: number
   onSelect: (index: number) => void
   onRun: (index: number) => void
+  /** Beside the preview pane, which shows the subtitle: titles get the room. */
+  compact?: boolean
 }
 
 /** Grouped rows under the bar; the selected one shows its main action. Indexes run across sections. */
-export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
+export function Results({ sections, selected, onSelect, onRun, compact }: ResultsProps) {
   const paths = sections.flatMap((s) => s.rows.flatMap((r) => (r.icon && 'path' in r.icon ? [r.icon.path] : [])))
   const icons = useIcons(paths)
   const list = useRef<HTMLDivElement>(null)
@@ -54,7 +56,7 @@ export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
                 onPointerMove={() => !active && onSelect(i)}
                 onClick={() => onRun(i)}
               >
-                {row.answer ? <Answer row={row} /> : <Plain row={row} icon={row.icon} icons={icons} />}
+                {row.answer ? <Answer row={row} /> : <Plain row={row} icon={row.icon} icons={icons} compact={compact} />}
                 <span className="shrink-0 text-caption text-muted-foreground">
                   {active ? (
                     <>
@@ -74,13 +76,13 @@ export function Results({ sections, selected, onSelect, onRun }: ResultsProps) {
   )
 }
 
-function Plain({ row, icon, icons }: { row: Row; icon?: RowIcon; icons: Map<string, string> }) {
+function Plain({ row, icon, icons, compact }: { row: Row; icon?: RowIcon; icons: Map<string, string>; compact?: boolean }) {
   return (
     <>
       <Icon icon={icon} icons={icons} />
       <span className="flex min-w-0 flex-1 items-baseline gap-2">
         <span className="truncate">{row.title}</span>
-        {row.subtitle && <span className="truncate text-caption text-muted-foreground">{row.subtitle}</span>}
+        {row.subtitle && !compact && <span className="truncate text-caption text-muted-foreground">{row.subtitle}</span>}
       </span>
     </>
   )
@@ -99,11 +101,12 @@ function Answer({ row }: { row: Row }) {
   )
 }
 
-function Icon({ icon, icons }: { icon?: RowIcon; icons: Map<string, string> }) {
+export function Icon({ icon, icons, large }: { icon?: RowIcon; icons: Map<string, string>; large?: boolean }) {
+  const box = large ? 'size-20' : 'size-7'
   const src = icon && ('src' in icon ? icon.src : 'path' in icon ? icons.get(icon.path) : undefined)
-  if (src) return <img src={src} alt="" className="size-7 shrink-0 rounded-md object-contain" draggable={false} />
+  if (src) return <img src={src} alt="" className={`${box} shrink-0 rounded-md object-contain`} draggable={false} />
   const Glyph = icon && 'glyph' in icon ? icon.glyph : undefined
-  return <span className="flex size-7 shrink-0 items-center justify-center text-muted-foreground">{Glyph && <Glyph className="size-5" />}</span>
+  return <span className={`flex ${box} shrink-0 items-center justify-center text-muted-foreground`}>{Glyph && <Glyph className={large ? 'size-12' : 'size-5'} />}</span>
 }
 
 /** One line in place of results: nothing found, or a scope waiting for a query. */

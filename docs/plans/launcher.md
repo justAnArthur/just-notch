@@ -8,9 +8,9 @@ The reference is macOS 26 Spotlight: one search pill, then round scope buttons (
 
 Built: the drop (a bead, a neck, a fall that eases into a squash, one rounded bar, then the buttons pinch off; a 140 ms fade to close), apps with frecency, inline maths and conversions (units, ECB currency, time zones, dates), file search, Actions (system actions and Shortcuts), a web fallback, the plugin `search` API with the Clipboard scope (↩ pastes into the app in front), and Settings › Launcher. The open island and the launcher row are 648 pt wide; the bar rests at 38% of the screen height. Plugin API 1.2.0.
 
-Since 1.3.1: the ⌘K actions panel (every action of the selected row, filtered by typing, at the sheet's bottom right).
+Since 1.3.1: the ⌘K actions panel (every action of the selected row, filtered by typing, at the sheet's bottom right), and a preview pane beside the results (Quick Look thumbnails and details for files, the whole clip for Clipboard; always on in scopes with previews, ⌘Y in the root). Plugin API 1.3.0 adds `SearchItem.preview`.
 
-Left for later: a preview pane, scope order in Settings, and plugin scopes for the GitHub and YouTrack library plugins.
+Left for later: scope order in Settings, and plugin scopes for the GitHub and YouTrack library plugins.
 
 ## What exists already
 

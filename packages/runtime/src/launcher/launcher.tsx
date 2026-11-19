@@ -11,6 +11,7 @@ import { setLauncherRegions } from '../island/hit-regions'
 import { useReduceMotion } from '../island/motion'
 import { bridgePath, type Circle } from './metaball'
 import { ActionPanel, filterActions, panelHeight } from './actions'
+import { hasPreviews, Preview, PREVIEW_MIN_H } from './preview'
 import { MAX_SCOPES, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
 import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
 import type { Row } from './rows'
@@ -148,6 +149,8 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const [selected, setSelected] = useState(0)
   /** The selected row's actions (⌘K), with what was typed into it and its own selection. */
   const [panel, setPanel] = useState<{ filter: string; selected: number }>()
+  /** The preview pane in the root search, toggled with ⌘Y; scopes with previews always show it. */
+  const [quickLook, setQuickLook] = useState(false)
   const scopes = useScopes()
   const scopesRef = useRef(scopes)
   scopesRef.current = scopes
@@ -226,6 +229,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     setScope(undefined)
     setSelected(0)
     setPanel(undefined)
+    setQuickLook(false)
     dispatch({ type: 'collapse' })
     regions(l, 0)
     for (const b of buttons) b.r.set(0)
@@ -357,7 +361,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const current = flat[selected]
   const listed = panel && current ? filterActions(current.actions, panel.filter) : []
   const panelOpen = panel !== undefined && current !== undefined && view.note === undefined
-  const listH = view.note ? NOTE_H : Math.min(sectionsHeight(view.sections), RESULTS_MAX)
+  const showPane = view.note === undefined && flat.length > 0 && (active ? hasPreviews(flat) : quickLook)
+  const rowsH = Math.min(sectionsHeight(view.sections), RESULTS_MAX)
+  const listH = view.note ? NOTE_H : showPane ? Math.max(rowsH, PREVIEW_MIN_H) : rowsH
   // The sheet grows to hold the panel when it has fewer rows than the panel has actions.
   const sheetH = panelOpen ? Math.max(listH, panelHeight(listed.length) + 2 * SHEET_PAD) : listH
   const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
@@ -406,6 +412,11 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       }
       if (panelOpen) {
         onPanelKey(event)
+        return
+      }
+      if (event.metaKey && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        setQuickLook((on) => !on)
         return
       }
       if (event.key === 'Escape') {
@@ -561,7 +572,12 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             {view.note ? (
               <Note>{view.note}</Note>
             ) : (
-              <Results sections={view.sections} selected={selected} onSelect={panelOpen ? () => {} : setSelected} onRun={(i) => void runRow(flat[i])} />
+              <div className="flex h-full">
+                <div className="min-w-0 flex-1">
+                  <Results sections={view.sections} selected={selected} onSelect={panelOpen ? () => {} : setSelected} onRun={(i) => void runRow(flat[i])} compact={showPane} />
+                </div>
+                {showPane && <Preview row={current} />}
+              </div>
             )}
             {panelOpen && (
               <ActionPanel

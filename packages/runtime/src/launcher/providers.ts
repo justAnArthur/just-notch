@@ -62,6 +62,21 @@ const fileKind: Record<FileHit['kind'], string> = {
 
 const folderOf = (path: string) => path.replace(/\/[^/]+\/?$/, '').replace(/^\/Users\/[^/]+/, '~')
 
+/** `1.2 MB`, in the decimal units Finder uses. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1000) return `${bytes} bytes`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = bytes / 1000
+  let unit = 0
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000
+    unit++
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
+}
+
+const formatDate = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+
 function fileRow(hit: FileHit): Row {
   return {
     id: `file:${hit.path}`,
@@ -69,6 +84,15 @@ function fileRow(hit: FileHit): Row {
     subtitle: folderOf(hit.path),
     icon: { path: hit.path },
     accessory: fileKind[hit.kind],
+    preview: {
+      thumbnail: hit.path,
+      details: [
+        { label: 'Kind', value: fileKind[hit.kind] },
+        ...(hit.size !== undefined ? [{ label: 'Size', value: formatBytes(hit.size) }] : []),
+        ...(hit.modified ? [{ label: 'Modified', value: formatDate(hit.modified) }] : []),
+        { label: 'Where', value: folderOf(hit.path) },
+      ],
+    },
     actions: [
       { title: 'Open', run: () => void call('runtime', 'files.open', { path: hit.path }) },
       { title: 'Show in Finder', run: () => void call('runtime', 'files.reveal', { path: hit.path }) },
@@ -79,7 +103,7 @@ function fileRow(hit: FileHit): Row {
 
 function pluginRow(scope: Scope, item: SearchItem): Row {
   const icon = typeof item.icon === 'string' ? { src: item.icon } : item.icon ? { glyph: item.icon } : { glyph: scope.icon }
-  return { id: `${scope.id}:${item.id}`, title: item.title, subtitle: item.subtitle, icon, accessory: item.accessory, actions: item.actions }
+  return { id: `${scope.id}:${item.id}`, title: item.title, subtitle: item.subtitle, icon, accessory: item.accessory, actions: item.actions, preview: item.preview }
 }
 
 /** Results that arrive later (files, plugin scopes), kept with the query they answer. */

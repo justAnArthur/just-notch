@@ -11,6 +11,15 @@ export interface RowAction {
 /** What draws a row's icon: a file's or app's own icon (by path), an image, or a glyph. */
 export type RowIcon = { path: string } | { src: string } | { glyph: ComponentType<IconProps> }
 
+/** What the preview pane shows: a file's Quick Look thumbnail (by path) or an image, text, then label and value lines. */
+export interface RowPreview {
+  thumbnail?: string
+  image?: string
+  text?: string
+  mono?: boolean
+  details?: { label: string; value: string }[]
+}
+
 /** One result, from any provider. */
 export interface Row {
   /** Stable across searches; frecency is kept by it. */
@@ -21,6 +30,7 @@ export interface Row {
   /** Short text at the row's end while it isn't selected (a kind, a date). */
   accessory?: string
   actions: RowAction[]
+  preview?: RowPreview
   /** The inline answer card (maths, conversions) instead of a plain row. */
   answer?: InlineAnswer
 }
