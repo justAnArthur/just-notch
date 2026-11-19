@@ -32,8 +32,8 @@ targets:
     info:
       path: JustNotch/Info.plist
       properties:
-        CFBundleName: Just Notch
-        CFBundleDisplayName: Just Notch
+        CFBundleName: $(APP_NAME)
+        CFBundleDisplayName: $(APP_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
@@ -72,6 +72,7 @@ targets:
       base:
         PRODUCT_NAME: JustNotch
         PRODUCT_BUNDLE_IDENTIFIER: com.justanarthur.justnotch
+        APP_NAME: Just Notch
         # Local builds only; release builds pass the root package.json version (.github/workflows/build-macos-on-tag.yml).
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
@@ -86,6 +87,13 @@ targets:
         DEVELOPMENT_TEAM: ""
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+      configs:
+        # Debug builds are ad-hoc signed, a new signature every build. Under the release's bundle id they'd make
+        # macOS drop the installed app's privacy grants (Calendar, Location, Accessibility); under their own id
+        # they get grants of their own and leave the release's alone.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.justanarthur.justnotch.debug
+          APP_NAME: Just Notch Debug
     preBuildScripts:
       - name: Require the Sparkle key in Release
         script: |

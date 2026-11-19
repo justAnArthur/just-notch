@@ -39,9 +39,13 @@ public final class WindowsService: NotchService {
     /// app the user was in.
     private func focusedWindow() throws -> (NSRunningApplication, AXUIElement) {
         guard AXIsProcessTrusted() else {
+            // The system's prompt the first time; after that the Accessibility list itself, so a move never just
+            // does nothing.
             if !Self.askedForAccessibility {
                 Self.askedForAccessibility = true
                 AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
             }
             throw ServiceError("Just Notch needs Accessibility to move windows: allow it in System Settings › Privacy & Security")
         }
