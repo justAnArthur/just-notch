@@ -501,6 +501,39 @@ a:focus-visible {
   color: var(--quiet);
 }
 
+/* ── Launcher: what it finds, then its keys ── */
+
+.launcher-body {
+  display: grid;
+  gap: 56px;
+  min-width: 0;
+}
+
+.launcher-table td:last-child {
+  width: auto;
+}
+
+.launcher-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px 32px;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.launcher-keys > div {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+
+.launcher-keys dd {
+  margin: 0;
+  color: var(--quiet);
+}
+
 /* ── Install: the one light field ── */
 
 .install {

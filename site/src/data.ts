@@ -95,3 +95,26 @@ export const SETTINGS = {
   src: shot('settings'),
   alt: 'Just Notch settings inside the island: launch at login, which screens show the island, and a settings page for each plugin.',
 }
+
+/** What the launcher finds, in the order its results come (packages/runtime/src/launcher/providers.ts). */
+export const LAUNCHER_FINDS = [
+  { name: 'Applications', note: 'Ranked by how often and how recently you open them.' },
+  { name: 'Answers', note: 'Maths, units, currencies at ECB rates, time zones (“time in tokyo”), dates and number bases, inline.' },
+  { name: 'Files', note: 'From the Spotlight index, with a Quick Look preview.' },
+  { name: 'Actions', note: 'Sleep, Turn Off Display, Start Screen Saver, Empty Trash, Toggle Dark Mode and your Shortcuts.' },
+  { name: 'Clipboard', note: 'Your history: Return pastes straight into the app in front.' },
+  { name: 'Web', note: 'A web search when nothing else fits.' },
+]
+
+/** The launcher's keys (packages/runtime/src/launcher/launcher.tsx). */
+export const LAUNCHER_KEYS = [
+  { keys: '⌥Space', does: 'Open it, or the shortcut you set' },
+  { keys: '↩', does: 'Open, paste or copy' },
+  { keys: '⌘↩', does: 'The second action: show in Finder, copy' },
+  { keys: '⇧↩', does: 'The third: copy the path, paste as plain text' },
+  { keys: '⌘K', does: 'Every action of the result' },
+  { keys: '⌘1–⌘6', does: 'A scope: Applications, Files, Actions, Clipboard' },
+  { keys: '⌘Y', does: 'The preview pane' },
+  { keys: 'Tab', does: 'Complete the result into the field' },
+  { keys: 'Esc', does: 'Clear, leave the scope, close' },
+]

@@ -48,6 +48,7 @@ export function Hero() {
           </a>
           <a className="menubar-link" href="#plugins">Plugins</a>
           <a className="menubar-link" href="#library">Library</a>
+          <a className="menubar-link" href="#launcher">Launcher</a>
           <a className="menubar-link" href="#install">Install</a>
         </div>
         <div className="menubar-side menubar-end">
@@ -97,7 +98,7 @@ export function Hero() {
           </h1>
           <p className="lede" data-rv style={{ '--i': 1 } as React.CSSProperties}>
             Just Notch turns the MacBook notch into a Dynamic Island: what is playing, your next meeting, the
-            weather and four more plugins, one hover away.
+            weather and four more plugins, one hover away. Press ⌥Space and search drops out of it.
           </p>
         </div>
         <div className="capsule" data-rv style={{ '--i': 2 } as React.CSSProperties}>

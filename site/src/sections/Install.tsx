@@ -24,7 +24,7 @@ export function Install() {
         <li data-rv style={{ '--i': 3 } as React.CSSProperties}>
           <p className="step-text">The first time, right-click the app and choose Open.</p>
           <p className="body">
-            The build is signed ad hoc and not notarized, so macOS asks once. If it refuses to open, clear the
+            The build is self-signed and not notarized, so macOS asks once. If it refuses to open, clear the
             quarantine flag in Terminal instead:
           </p>
           <Copy className="step-copy" value={QUARANTINE_COMMAND} label="Terminal" />

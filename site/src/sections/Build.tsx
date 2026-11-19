@@ -15,7 +15,7 @@ const MANIFEST = `{
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [],
-  "engines": { "notch": "^0.1.0" }
+  "engines": { "notch": "^1.3.0" }
 }`
 
 const SOURCE = `import { Button } from '@justanarthur/modo-ui'
@@ -42,6 +42,41 @@ export default definePlugin({
   widget: { title: 'My Plugin', view: Widget },
 })`
 
+// A launcher scope: `search` on definePlugin (plugin API 1.2), with previews (1.3). Modelled on plugins/clipboard.
+const SEARCH = `import { definePlugin, type PluginContext, type SearchItem } from '@just-notch/sdk'
+import { Bookmark } from 'lucide-react'
+
+const LINKS = [
+  { id: 'notch', title: 'Just Notch', url: 'https://github.com/justAnArthur/just-notch' },
+  { id: 'modo', title: 'modo-ui', url: 'https://github.com/justAnArthur/modo' },
+]
+
+function linkItem(link: (typeof LINKS)[number], ctx: PluginContext): SearchItem {
+  const host = new URL(link.url).host
+  return {
+    id: link.id,
+    title: link.title,
+    subtitle: host,
+    accessory: 'Link',
+    preview: { text: link.url, mono: true, details: [{ label: 'Host', value: host }] },
+    actions: [
+      { title: 'Open', run: () => void ctx.call('system.openUrl', { url: link.url }) },
+      { title: 'Copy Link', run: () => void ctx.call('clipboard.writeText', { text: link.url }) },
+    ],
+  }
+}
+
+export default definePlugin({
+  search: {
+    title: 'Links',
+    icon: Bookmark,
+    keywords: ['link', 'links'],
+    root: { limit: 3 },
+    provide: (query, { ctx }) =>
+      LINKS.filter((link) => link.title.toLowerCase().includes(query.toLowerCase())).map((link) => linkItem(link, ctx)),
+  },
+})`
+
 export function Build() {
   return (
     <section className="build field-ink" id="build" aria-labelledby="build-title">
@@ -51,7 +86,7 @@ export function Build() {
         </h2>
         <p className="body" data-rv style={{ '--i': 1 } as React.CSSProperties}>
           A plugin is a React component, a manifest and the permissions it asks for. It draws with modo-ui, the
-          island's own components, so it looks native from the first line. The CLI scaffolds, builds and packs
+          island's own components, so it looks native from the first line. It can add a scope to the launcher too: results, their actions and a preview. The CLI scaffolds, builds and packs
           it into a .notchplugin; while you work, the runtime's dev server reloads the island on every save.
         </p>
         <div className="build-command" data-rv style={{ '--i': 2 } as React.CSSProperties}>
@@ -63,10 +98,11 @@ export function Build() {
       </div>
       <div className="build-code" data-rv style={{ '--i': 2 } as React.CSSProperties}>
         <Tabs defaultValue="source" size="compact">
-          <Tabs.List aria-label="Files of a new plugin">
+          <Tabs.List aria-label="Files of a new plugin, and a launcher scope">
             <Tabs.Item value="terminal" label="Terminal" />
             <Tabs.Item value="manifest" label="manifest.json" />
             <Tabs.Item value="source" label="src/index.tsx" />
+            <Tabs.Item value="search" label="Launcher scope" />
           </Tabs.List>
           <Tabs.Panel value="terminal">
             <Code language="sh" className="code">{TERMINAL}</Code>
@@ -76,6 +112,9 @@ export function Build() {
           </Tabs.Panel>
           <Tabs.Panel value="source">
             <Code language="tsx" className="code">{SOURCE}</Code>
+          </Tabs.Panel>
+          <Tabs.Panel value="search">
+            <Code language="tsx" className="code">{SEARCH}</Code>
           </Tabs.Panel>
         </Tabs>
       </div>
