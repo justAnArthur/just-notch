@@ -37,10 +37,10 @@ final class NotchPanel: NSPanel {
 
 enum ScreenLayout {
     /// Room for the island's tall sheet (560) below the notch, and for the launcher's search row; the panel is
-    /// transparent and lets clicks through outside the island.
+    /// transparent and lets clicks through outside the island. Taller on most screens: see `height(_:)`.
     static let panelSize = NSSize(width: 800, height: 620)
-    /// The launcher's pill rests here, as Spotlight's does: a fraction of the screen's height from its top.
-    static let launcherTop = 0.26
+    /// The launcher's pill rests here, about where Spotlight's sits: a fraction of the screen's height from its top.
+    static let launcherTop = 0.38
     /// Below the pill: its row (56) and the results sheet.
     static let launcherBelow = 560.0
 
@@ -49,15 +49,17 @@ enum ScreenLayout {
         (screen.frame.height * launcherTop).rounded()
     }
 
-    /// The panel's height while the launcher is open: from the screen's top past the results sheet.
-    static func launcherHeight(_ screen: NSScreen) -> Double {
-        max(panelSize.height, launcherPillTop(screen) + launcherBelow)
+    /// From the screen's top past the launcher's results. Always this tall, never resized: resizing a web view
+    /// relayouts and repaints the page, a stutter right as the launcher's drop starts. Transparent space is free.
+    static func height(_ screen: NSScreen) -> Double {
+        min(screen.frame.height, max(panelSize.height, launcherPillTop(screen) + launcherBelow))
     }
     static let virtualNotchWidth = 200.0
     static let virtualNotchHeight = 32.0
 
     /// The panel's frame on `screen` (centered on the notch, top edge flush) and its geometry.
-    static func layout(_ screen: NSScreen, height: Double = panelSize.height) -> (frame: NSRect, geometry: ScreenGeometry) {
+    static func layout(_ screen: NSScreen) -> (frame: NSRect, geometry: ScreenGeometry) {
+        let height = height(screen)
         let frame = screen.frame
         let notch = notchRect(screen)
         let size = NSSize(width: panelSize.width, height: height)

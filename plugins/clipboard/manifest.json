@@ -6,9 +6,10 @@
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [
-    "clipboard"
+    "clipboard",
+    "apps.read"
   ],
   "engines": {
-    "notch": "^1.0.0"
+    "notch": "^1.2.0"
   }
 }

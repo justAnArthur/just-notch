@@ -21,6 +21,8 @@ export const PERMISSION_INFO: Record<Permission, LibraryPermission> = {
   'weather.read': { label: 'Weather', description: 'Gets the weather where you are.' },
   clipboard: { label: 'Clipboard', description: 'Reads what you copy and your clipboard history.' },
   'files.recent': { label: 'Recent files', description: 'Sees your recent downloads and screenshots.' },
+  'apps.read': { label: 'Apps', description: 'Sees your installed apps.' },
+  'apps.launch': { label: 'Opening apps', description: 'Opens your apps.' },
   net: { label: 'Internet', description: 'Connects to the hosts listed below, and to others only if you allow them.' },
   secrets: { label: 'Keychain', description: 'Keeps passwords and tokens in your Keychain, out of the plugin’s files.' },
 }

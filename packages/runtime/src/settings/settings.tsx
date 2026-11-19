@@ -1,7 +1,7 @@
 import type { AppPreferences, InstalledPlugin, LibraryEntry, Methods, UpdateState } from '@just-notch/bridge-schema'
 import { Badge, Button, List } from '@justanarthur/modo-ui'
 import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
-import { Library } from 'lucide-react'
+import { Library, Search } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call } from '../host/client'
@@ -9,6 +9,7 @@ import { useHostInfo, useInstalled } from '../host/session'
 import { subscribeTopic } from '../host/topics'
 import { usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
+import LauncherPage, { type PreferenceChange } from './launcher'
 import LibraryPage, { useLibrary } from './library'
 import { entryState, updateCount } from './library-state'
 import { setSettingsTarget, useSettingsTarget } from './target'
@@ -79,16 +80,21 @@ const PERMISSIONS: (Omit<SettingsPermission, 'granted'> & { pane: string; status
   { id: 'files', pane: 'FilesAndFolders', label: 'Downloads and Desktop', description: 'Lists your recent downloads and screenshots.' },
 ]
 
+/** The host's preferences; a change shows at once and settles to what the host kept (a taken shortcut isn't). */
 function usePreferences() {
   const [preferences, setPreferences] = useState<AppPreferences>()
-  useEffect(() => {
-    void call('runtime', 'app.preferences', {}).then(setPreferences)
-  }, [])
-  const change = (next: AppPreferences) => {
-    setPreferences(next)
-    void call('runtime', 'app.setPreferences', next).then(setPreferences)
+  const [error, setError] = useState<string>()
+  const reload = () => void call('runtime', 'app.preferences', {}).then(setPreferences)
+  useEffect(reload, [])
+  const change = (next: PreferenceChange) => {
+    setError(undefined)
+    setPreferences((current) => current && { ...current, ...next, launcher: { ...current.launcher, ...next.launcher } })
+    void call('runtime', 'app.setPreferences', next).then(setPreferences, (reason: unknown) => {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      reload()
+    })
   }
-  return [preferences, change] as const
+  return [preferences, change, error] as const
 }
 
 function useGranted() {
@@ -154,7 +160,7 @@ export default function Settings() {
   const info = useHostInfo()
   const installed = useInstalled()
   const loaded = usePlugins()
-  const [preferences, setPreferences] = usePreferences()
+  const [preferences, setPreferences, preferencesError] = usePreferences()
   const granted = useGranted()
   const library = useLibrary()
   const target = useSettingsTarget()
@@ -191,6 +197,14 @@ export default function Settings() {
 
   const updates = updateCount(library.catalog?.plugins, installed, apiVersion)
   const pages = [
+    {
+      id: 'launcher',
+      label: 'Launcher',
+      lead: 'Spotlight-style search that drops out of the notch.',
+      icon: Search,
+      after: 'general',
+      content: <LauncherPage preferences={preferences} error={preferencesError} onChange={setPreferences} />,
+    },
     {
       id: 'library',
       label: 'Library',
@@ -234,7 +248,7 @@ export default function Settings() {
         onValueChange={(page) => setSettingsTarget({ page })}
         pages={pages}
         preferences={preferences}
-        onPreferencesChange={setPreferences}
+        onPreferencesChange={({ launchAtLogin, screens }) => setPreferences({ launchAtLogin, screens })}
         plugins={plugins}
         enabled={Object.fromEntries(installed.map((p) => [p.manifest.id, p.enabled]))}
         onEnabledChange={(next) => {

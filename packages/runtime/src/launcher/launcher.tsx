@@ -1,27 +1,38 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
 import { AppWindow, Clipboard, Folder, Layers, type LucideIcon, Search } from 'lucide-react'
 import { AnimatePresence, animate, motion, type MotionValue, useMotionValue, useTransform } from 'motion/react'
-import { useEffect, useId, useRef, useState } from 'react'
-import { dispatch } from '../activity/store'
+import { useEffect, useRef, useState } from 'react'
+import { present } from '../activity/reducer'
+import { dispatch, useActivityState } from '../activity/store'
 import { on } from '../host/bus'
 import { call } from '../host/client'
+import { EXPANDED } from '../island/geometry'
 import { setLauncherRegions } from '../island/hit-regions'
 import { useReduceMotion } from '../island/motion'
+import { type AppResult, searchApps, useAppIndex, useFrecency } from './apps'
+import { bridgePath, type Circle } from './metaball'
+import { Note, Results, type Section, SHEET_RADIUS, sectionsHeight } from './results'
+import { setLauncherOpen } from './state'
 
-/** The search pill, then the round scope buttons to its right, as macOS 26 Spotlight lays them out. */
-const PILL_W = 520
 const PILL_H = 52
 const BUTTON = 52
 const GAP = 10
-const ROW_W = PILL_W + 4 * (GAP + BUTTON)
-/** The drop as it leaves the notch, and as it lands. */
-const DROP = 26
+const BUTTONS_W = 4 * (GAP + BUTTON)
+/** The drop as it falls, and the bud it leaves the notch from. */
+const DROP = 34
+const BUD = 18
+/** The drop while it still hangs from the notch, before it lets go. */
+const HANG = 26
 const RESULTS_GAP = 8
-const RESULTS_H = 320
-
-// The island's goo: blur, then threshold the alpha back into solid shapes, so nearby bodies melt together.
-const GOO_MATRIX = '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10'
-const GOO_BLUR = 7
+/** The results sheet grows with its rows up to this, then scrolls. */
+const RESULTS_MAX = 420
+/** Results on the root search; a scope lists more. */
+const ROOT_LIMIT = 8
+const SCOPE_LIMIT = 50
+/** A note's height, for a scope that isn't built yet or nothing found. */
+const NOTE_H = 56
+/** How far the liquid between the pill's end and a button stretches before it snaps, in button radii: under the gap (10 pt), so none stays joined at rest. */
+const BUTTON_REACH = 0.3
 
 interface Scope {
   id: string
@@ -29,7 +40,7 @@ interface Scope {
   icon: LucideIcon
 }
 
-/** Placeholders for the spike: phase 1 fills Apps, later phases the rest (plugins add their own). */
+/** Apps works; later phases fill the rest, and plugins add their own. */
 const SCOPES: Scope[] = [
   { id: 'apps', title: 'Applications', icon: AppWindow },
   { id: 'files', title: 'Files', icon: Folder },
@@ -43,8 +54,10 @@ interface Layout {
   cx: number
   /** The notch's bottom edge, where the drop forms. */
   notchBottom: number
+  rowW: number
   rowLeft: number
-  pillCx: number
+  /** The pill's width beside the scope buttons; alone (while typing) it spans the row. */
+  pillW: number
   /** The pill's vertical centre. */
   pillCy: number
   top: number
@@ -53,15 +66,18 @@ interface Layout {
 
 function layoutOf(geometry: ScreenGeometry, top: number): Layout {
   const cx = geometry.notch.x + geometry.notch.w / 2
-  const rowLeft = Math.round(cx - ROW_W / 2)
+  const rowW = Math.min(EXPANDED.w, geometry.panel.w - 28)
+  const rowLeft = Math.round(cx - rowW / 2)
+  const pillW = rowW - BUTTONS_W
   return {
     cx,
     notchBottom: geometry.notch.h,
+    rowW,
     rowLeft,
-    pillCx: rowLeft + PILL_W / 2,
+    pillW,
     pillCy: top + PILL_H / 2,
     top,
-    buttonCx: (index) => rowLeft + PILL_W + GAP + BUTTON / 2 + index * (GAP + BUTTON),
+    buttonCx: (index) => rowLeft + pillW + GAP + BUTTON / 2 + index * (GAP + BUTTON),
   }
 }
 
@@ -71,15 +87,30 @@ function useBody() {
 }
 type Body = ReturnType<typeof useBody>
 
-function BodyRect({ body }: { body: Body }) {
-  const x = useTransform(() => body.x.get() - body.w.get() / 2)
-  const y = useTransform(() => body.y.get() - body.h.get() / 2)
-  const r = useTransform(() => Math.min(body.w.get(), body.h.get()) / 2)
-  return <motion.rect x={x} y={y} width={body.w} height={body.h} rx={r} />
+function BodyRect({ body, outlined = false }: { body: Body; outlined?: boolean }) {
+  const x = useTransform(() => body.x.get() - Math.max(0, body.w.get()) / 2)
+  const y = useTransform(() => body.y.get() - Math.max(0, body.h.get()) / 2)
+  const w = useTransform(() => Math.max(0, body.w.get()))
+  const h = useTransform(() => Math.max(0, body.h.get()))
+  const r = useTransform(() => Math.max(0, Math.min(body.w.get(), body.h.get())) / 2)
+  // The hairline is the rect's own stroke, so it follows the shape without laying out any HTML.
+  return (
+    <motion.rect
+      x={x}
+      y={y}
+      width={w}
+      height={h}
+      rx={r}
+      stroke="white"
+      strokeWidth={1}
+      style={{ strokeOpacity: outlined ? 0.1 : 0, transition: 'stroke-opacity 120ms' }}
+    />
+  )
 }
 
-function ButtonCircle({ x, r, cy }: { x: MotionValue<number>; r: MotionValue<number>; cy: number }) {
-  return <motion.circle cx={x} cy={cy} r={r} />
+function Dot({ x, y, r }: { x: MotionValue<number>; y: MotionValue<number> | number; r: MotionValue<number> }) {
+  const radius = useTransform(() => Math.max(0, r.get()))
+  return <motion.circle cx={x} cy={y} r={radius} />
 }
 
 const set = (body: Body, v: { x?: number; y?: number; w?: number; h?: number }) => {
@@ -89,109 +120,194 @@ const set = (body: Body, v: { x?: number; y?: number; w?: number; h?: number }) 
   if (v.h !== undefined) body.h.set(v.h)
 }
 
+/** The drop as a circle, for its bridge: the smaller side's radius around its centre. */
+const asCircle = (body: Body): Circle => ({ x: body.x.get(), y: body.y.get(), r: Math.max(0, Math.min(body.w.get(), body.h.get())) / 2 })
+/** The pill's right end, the circle its cap is part of. */
+const endCap = (body: Body): Circle => {
+  const r = Math.max(0, body.h.get()) / 2
+  return { x: body.x.get() + Math.max(0, body.w.get()) / 2 - r, y: body.y.get(), r }
+}
+
+// Motion tuned to read like water and to be about as quick as Spotlight's own (~0.35 s to the field).
+const SWELL = { duration: 0.07, ease: [0.3, 0, 0.6, 1] } as const
+/** The bead hangs and stretches on its neck before it lets go. */
+const HANG_T = { duration: 0.09, ease: [0.45, 0, 0.55, 1] } as const
+/** The fall: off the notch quickly, then easing into the landing, so you see the drop arrive and become the bar. */
+const FALL = { duration: 0.2, ease: [0.45, 0, 0.2, 1] } as const
+/** Landing: the drop spreads into the bar, fast at first and easing into the ends. */
+const FILL = { duration: 0.28, ease: [0.25, 0.75, 0.3, 1] } as const
+const SPLIT = { type: 'spring', visualDuration: 0.2, bounce: 0.18 } as const
+const RECOIL = { type: 'spring', visualDuration: 0.2, bounce: 0.5 } as const
+const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
+
 /**
- * The launcher: a drop of the island's black falls from the notch to where Spotlight's search sits and spreads
- * into the search pill; the scope buttons bud off its end. Closing runs it back up into the notch.
+ * The launcher: a drop of the island's black swells under the notch, pinches off, falls to where Spotlight's
+ * search sits, squashes as it lands and spreads into the search bar; the scope buttons then pinch off its end. Typing draws them back into
+ * the bar, as Spotlight does. Closing is a quick fade.
  *
- * Spike scope: the motion, the keyboard and the host round trip. Search itself comes in phase 1.
+ * Every shape is a circle, a rounded rect or the liquid bridge between two of them (metaball.ts), one SVG path
+ * per frame: no blur filter, so it stays sharp and smooth.
+ *
+ * Search covers apps for now (phase 1 of docs/plans/launcher.md): ↑↓ select, ↩ opens, ⌘↩ shows in Finder,
+ * ⇥ completes the name, ⌘1–⌘4 pick a scope.
  */
 export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const reduced = useReduceMotion()
-  const gooId = useId()
   const [phase, setPhase] = useState<Phase>('closed')
   const [top, setTop] = useState(220)
-  const [goo, setGoo] = useState(false)
   const [content, setContent] = useState(false)
+  const [buttonsShown, setButtonsShown] = useState(false)
+  /** The pill's hairline, off while it changes shape (it would cut the liquid necks). */
+  const [outlined, setOutlined] = useState(false)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<number>()
+  const [selected, setSelected] = useState(0)
+  const apps = useAppIndex(phase === 'opening')
+  const [frecency, launched] = useFrecency()
   const input = useRef<HTMLInputElement>(null)
   const run = useRef(0)
   const phaseRef = useRef<Phase>('closed')
   phaseRef.current = phase
 
-  const neck = useBody()
   const drop = useBody()
+  const bud = { x: useMotionValue(0), y: useMotionValue(0), r: useMotionValue(0) }
   const buttons = [0, 1, 2, 3].map(() => ({ x: useMotionValue(0), r: useMotionValue(0) }))
+  /** How far the notch ↔ drop neck stretches before it snaps (in the drop's radii): long while it hangs. */
+  const reach = useMotionValue(2.5)
+  /** The little satellite drop that follows the big one when the neck snaps. */
+  const satellite = { y: useMotionValue(0), r: useMotionValue(0) }
+  /** The whole launcher's opacity: 1 while open, faded to 0 to close. */
+  const fade = useMotionValue(1)
+  const fadeScale = useTransform(() => 0.97 + 0.03 * fade.get())
 
   const layout = layoutOf(geometry, top)
   const layoutRef = useRef(layout)
   layoutRef.current = layout
 
-  const regions = (l: Layout, results: boolean) =>
-    setLauncherRegions([
-      { x: l.rowLeft - 8, y: l.top - 8, w: ROW_W + 16, h: PILL_H + 16 + (results ? RESULTS_GAP + RESULTS_H : 0) },
-    ])
+  // Every liquid neck in one path: notch ↔ drop, and the pill's end ↔ each button near it.
+  const bridges = useTransform(() => {
+    const l = layoutRef.current
+    const parts = [bridgePath({ x: bud.x.get(), y: bud.y.get(), r: Math.max(0, bud.r.get()) }, asCircle(drop), reach.get(), 0.55)]
+    const cap = endCap(drop)
+    for (const b of buttons) parts.push(bridgePath(cap, { x: b.x.get(), y: l.pillCy, r: Math.max(0, b.r.get()) }, BUTTON_REACH, 0.45))
+    return parts.join('')
+  })
 
-  async function openSequence(l: Layout) {
-    const token = ++run.current
-    const alive = () => token === run.current
-    setPhase('opening')
-    setContent(false)
-    setQuery('')
-    setScope(undefined)
-    dispatch({ type: 'collapse' })
-    regions(l, false)
-    for (const b of buttons) {
-      b.x.set(l.pillCx + PILL_W / 2 - BUTTON / 2)
-      b.r.set(0)
+  const regions = (l: Layout, results: number) =>
+    setLauncherRegions([{ x: l.rowLeft - 8, y: l.top - 8, w: l.rowW + 16, h: PILL_H + 16 + (results ? RESULTS_GAP + results : 0) }])
+
+  /** The pill alone across the row (typing) or beside its buttons, which pinch off its end. */
+  function arrange(l: Layout, alone: boolean, instant = false) {
+    const w = alone ? l.rowW : l.pillW
+    const x = l.rowLeft + w / 2
+    if (instant || reduced) {
+      setOutlined(true)
+      set(drop, { x, w, h: PILL_H })
+      buttons.forEach((b, i) => {
+        b.x.set(l.buttonCx(i))
+        b.r.set(alone ? 0 : BUTTON / 2)
+      })
+      setButtonsShown(!alone)
+      return Promise.resolve()
     }
-
-    if (reduced) {
-      set(neck, { x: l.cx, y: 0, w: 0, h: 0 })
-      set(drop, { x: l.pillCx, y: l.pillCy, w: PILL_W, h: PILL_H })
+    setOutlined(false)
+    if (alone) setButtonsShown(false)
+    else {
+      // They sit under the pill's end already, so as it draws back each one is left behind with a neck that snaps.
       buttons.forEach((b, i) => {
         b.x.set(l.buttonCx(i))
         b.r.set(BUTTON / 2)
       })
+      setTimeout(() => setButtonsShown(true), 90)
+    }
+    const moves = [animate(drop.x, x, SPLIT), animate(drop.w, w, SPLIT)]
+    // Swallowed: once the pill covers them they're gone.
+    if (alone) for (const b of buttons) moves.push(animate(b.r, 0, { ...QUICK, delay: 0.12 }))
+    return Promise.all(moves).then(() => setOutlined(true))
+  }
+
+  async function openSequence(l: Layout) {
+    const token = ++run.current
+    const alive = () => token === run.current
+    setLauncherOpen(true)
+    fade.set(1)
+    setPhase('opening')
+    setContent(false)
+    setButtonsShown(false)
+    setOutlined(false)
+    setQuery('')
+    setScope(undefined)
+    setSelected(0)
+    dispatch({ type: 'collapse' })
+    regions(l, 0)
+    for (const b of buttons) b.r.set(0)
+
+    if (reduced) {
+      bud.r.set(0)
+      set(drop, { y: l.pillCy, h: PILL_H })
+      void arrange(l, false, true)
       setContent(true)
       setPhase('open')
       return
     }
 
-    setGoo(true)
-    // The neck hangs from inside the notch, so its blurred top melts into the island's black.
-    set(neck, { x: l.cx, y: l.notchBottom / 2, w: DROP * 1.1, h: l.notchBottom })
-    set(drop, { x: l.cx, y: l.notchBottom, w: 0, h: 0 })
+    const budTop = l.notchBottom - BUD
+    bud.x.set(l.cx)
+    bud.y.set(budTop)
+    bud.r.set(0)
+    reach.set(4.5)
+    satellite.r.set(0)
+    set(drop, { x: l.cx, y: budTop, w: 0, h: 0 })
 
-    // 1. Swell: the notch's bottom edge sags and a drop forms under it.
+    // 1. Swell: the notch's bottom edge sags into a bead.
     await Promise.all([
-      animate(neck.h, l.notchBottom + 16, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(neck.y, (l.notchBottom + 16) / 2, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(drop.w, DROP, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(drop.h, DROP, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(drop.y, l.notchBottom + 10, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
+      animate(bud.r, BUD, SWELL),
+      animate(bud.y, l.notchBottom - 4, SWELL),
+      animate(drop.w, HANG, SWELL),
+      animate(drop.h, HANG, SWELL),
+      animate(drop.y, l.notchBottom + 8, SWELL),
     ])
     if (!alive()) return
 
-    // 2. Fall: gravity's ease-in, the drop stretching as it speeds up; the neck follows, thins and snaps back.
-    const fall = 0.3
+    // 2. Hang: it stretches down on a neck that thins.
     await Promise.all([
-      animate(drop.y, [l.notchBottom + 10, l.pillCy], { duration: fall, ease: [0.55, 0, 0.85, 0.45] }),
-      animate(drop.h, [DROP, DROP * 1.55, DROP * 1.2], { duration: fall, times: [0, 0.55, 1] }),
-      animate(drop.w, [DROP, DROP * 0.82, DROP * 1.05], { duration: fall, times: [0, 0.55, 1] }),
-      animate(drop.x, [l.cx, l.pillCx], { duration: fall, ease: 'easeInOut' }),
-      animate(neck.h, [l.notchBottom + 16, l.notchBottom + 44, l.notchBottom * 0.6], { duration: fall * 0.75, times: [0, 0.35, 1] }),
-      animate(neck.y, [(l.notchBottom + 16) / 2, (l.notchBottom + 44) / 2, (l.notchBottom * 0.6) / 2], {
-        duration: fall * 0.75,
-        times: [0, 0.35, 1],
-      }),
-      animate(neck.w, [DROP * 1.1, DROP * 0.45, DROP * 0.9], { duration: fall * 0.75, times: [0, 0.35, 1] }),
+      animate(drop.y, l.notchBottom + 40, HANG_T),
+      animate(drop.h, HANG * 1.2, HANG_T),
+      animate(drop.w, HANG * 0.9, HANG_T),
+      animate(bud.r, BUD * 0.65, HANG_T),
     ])
     if (!alive()) return
 
-    // 3. Spread: it lands and flattens into the pill with a surface-tension wobble; the buttons bud off its end.
-    const splash = { type: 'spring' as const, visualDuration: 0.38, bounce: 0.28 }
-    setTimeout(() => alive() && setContent(true), 160)
+    // 3. Let go: the neck snaps, the notch's bead springs back, a satellite drop trails the big one down.
+    reach.set(0.3)
+    void animate(bud.y, l.notchBottom - BUD - 2, RECOIL)
+    void animate(bud.r, 0, { ...RECOIL, delay: 0.02 })
+    satellite.y.set(l.notchBottom + 14)
+    satellite.r.set(3.5)
+    void animate(satellite.y, l.top - 6, { ...FALL, duration: FALL.duration * 1.05 }).then(() => satellite.r.set(0))
     await Promise.all([
-      animate(drop.w, PILL_W, splash),
-      animate(drop.h, PILL_H, { ...splash, bounce: 0.4 }),
-      ...buttons.flatMap((b, i) => [
-        animate(b.x, l.buttonCx(i), { type: 'spring', visualDuration: 0.34, bounce: 0.3, delay: 0.1 + i * 0.04 }),
-        animate(b.r, BUTTON / 2, { type: 'spring', visualDuration: 0.3, bounce: 0.35, delay: 0.1 + i * 0.04 }),
-      ]),
+      animate(drop.y, l.pillCy, FALL),
+      animate(drop.h, [HANG * 1.2, DROP * 1.2], FALL),
+      animate(drop.w, [HANG * 0.9, DROP * 0.9], FALL),
     ])
     if (!alive()) return
-    setGoo(false)
+
+    // 4. Land: it squashes as it touches down…
+    await Promise.all([
+      animate(drop.w, DROP * 1.3, { duration: 0.06, ease: 'easeOut' }),
+      animate(drop.h, DROP * 0.8, { duration: 0.06, ease: 'easeOut' }),
+    ])
+    if (!alive()) return
+    // …and spreads into the bar, one rounded shape, rounding out to its height first so its ends stay round.
+    setTimeout(() => alive() && setContent(true), 140)
+    await Promise.all([
+      animate(drop.w, l.rowW, FILL),
+      animate(drop.h, PILL_H, { type: 'spring', visualDuration: 0.12, bounce: 0.25 }),
+    ])
+    if (!alive()) return
+    // 5. Then it draws back from its end, leaving the scope buttons behind, each pinching off.
+    await arrange(l, false)
+    if (!alive()) return
     setPhase('open')
   }
 
@@ -202,48 +318,20 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     const l = layoutRef.current
     setPhase('closing')
     setContent(false)
+    setOutlined(false)
     input.current?.blur()
     const finish = () => {
       if (!alive()) return
-      setGoo(false)
       setPhase('closed')
+      setLauncherOpen(false)
       setLauncherRegions([])
       void call('runtime', 'launcher.closed', {}).catch(() => {})
     }
-
     if (reduced) return finish()
 
-    setGoo(true)
-    set(neck, { x: l.cx, y: l.notchBottom * 0.3, w: DROP * 0.9, h: l.notchBottom * 0.6 })
-    // 1. The buttons fold back into the pill, the pill draws in to a drop.
-    const end = l.pillCx + PILL_W / 2 - BUTTON / 2
-    await Promise.all([
-      ...buttons.flatMap((b, i) => [
-        animate(b.x, end, { type: 'spring', visualDuration: 0.14, bounce: 0, delay: (3 - i) * 0.02 }),
-        animate(b.r, 0, { type: 'spring', visualDuration: 0.14, bounce: 0, delay: (3 - i) * 0.02 }),
-      ]),
-      animate(drop.w, DROP, { type: 'spring', visualDuration: 0.2, bounce: 0, delay: 0.04 }),
-      animate(drop.h, DROP, { type: 'spring', visualDuration: 0.2, bounce: 0, delay: 0.04 }),
-    ])
+    // Closing has no drop: a quick fade and settle, as Spotlight dismisses, so it gets out of the way at once.
+    await Promise.all([animate(fade, 0, { duration: 0.14, ease: [0.4, 0, 1, 1] })])
     if (!alive()) return
-
-    // 2. It rises into the notch, which reaches down for it, and is taken in.
-    const rise = 0.24
-    await Promise.all([
-      animate(drop.y, l.notchBottom + 6, { duration: rise, ease: [0.35, 0, 0.2, 1] }),
-      animate(drop.x, l.cx, { duration: rise, ease: 'easeInOut' }),
-      animate(drop.h, [DROP, DROP * 1.35, DROP], { duration: rise, times: [0, 0.5, 1] }),
-      animate(neck.h, [l.notchBottom * 0.6, l.notchBottom * 0.6, l.notchBottom + 18], { duration: rise, times: [0, 0.6, 1] }),
-      animate(neck.y, [l.notchBottom * 0.3, l.notchBottom * 0.3, (l.notchBottom + 18) / 2], { duration: rise, times: [0, 0.6, 1] }),
-    ])
-    if (!alive()) return
-    await Promise.all([
-      animate(drop.w, 0, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(drop.h, 0, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(drop.y, l.notchBottom / 2, { type: 'spring', visualDuration: 0.12, bounce: 0 }),
-      animate(neck.h, l.notchBottom * 0.5, { type: 'spring', visualDuration: 0.16, bounce: 0.3 }),
-      animate(neck.y, l.notchBottom * 0.25, { type: 'spring', visualDuration: 0.16, bounce: 0.3 }),
-    ])
     finish()
   }
 
@@ -258,18 +346,48 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     [geometry],
   )
 
+  // The island opening (hovered, clicked, Settings…) takes over: the launcher steps aside.
+  const islandOpen = present(useActivityState()).island === 'expanded'
+  useEffect(() => {
+    if (islandOpen && (phaseRef.current === 'open' || phaseRef.current === 'opening')) void closeSequence()
+  }, [islandOpen])
+
   // Typing works from the moment the drop forms: the field takes focus as soon as it exists.
   useEffect(() => {
     if (phase === 'opening' || phase === 'open') input.current?.focus()
   }, [phase, content])
 
+  // Typing draws the buttons back into the bar, which spans the row; clearing it lets them out again.
+  const typing = query !== ''
   useEffect(() => {
-    if (phase === 'open') regions(layout, query !== '')
-  }, [phase, query !== '', top])
+    if (phase === 'open') void arrange(layoutRef.current, typing)
+  }, [typing, phase === 'open'])
+
+  const active = scope === undefined ? undefined : SCOPES[scope]
+  const view = resultsFor(query, active?.id, apps, frecency)
+  const flat = view.sections.flatMap((s) => s.results)
+  const sheetH = view.note ? NOTE_H : Math.min(sectionsHeight(view.sections), RESULTS_MAX)
+  const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
+
+  // A new query or scope starts at the top.
+  useEffect(() => setSelected(0), [query, scope])
+
+  useEffect(() => {
+    if (phase === 'open') regions(layout, showResults ? sheetH : 0)
+  }, [phase, showResults, sheetH, top])
+
+  const runResult = (result: AppResult | undefined, reveal = false) => {
+    if (!result) return
+    launched(result.id)
+    void closeSequence()
+    if (reveal) void call('runtime', 'files.reveal', { path: result.app.path }).catch(() => {})
+    else void call('runtime', 'apps.launch', { path: result.app.path }).catch(() => {})
+  }
 
   useEffect(() => {
     if (phase !== 'opening' && phase !== 'open') return
     const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing) return
       if (event.key === 'Escape') {
         event.preventDefault()
         if (query) setQuery('')
@@ -279,102 +397,150 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       }
       if (event.metaKey && /^[1-4]$/.test(event.key)) {
         event.preventDefault()
-        setScope(Number(event.key) - 1)
+        const next = Number(event.key) - 1
+        setScope(scope === next ? undefined : next)
+        return
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        if (!flat.length) return
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        setSelected((i) => (i + step + flat.length) % flat.length)
+        return
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        runResult(flat[selected], event.metaKey)
+        return
+      }
+      if (event.key === 'Tab' && !event.shiftKey) {
+        event.preventDefault()
+        const name = flat[selected]?.app.name
+        if (name) setQuery(name)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, query, scope])
+  }, [phase, query, scope, selected, flat])
 
   if (phase === 'closed') return null
 
-  const active = scope === undefined ? undefined : SCOPES[scope]
-  const showResults = phase === 'open' && query !== ''
-
   return (
-    <div className="pointer-events-none absolute top-0 left-0" style={{ width: geometry.panel.w, height: geometry.panel.h }}>
+    <motion.div
+      className="pointer-events-none absolute top-0 left-0"
+      style={{ width: geometry.panel.w, height: geometry.panel.h, opacity: fade, scale: fadeScale, transformOrigin: `${layout.cx}px ${layout.pillCy}px` }}
+    >
       <svg aria-hidden className="absolute inset-0 overflow-visible" width={geometry.panel.w} height={geometry.panel.h}>
-        <defs>
-          <filter id={gooId} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
-            <feGaussianBlur in="SourceGraphic" stdDeviation={GOO_BLUR} result="blur" />
-            <feColorMatrix in="blur" mode="matrix" values={GOO_MATRIX} result="goo" />
-            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-          </filter>
-        </defs>
-        <g className="fill-island" style={goo ? { filter: `url(#${CSS.escape(gooId)})` } : undefined}>
-          {goo && <BodyRect body={neck} />}
-          <BodyRect body={drop} />
+        <g className="fill-island">
+          <Dot x={bud.x} y={bud.y} r={bud.r} />
+          <Dot x={drop.x} y={satellite.y} r={satellite.r} />
+          <BodyRect body={drop} outlined={outlined && phase === 'open'} />
           {buttons.map((b, i) => (
-            <ButtonCircle key={i} x={b.x} r={b.r} cy={layout.pillCy} />
+            <Dot key={i} x={b.x} y={layout.pillCy} r={b.r} />
           ))}
+          <motion.path d={bridges} />
         </g>
       </svg>
 
-      <motion.div
-        className="pointer-events-auto absolute flex items-center text-foreground"
-        style={{ left: layout.rowLeft, top: layout.top, width: ROW_W, height: PILL_H, gap: GAP }}
-        // Mounted from the first frame, so the field has focus and takes keys while the drop still falls.
+      {/* Mounted from the first frame, so the field has focus and takes keys while the drop still falls. */}
+      <motion.label
+        className="pointer-events-auto absolute flex items-center gap-3 rounded-full px-4 text-foreground"
+        style={{ left: layout.rowLeft, top: layout.top, width: typing ? layout.rowW : layout.pillW, height: PILL_H }}
         initial={{ opacity: 0 }}
         animate={{ opacity: content ? 1 : 0 }}
-        transition={{ duration: content ? 0.18 : 0.08, ease: 'easeOut' }}
+        transition={{ duration: content ? 0.12 : 0.06, ease: 'easeOut' }}
       >
-        <label
-          className="flex h-full items-center gap-3 rounded-full px-4 ring-1 ring-white/10 ring-inset"
-          style={{ width: PILL_W }}
+        <Search className="size-5 shrink-0 text-muted-foreground" />
+        <input
+          ref={input}
+          aria-label="Search"
+          value={query}
+          placeholder={active ? active.title : 'Spotlight Search'}
+          spellCheck={false}
+          autoComplete="off"
+          className="min-w-0 flex-1 bg-transparent text-[20px] text-foreground outline-none placeholder:text-muted-foreground"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {active && (
+          <span className="flex shrink-0 items-center gap-1 text-caption text-muted-foreground">
+            <kbd className="rounded-md bg-surface-3 px-1.5 py-0.5">⌘</kbd>
+            <kbd className="rounded-md bg-surface-3 px-1.5 py-0.5">{(scope ?? 0) + 1}</kbd>
+          </span>
+        )}
+      </motion.label>
+
+      {SCOPES.map((s, i) => (
+        <motion.button
+          key={s.id}
+          type="button"
+          title={`${s.title} ⌘${i + 1}`}
+          aria-pressed={scope === i}
+          tabIndex={-1}
+          className="absolute flex items-center justify-center rounded-full text-muted-foreground ring-1 ring-white/10 ring-inset hover:text-foreground aria-pressed:bg-surface-3 aria-pressed:text-foreground"
+          style={{
+            left: layout.buttonCx(i) - BUTTON / 2,
+            top: layout.top,
+            width: BUTTON,
+            height: BUTTON,
+            pointerEvents: content && buttonsShown ? 'auto' : 'none',
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: content && buttonsShown ? 1 : 0 }}
+          transition={{ duration: 0.1, delay: content && buttonsShown ? i * 0.02 : 0 }}
+          onClick={() => {
+            setScope(scope === i ? undefined : i)
+            input.current?.focus()
+          }}
         >
-          <Search className="size-5 shrink-0 text-muted-foreground" />
-          <input
-            ref={input}
-            aria-label="Search"
-            value={query}
-            placeholder={active ? active.title : 'Spotlight Search'}
-            spellCheck={false}
-            autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent text-[20px] text-foreground outline-none placeholder:text-muted-foreground"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {active && (
-            <span className="flex shrink-0 items-center gap-1 text-caption text-muted-foreground">
-              <kbd className="rounded-md bg-surface-3 px-1.5 py-0.5">⌘</kbd>
-              <kbd className="rounded-md bg-surface-3 px-1.5 py-0.5">{(scope ?? 0) + 1}</kbd>
-            </span>
-          )}
-        </label>
-        {SCOPES.map((s, i) => (
-          <button
-            key={s.id}
-            type="button"
-            title={`${s.title} ⌘${i + 1}`}
-            aria-pressed={scope === i}
-            className="flex shrink-0 items-center justify-center rounded-full text-muted-foreground ring-1 ring-white/10 ring-inset hover:text-foreground aria-pressed:bg-surface-3 aria-pressed:text-foreground"
-            style={{ width: BUTTON, height: BUTTON }}
-            onClick={() => {
-              setScope(scope === i ? undefined : i)
-              input.current?.focus()
-            }}
-          >
-            <s.icon className="size-5" />
-          </button>
-        ))}
-      </motion.div>
+          <s.icon className="size-5" />
+        </motion.button>
+      ))}
 
       <AnimatePresence>
         {showResults && (
           <motion.div
             key="results"
-            className="pointer-events-auto absolute overflow-hidden rounded-[26px] bg-[var(--island)] p-3 text-foreground ring-1 ring-white/10 ring-inset"
-            style={{ left: layout.rowLeft, top: layout.top + PILL_H + RESULTS_GAP, width: PILL_W, height: RESULTS_H, transformOrigin: 'top' }}
-            initial={{ opacity: 0, scaleY: 0.6, y: -12 }}
-            animate={{ opacity: 1, scaleY: 1, y: 0 }}
-            exit={{ opacity: 0, scaleY: 0.8, y: -8, transition: { duration: 0.1 } }}
-            transition={{ type: 'spring', visualDuration: 0.3, bounce: 0.2 }}
+            className="pointer-events-auto absolute overflow-hidden bg-[var(--island)] text-foreground ring-1 ring-white/10 ring-inset"
+            style={{ left: layout.rowLeft, top: layout.top + PILL_H + RESULTS_GAP, width: layout.rowW, borderRadius: SHEET_RADIUS, transformOrigin: 'top' }}
+            initial={{ opacity: 0, scaleY: 0.85, y: -6, height: sheetH }}
+            animate={{ opacity: 1, scaleY: 1, y: 0, height: sheetH }}
+            exit={{ opacity: 0, scaleY: 0.92, y: -4, transition: { duration: 0.08 } }}
+            transition={{ type: 'spring', visualDuration: 0.18, bounce: 0.12 }}
           >
-            <p className="px-2 py-1.5 text-caption text-muted-foreground">{active ? active.title : 'Top hits'}</p>
-            <div className="rounded-xl bg-surface-3 px-3 py-2.5">{query}</div>
-            <p className="px-2 pt-3 text-caption text-muted-foreground">Search arrives in phase 1.</p>
+            {view.note ? (
+              <Note>{view.note}</Note>
+            ) : (
+              <Results sections={view.sections} selected={selected} onSelect={setSelected} onRun={(i) => runResult(flat[i])} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   )
+}
+
+/** What the sheet shows for a query in a scope: sections of results, or one note. */
+function resultsFor(
+  query: string,
+  scope: string | undefined,
+  apps: Parameters<typeof searchApps>[1],
+  frecency: Parameters<typeof searchApps>[2],
+): { sections: Section[]; note?: string } {
+  const typed = query.trim() !== ''
+  if (scope === 'files' || scope === 'actions' || scope === 'clipboard') {
+    const later = { files: 'File search', actions: 'Actions', clipboard: 'Clipboard search' }[scope]
+    return { sections: [], note: `${later} arrives in a later update.` }
+  }
+  if (scope === 'apps') {
+    if (!typed) {
+      const all = apps.filter((a) => a.path).map((app) => ({ id: `app:${app.bundleId}`, app: { ...app, path: app.path ?? '' }, score: 0 }))
+      return { sections: all.length ? [{ title: 'Applications', results: all }] : [] }
+    }
+    const results = searchApps(query, apps, frecency, SCOPE_LIMIT)
+    return results.length ? { sections: [{ title: 'Applications', results }] } : { sections: [], note: `No apps match “${query.trim()}”.` }
+  }
+  if (!typed) return { sections: [] }
+  const [top, ...rest] = searchApps(query, apps, frecency, ROOT_LIMIT)
+  if (!top) return { sections: [], note: `No results for “${query.trim()}”.` }
+  return { sections: [{ title: 'Top Hit', results: [top] }, ...(rest.length ? [{ title: 'Applications', results: rest }] : [])] }
 }

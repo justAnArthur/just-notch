@@ -1,14 +1,22 @@
 import AppKit
+import Carbon.HIToolbox
+import NotchServices
 
 /// The launcher: a global shortcut opens a search bar that drops out of the notch to where Spotlight's sits.
 ///
-/// The page draws and animates it. The host grows the panel to make room, makes it key without activating
-/// the app (it's a non-activating panel, so the app in front keeps the menu bar and gets the keyboard back),
-/// and shrinks it again once the page says its closing animation is done.
+/// The page draws and animates it, in the panel (tall enough already, see `ScreenLayout.height`). The host
+/// makes the panel key without activating the app (it's a non-activating panel, so the app in front keeps the
+/// menu bar and gets the keyboard back) and lets the keyboard go once the page says it's closed.
 @MainActor
 final class Launcher {
     static let defaultShortcut = "Alt+Space"
     private static let shortcutKey = "launcher.shortcut"
+    private static let enabledKey = "launcher.enabled"
+
+    /// The bridge's host shortcuts: register an accelerator with an action, release one by id.
+    var registerShortcut: ((String, @escaping () -> Void) throws -> String)?
+    var unregisterShortcut: ((String) -> Void)?
+    private var shortcutId: String?
 
     private let events: EventDispatcher
     private let panels: () -> [PanelController]
@@ -22,9 +30,63 @@ final class Launcher {
         self.panels = panels
     }
 
-    /// The shortcut in Electron's syntax (`Alt+Space`); a user's choice once Settings has one.
+    /// The shortcut in Electron's syntax (`Alt+Space`), as Settings › Launcher set it.
     static var shortcut: String {
         UserDefaults.standard.string(forKey: shortcutKey) ?? defaultShortcut
+    }
+
+    static var enabled: Bool {
+        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+    }
+
+    var preferences: LauncherPreferences {
+        LauncherPreferences(enabled: Self.enabled, shortcut: Self.shortcut, active: shortcutId != nil,
+                            spotlightConflict: Self.isCommandSpace(Self.shortcut) && Self.spotlightUsesCommandSpace)
+    }
+
+    /// Registers the saved shortcut, if the launcher is on. A taken shortcut is logged and shows in Settings.
+    func start() {
+        do { try register(Self.shortcut) } catch {
+            log.error("launcher shortcut \(Self.shortcut, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Settings › Launcher: a new shortcut is tried before it's saved, so a taken one leaves the old in place.
+    func update(enabled: Bool?, shortcut: String?) throws {
+        let nextEnabled = enabled ?? Self.enabled
+        let nextShortcut = shortcut ?? Self.shortcut
+        _ = try HotKeys.parse(nextShortcut)
+        let previous = (Self.enabled, Self.shortcut)
+        UserDefaults.standard.set(nextEnabled, forKey: Self.enabledKey)
+        UserDefaults.standard.set(nextShortcut, forKey: Self.shortcutKey)
+        do {
+            try register(nextShortcut)
+        } catch {
+            UserDefaults.standard.set(previous.0, forKey: Self.enabledKey)
+            UserDefaults.standard.set(previous.1, forKey: Self.shortcutKey)
+            try? register(previous.1)
+            throw error
+        }
+        if !nextEnabled { dismiss() }
+    }
+
+    private func register(_ shortcut: String) throws {
+        if let shortcutId { unregisterShortcut?(shortcutId) }
+        shortcutId = nil
+        guard Self.enabled, let registerShortcut else { return }
+        shortcutId = try registerShortcut(shortcut) { [weak self] in self?.toggle() }
+    }
+
+    private static func isCommandSpace(_ shortcut: String) -> Bool {
+        guard let (key, modifiers) = try? HotKeys.parse(shortcut) else { return false }
+        return key == UInt32(kVK_Space) && modifiers == UInt32(cmdKey)
+    }
+
+    /// Spotlight's "Show Spotlight search" (symbolic hot key 64) is on, as it is until the user turns it off.
+    private static var spotlightUsesCommandSpace: Bool {
+        let hotKeys = CFPreferencesCopyAppValue("AppleSymbolicHotKeys" as CFString, "com.apple.symbolichotkeys" as CFString) as? [String: Any]
+        guard let entry = hotKeys?["64"] as? [String: Any] else { return true }
+        return (entry["enabled"] as? NSNumber)?.boolValue ?? true
     }
 
     func toggle() {
@@ -40,7 +102,6 @@ final class Launcher {
         open = target
         closing = false
 
-        target.move(to: screen, height: ScreenLayout.launcherHeight(screen))
         target.panel.launcher = true
         target.panel.makeKey()
         target.panel.makeFirstResponder(target.webView)
@@ -74,7 +135,6 @@ final class Launcher {
         resignObserver = nil
         target.panel.launcher = false
         if target.panel.isKeyWindow, !target.panel.focusable { target.panel.resignKey() }
-        if let screen = target.panel.screen { target.move(to: screen) }
     }
 
     /// Panels are being rebuilt (screens changed): nothing to animate, just let go.

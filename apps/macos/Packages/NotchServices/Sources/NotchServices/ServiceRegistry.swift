@@ -13,6 +13,7 @@ public enum ServiceRegistry {
             FilesService(),
             WeatherService(),
             ClipboardService(),
+            AppsService(),
             RecentFilesService(),
             SystemService(),
         ]

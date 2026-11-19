@@ -36,6 +36,10 @@ export type Permission =
   | 'weather.read'
   | 'clipboard'
   | 'files.recent'
+  /** `apps.list`, `apps.index`, `apps.icons`: the installed apps, their names and icons. */
+  | 'apps.read'
+  /** `apps.launch`: opens an installed app. */
+  | 'apps.launch'
   /** `net.*`: HTTP(S) to the manifest's `hosts` and hosts the user granted. */
   | 'net'
   /** `secrets.*`: per-plugin strings in the Keychain (tokens, passwords). */
@@ -106,7 +110,7 @@ export interface ScreenGeometry {
  * an addition, the major for a break; user and library plugins whose `engines.notch` doesn't match aren't loaded.
  * 1.0 is the surface plugins first shipped against, 1.1 adds `net` and `secrets`.
  */
-export const API_VERSION = '1.1.0'
+export const API_VERSION = '1.2.0'
 
 interface Version {
   major: number
@@ -413,6 +417,10 @@ export interface AppInfo {
   name: string
   /** Small `data:` PNG of the app's icon. */
   icon?: string
+  /** The bundle's path; set by `apps.index`. */
+  path?: string
+  /** Other names it answers to in a search (its English name under a localized one); set by `apps.index`. */
+  keywords?: string[]
 }
 
 export interface RecentFile {
@@ -691,6 +699,12 @@ export interface Methods {
   'clipboard.setIgnoredApps': { params: { apps: string[] }; result: null }
   /** Running regular apps and those in the Applications folders, one per bundle id, sorted by name. */
   'apps.list': { params: Record<string, never>; result: AppInfo[] }
+  /** Every app a launcher can open, with paths and search keywords but no icons, sorted by name. Includes apps in folders inside the Applications folders. */
+  'apps.index': { params: Record<string, never>; result: AppInfo[] }
+  /** Icons for app paths as `data:` PNGs, `size` px square (default 64); paths without one are left out. */
+  'apps.icons': { params: { paths: string[]; size?: number }; result: Record<string, string> }
+  /** Opens the app at `path` and brings it forward. */
+  'apps.launch': { params: { path: string }; result: null }
 
   /** Hides a source's current files from `recentFiles`; nothing is deleted. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
@@ -767,7 +781,10 @@ export interface Methods {
    */
   'library.uninstall': { params: { id: string }; result: null }
   'app.preferences': { params: Record<string, never>; result: AppPreferences }
-  'app.setPreferences': { params: Partial<AppPreferences>; result: AppPreferences }
+  'app.setPreferences': {
+    params: Partial<Omit<AppPreferences, 'launcher'>> & { launcher?: Partial<Pick<LauncherPreferences, 'enabled' | 'shortcut'>> }
+    result: AppPreferences
+  }
 }
 /** An update as Sparkle sees it: the platform's `UpdateState` (`@just-apps/host-contract`). */
 export type UpdateState =
@@ -783,6 +800,17 @@ export interface AppPreferences {
   launchAtLogin: boolean
   /** `notched`: only the notched (else built-in, else main) screen; `all`: every screen. */
   screens: 'notched' | 'all'
+  launcher: LauncherPreferences
+}
+
+export interface LauncherPreferences {
+  enabled: boolean
+  /** Electron's accelerator syntax: `Alt+Space`, `Command+Space`. */
+  shortcut: string
+  /** Read only: the shortcut is registered. False when another app holds it (or the launcher is off). */
+  active?: boolean
+  /** Read only: the shortcut is ⌘Space and Spotlight still uses it, so the system takes it first. */
+  spotlightConflict?: boolean
 }
 
 export type Method = keyof Methods
@@ -811,7 +839,10 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'clipboard.clear': 'clipboard',
   'clipboard.setPaused': 'clipboard',
   'clipboard.setIgnoredApps': 'clipboard',
-  'apps.list': 'clipboard',
+  'apps.list': 'apps.read',
+  'apps.index': 'apps.read',
+  'apps.icons': 'apps.read',
+  'apps.launch': 'apps.launch',
   'recentFiles.clear': 'files.recent',
   'recentFiles.chooseFolder': 'files.recent',
   'recentFiles.resetFolder': 'files.recent',

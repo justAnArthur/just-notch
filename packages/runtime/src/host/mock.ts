@@ -251,12 +251,42 @@ async function netFetch(request: NetRequest, plugin: string): Promise<NetRespons
   return result
 }
 const PREFERENCES_KEY = 'notch:mock:preferences'
-const DEFAULT_PREFERENCES: AppPreferences = { launchAtLogin: false, screens: 'notched' }
+const DEFAULT_PREFERENCES: AppPreferences = { launchAtLogin: false, screens: 'notched', launcher: { enabled: true, shortcut: 'Alt+Space', active: true, spotlightConflict: false } }
 
 function preferences(): AppPreferences {
   const raw = localStorage.getItem(PREFERENCES_KEY)
-  return { ...DEFAULT_PREFERENCES, ...(raw ? JSON.parse(raw) : {}) }
+  const saved = raw ? JSON.parse(raw) : {}
+  const launcher = { ...DEFAULT_PREFERENCES.launcher, ...saved.launcher }
+  const conflict = /^(command|cmd)\+space$/i.test(launcher.shortcut)
+  return { ...DEFAULT_PREFERENCES, ...saved, launcher: { ...launcher, active: launcher.enabled, spotlightConflict: conflict } }
 }
+
+/** What `apps.index` finds on a typical Mac, enough to rank against. */
+const MOCK_APPS: [string, string, string[]?][] = [
+  ['com.apple.AppStore', 'App Store'],
+  ['com.apple.ActivityMonitor', 'Activity Monitor'],
+  ['com.apple.calculator', 'Calculator'],
+  ['com.apple.iCal', 'Calendar'],
+  ['com.google.Chrome', 'Google Chrome', ['Chrome']],
+  ['com.apple.finder', 'Finder'],
+  ['com.figma.Desktop', 'Figma'],
+  ['com.apple.mail', 'Mail'],
+  ['com.apple.Maps', 'Maps'],
+  ['com.apple.Music', 'Music'],
+  ['com.apple.Notes', 'Notes'],
+  ['com.apple.Photos', 'Photos'],
+  ['com.apple.Preview', 'Preview'],
+  ['com.apple.Safari', 'Safari'],
+  ['com.tinyspeck.slackmacgap', 'Slack'],
+  ['com.spotify.client', 'Spotify'],
+  ['com.apple.systempreferences', 'System Settings', ['System Preferences']],
+  ['com.apple.Terminal', 'Terminal'],
+  ['com.microsoft.VSCode', 'Visual Studio Code', ['Code']],
+  ['com.apple.dt.Xcode', 'Xcode'],
+  ['dev.zed.Zed', 'Zed'],
+  ['app.zen-browser.zen', 'Zen'],
+]
+const appPath = (name: string) => `/Applications/${name}.app`
 
 async function loadPlugins(): Promise<InstalledPlugin[]> {
   const response = await fetch('/plugins/index.json').catch(() => null)
@@ -489,6 +519,13 @@ const handlers: Handlers = {
       { bundleId: 'com.apple.Safari', name: 'Safari' },
       { bundleId: 'com.apple.Terminal', name: 'Terminal' },
     ].map((app, i) => ({ ...app, icon: artwork(i + 7) })),
+  'apps.index': () => MOCK_APPS.map(([bundleId, name, keywords]) => ({ bundleId, name, path: appPath(name), keywords })),
+  'apps.icons': ({ paths }) =>
+    Object.fromEntries(paths.map((path) => [path, artwork(MOCK_APPS.findIndex(([, name]) => appPath(name) === path) + 3)])),
+  'apps.launch': ({ path }) => {
+    launched.push(path)
+    return null
+  },
   'recentFiles.clear': ({ source }) => {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
     return null
@@ -611,7 +648,8 @@ const handlers: Handlers = {
   'library.uninstall': ({ id }) => libraryUninstall(id),
   'app.preferences': preferences,
   'app.setPreferences': (changes) => {
-    const next = { ...preferences(), ...changes }
+    const current = preferences()
+    const next = { ...current, ...changes, launcher: { ...current.launcher, ...changes.launcher } }
     localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next))
     return next
   },
@@ -629,6 +667,8 @@ function authorize({ plugin, method }: HostRequest) {
 }
 
 let launcherOpen = false
+/** Paths `apps.launch` opened, newest last. */
+export const launched: string[] = []
 
 /** Triggers for the dev toolbar: what the real host would send. */
 export const mock = {
@@ -715,6 +755,7 @@ export const mock = {
   /** The next subscription to `topic` is answered with `null`, its first sample arriving later. */
   nullSnapshot: (topic: Topic) => nullOnce.add(topic),
   hitRegions,
+  launched,
   haptics,
 }
 

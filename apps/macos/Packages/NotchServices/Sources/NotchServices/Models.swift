@@ -156,6 +156,10 @@ public struct AppInfo: Codable, Equatable, Sendable {
     public var bundleId: String
     public var name: String
     public var icon: String?
+    /// The bundle's path; `apps.index` fills it, `apps.list` leaves it out.
+    public var path: String?
+    /// Other names it answers to in a search: its English name under a localized one, its executable's.
+    public var keywords: [String]?
 }
 
 public struct RecentFile: Codable, Equatable, Sendable {

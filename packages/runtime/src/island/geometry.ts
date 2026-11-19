@@ -17,7 +17,7 @@ export interface Box {
 }
 
 /** The open panel the notch kit's widgets are laid out for; its first snap fits the content up to `h`. */
-const EXPANDED = { w: 720, h: 240 }
+export const EXPANDED = { w: 648, h: 240 }
 /** The tall snap, for settings and any tab pulled down. */
 const SHEET_H = 560
 /** The least the first snap shrinks to. */

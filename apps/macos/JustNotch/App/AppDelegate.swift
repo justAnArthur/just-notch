@@ -176,11 +176,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: launcher
 
     private func registerLauncherShortcut() {
-        do {
-            _ = try bridge.registerHostShortcut(Launcher.shortcut) { [weak self] in self?.launcher.toggle() }
-        } catch {
-            log.error("launcher shortcut \(Launcher.shortcut, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        launcher.registerShortcut = { [unowned self] accelerator, action in try bridge.registerHostShortcut(accelerator, action: action) }
+        launcher.unregisterShortcut = { [unowned self] id in bridge.unregisterHostShortcut(id) }
+        launcher.start()
     }
 
     // MARK: settings
@@ -281,7 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     var preferences: AppPreferences {
-        AppPreferences(launchAtLogin: launchAtLogin, screens: ScreenLayout.screens)
+        AppPreferences(launchAtLogin: launchAtLogin, screens: ScreenLayout.screens, launcher: launcher.preferences)
     }
 
     func setPreferences(_ update: PreferencesParams) throws {
@@ -291,6 +289,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         if let enabled = update.launchAtLogin, enabled != launchAtLogin {
             try setLaunchAtLogin(enabled)
+        }
+        if let next = update.launcher {
+            try launcher.update(enabled: next.enabled, shortcut: next.shortcut)
         }
     }
 }

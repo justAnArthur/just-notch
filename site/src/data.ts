@@ -23,6 +23,8 @@ const PERMISSION: Record<string, string> = {
   'power.read': 'Battery',
   clipboard: 'Clipboard',
   'files.recent': 'Recent files',
+  'apps.read': 'Your apps',
+  'apps.launch': 'Opening apps',
   files: 'Opening files',
   net: 'The network',
   secrets: 'Keychain secrets',

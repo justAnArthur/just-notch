@@ -33,6 +33,8 @@ enum Permission: String, Codable {
     case weatherRead = "weather.read"
     case clipboard
     case filesRecent = "files.recent"
+    case appsRead = "apps.read"
+    case appsLaunch = "apps.launch"
     case net
     case secrets
 }
@@ -97,6 +99,14 @@ struct AppPreferences: Codable, Equatable {
 
     var launchAtLogin: Bool
     var screens: Screens
+    var launcher: LauncherPreferences
+}
+
+struct LauncherPreferences: Codable, Equatable {
+    var enabled: Bool
+    var shortcut: String
+    var active: Bool?
+    var spotlightConflict: Bool?
 }
 
 enum Schema {
@@ -130,7 +140,10 @@ enum Schema {
         "clipboard.clear": .clipboard,
         "clipboard.setPaused": .clipboard,
         "clipboard.setIgnoredApps": .clipboard,
-        "apps.list": .clipboard,
+        "apps.list": .appsRead,
+        "apps.index": .appsRead,
+        "apps.icons": .appsRead,
+        "apps.launch": .appsLaunch,
         "recentFiles.clear": .filesRecent,
         "recentFiles.chooseFolder": .filesRecent,
         "recentFiles.resetFolder": .filesRecent,
@@ -231,8 +244,14 @@ struct SetEnabledParams: Decodable {
 
 /// `Partial<AppPreferences>`.
 struct PreferencesParams: Decodable {
+    struct Launcher: Decodable {
+        var enabled: Bool?
+        var shortcut: String?
+    }
+
     var launchAtLogin: Bool?
     var screens: AppPreferences.Screens?
+    var launcher: Launcher?
 }
 
 struct AcceleratorParams: Decodable {

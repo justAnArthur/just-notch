@@ -6,6 +6,7 @@ import { present, SETTINGS_TAB } from '../activity/reducer'
 import { dispatch, getState, holdFlash, useActivityState } from '../activity/store'
 import { on } from '../host/bus'
 import { call } from '../host/client'
+import { isLauncherOpen } from '../launcher/state'
 import PluginView from '../plugins/plugin-view'
 import Expanded, { type TabStep } from './expanded'
 import { POPUP_SELECTOR, setIslandRegions, trackPopups } from './hit-regions'
@@ -79,6 +80,7 @@ function useHover(island: IslandState) {
   // Only entering and leaving act, so Escape (or a flash ending) under a resting pointer doesn't reopen it.
   useEffect(() => {
     const act = () => {
+      if (hovering && isLauncherOpen()) return
       if (hovering === getState().expanded || (hovering && present(getState()).island === 'flash')) return
       dispatch({ type: hovering ? 'expand' : 'collapse' })
     }

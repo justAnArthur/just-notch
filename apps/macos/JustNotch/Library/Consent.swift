@@ -20,6 +20,8 @@ enum Consent {
         case "weather.read": "Get the weather where you are"
         case "clipboard": "Read what you copy and your clipboard history"
         case "files.recent": "See your recent downloads and screenshots"
+        case "apps.read": "See your installed apps"
+        case "apps.launch": "Open your apps"
         case "net": hosts.isEmpty ? "Connect to the internet, to sites you allow" : "Connect to the internet: \(hosts.joined(separator: ", "))"
         case "secrets": "Keep passwords and tokens in your Keychain"
         default: "Use “\(permission)”"

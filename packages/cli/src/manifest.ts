@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   'weather.read',
   'clipboard',
   'files.recent',
+  'apps.read',
+  'apps.launch',
   'net',
   'secrets',
 ] as const satisfies readonly Permission[]
