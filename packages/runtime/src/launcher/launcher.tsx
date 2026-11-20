@@ -133,7 +133,7 @@ const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
  * Every shape is a circle, a rounded rect or the liquid bridge between two of them (metaball.ts), one SVG path
  * per frame: no blur filter, so it stays sharp and smooth.
  *
- * Search covers apps for now (phase 1 of docs/plans/launcher.md): ↑↓ select, ↩ opens, ⌘↩ shows in Finder,
+ * Search covers apps for now: ↑↓ select, ↩ opens, ⌘↩ shows in Finder,
  * ⇥ completes the name, ⌘1–⌘4 pick a scope.
  */
 export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {

@@ -13,3 +13,6 @@ site/public/library/
 
 # landing page: the art-direction skill's working files
 .taste-skill/
+
+# Private plans and notes, kept out of the public repo.
+docs/
