@@ -189,8 +189,8 @@ function usePermissionStates(watching: boolean) {
 
 /**
  * What a row says beyond the kit's own line for its state. The app never resets a grant itself (no `tccutil`):
- * Fix opens the pane with the steps. A feature that hasn't asked yet asks the first time it's used, so only
- * Accessibility, which can be added by hand, keeps the Allow… button.
+ * Fix opens the pane with the steps. Allow… on a permission not asked yet shows macOS's prompt now; the row's
+ * description is the explanation.
  */
 function permissionRow(permission: (typeof PERMISSIONS)[number], state: PermissionState | undefined): SettingsPermission {
   const { id, label, description } = permission
@@ -202,17 +202,8 @@ function permissionRow(permission: (typeof PERMISSIONS)[number], state: Permissi
       state,
       note: "System Settings shows it as on, but macOS isn't honouring it. Fix opens the list: remove Just Notch with −, add it back with +, then come back.",
     }
-  if (state === 'notAsked' && id !== 'accessibility')
-    return {
-      id,
-      label,
-      description,
-      state,
-      note: 'Just Notch asks the first time a feature needs it.',
-      // No button: the state already reads "Not asked" beside the name.
-      action: <></>,
-    }
-  if (state === 'notAsked') return { id, label, description, state, note: 'Turn on Just Notch in the list, or add it with +, then come back.' }
+  if (state === 'notAsked' && id === 'accessibility')
+    return { id, label, description, state, note: 'macOS asks, then opens System Settings: turn on Just Notch and come back.' }
   return { id, label, description, state }
 }
 
@@ -383,6 +374,14 @@ export default function Settings() {
           : []),
         { label: 'Website', value: <Link url="https://justanarthur.github.io/just-notch/">justanarthur.github.io/just-notch</Link> },
         { label: 'License', value: <Link url={`${REPO}/blob/main/LICENSE.md`}>FSL-1.1-MIT</Link> },
+        {
+          label: 'First steps',
+          value: (
+            <Button variant="link" size="compact" onClick={() => void call('runtime', 'onboarding.open', {})}>
+              Show Welcome…
+            </Button>
+          ),
+        },
       ]
     : []
 
@@ -406,9 +405,11 @@ export default function Settings() {
             if (next[manifest.id] !== enabled) void call('runtime', 'plugins.setEnabled', { id: manifest.id, enabled: next[manifest.id] })
         }}
         permissions={PERMISSIONS.map((permission) => permissionRow(permission, permissionStates[permission.id]))}
-        onFixPermission={(id) => {
-          const url = PERMISSIONS.find((p) => p.id === id)?.url
-          if (url) void call('runtime', 'system.openUrl', { url })
+        onFixPermission={(id, state) => {
+          const permission = PERMISSIONS.find((p) => p.id === id)
+          if (!permission) return
+          if (state === 'notAsked' && permission.status) void call('runtime', 'permissions.request', { permission: permission.status })
+          else void call('runtime', 'system.openUrl', { url: permission.url })
         }}
         aboutHeader={aboutHeader}
         about={about}
