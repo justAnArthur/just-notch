@@ -72,4 +72,24 @@ struct ShelfTests {
         shelf.removeAll()
         #expect(shelf.items().isEmpty)
     }
+
+    @Test func theStateListsShelfCopiesEvenWithoutFolderAccess() throws {
+        defer { try? FileManager.default.removeItem(at: base) }
+        let now = Date(timeIntervalSince1970: 100_000)
+        _ = shelf.keep([try file("kept.pdf", bytes: 300)], limitBytes: 1000, now: now)
+        let folder = RecentFolder(path: "/x", custom: false)
+        let old = RecentFile(id: "/x/a.zip", name: "a.zip", size: 1, addedAt: 1, source: .downloads, from: nil)
+        var state = RecentFilesState(access: .denied, files: [old], downloads: [], folders: .init(downloads: folder, screenshots: folder))
+        state.addShelf(shelf, limitBytes: 1000, expiryHours: 24, now: now.addingTimeInterval(60))
+        #expect(state.files.map(\.source) == [.shelf, .downloads])
+        #expect(state.shelf == ShelfState(bytes: 300, limitBytes: 1000, expiryHours: 24))
+    }
+
+    @Test func aTrashedCopyLeavesNoFolder() throws {
+        defer { try? FileManager.default.removeItem(at: base) }
+        let kept = shelf.keep([try file("a.txt", bytes: 1)], limitBytes: 1000).kept[0]
+        try FileManager.default.removeItem(atPath: kept)
+        shelf.trim(limitBytes: 1000, expiryHours: nil)
+        #expect((try FileManager.default.contentsOfDirectory(atPath: shelf.root.path)).isEmpty)
+    }
 }

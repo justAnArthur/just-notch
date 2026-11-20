@@ -3,14 +3,16 @@ import AppKit
 /// `recentFiles` topic: the newest files in Downloads and the screenshot folder
 /// (`com.apple.screencapture location`, Desktop by default), or the folders the
 /// user chose instead, plus downloads still being written. Folders are watched with vnode sources while subscribed; an
-/// active download adds a 1 s rescan so its progress moves.
+/// active download adds a 1 s rescan so its progress moves. Also the shelf (`recentFiles.keep`): copies of files
+/// dropped on the notch, which needs no folder access, trimmed on every scan and every 15 minutes.
 ///
 /// Every touch of the folders runs off the main thread: they are privacy-protected,
 /// and the first one blocks until the user answers macOS's prompt.
 @MainActor
 public final class RecentFilesService: NotchService {
     public let topics = ["recentFiles"]
-    public let methods = ["recentFiles.clear", "recentFiles.chooseFolder", "recentFiles.resetFolder", "recentFiles.cancelDownload"]
+    public let methods = ["recentFiles.clear", "recentFiles.chooseFolder", "recentFiles.resetFolder", "recentFiles.cancelDownload",
+                          "recentFiles.keep", "recentFiles.setShelf"]
     public weak var sink: ServiceSink?
 
     nonisolated static let perSource = 20
@@ -22,6 +24,8 @@ public final class RecentFilesService: NotchService {
 
     private var watchers: [DispatchSourceFileSystemObject] = []
     private var progressTimer: Timer?
+    private var expiryTimer: Timer?
+    private let shelf: Shelf
     private var pending: Task<Void, Never>?
     private var latest = Latest<RecentFilesState>()
     private var partial: Partial = [:]
@@ -31,7 +35,28 @@ public final class RecentFilesService: NotchService {
     private var rescan = false
     private var subscribed = false
 
-    public init() {}
+    public convenience init() {
+        self.init(shelf: .standard)
+    }
+
+    init(shelf: Shelf) {
+        self.shelf = shelf
+    }
+
+    // MARK: shelf settings
+
+    private static let expiryKey = "recentFiles.shelf.expiryHours"
+    private static let limitKey = "recentFiles.shelf.limitBytes"
+
+    /// `nil` keeps files until the limit or a Clear; stored as 0, since defaults can't hold a null.
+    nonisolated static var expiryHours: Double? {
+        guard let stored = UserDefaults.standard.object(forKey: expiryKey) as? Double else { return Shelf.defaultExpiryHours }
+        return stored > 0 ? stored : nil
+    }
+
+    nonisolated static var limitBytes: Double {
+        (UserDefaults.standard.object(forKey: limitKey) as? Double).flatMap { $0 > 0 ? $0 : nil } ?? Shelf.defaultLimit
+    }
 
     public func start(topic: String) {
         subscribed = true
@@ -49,6 +74,9 @@ public final class RecentFilesService: NotchService {
                 watchers.append(source)
             }
         }
+        let expiry = Timer(timeInterval: 15 * 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.scan() } }
+        RunLoop.main.add(expiry, forMode: .common)
+        expiryTimer = expiry
         scan()
     }
 
@@ -59,6 +87,8 @@ public final class RecentFilesService: NotchService {
         watchers = []
         progressTimer?.invalidate()
         progressTimer = nil
+        expiryTimer?.invalidate()
+        expiryTimer = nil
         pending?.cancel()
         pending = nil
         partial = [:]
@@ -72,16 +102,42 @@ public final class RecentFilesService: NotchService {
     public func handle(method: String, params: Data) async throws -> Data? {
         switch method {
         case "recentFiles.clear":
-            UserDefaults.standard.set(nowMs(), forKey: Self.clearedKey(try decode(SourceParams.self, params).source))
+            let source = try decode(SourceParams.self, params).source
+            if source == .shelf {
+                let shelf = shelf
+                await Task.detached { shelf.removeAll() }.value
+            } else {
+                UserDefaults.standard.set(nowMs(), forKey: Self.clearedKey(source))
+            }
+            if subscribed { scan() }
+        case "recentFiles.keep":
+            let urls = try decode(PathsParams.self, params).paths.map { URL(fileURLWithPath: $0) }
+            let (shelf, limit) = (shelf, Self.limitBytes)
+            let outcome = await Task.detached { shelf.keep(urls, limitBytes: limit) }.value
+            if subscribed { scan() }
+            return KeepResult(kept: outcome.kept, skipped: outcome.skipped).json()
+        case "recentFiles.setShelf":
+            let change = try JSONSerialization.jsonObject(with: params) as? [String: Any] ?? [:]
+            if let expiry = change["expiryHours"] {
+                UserDefaults.standard.set((expiry as? Double).map { max($0, 0) } ?? 0, forKey: Self.expiryKey)
+            }
+            if let limit = change["limitBytes"] as? Double, limit > 0 {
+                UserDefaults.standard.set(limit, forKey: Self.limitKey)
+            }
+            let (shelf, limit, expiry) = (shelf, Self.limitBytes, Self.expiryHours)
+            await Task.detached { shelf.trim(limitBytes: limit, expiryHours: expiry) }.value
             if subscribed { scan() }
         case "recentFiles.chooseFolder":
             let source = try decode(SourceParams.self, params).source
+            guard source != .shelf else { throw ServiceError("the shelf has no folder to choose") }
             guard let url = await chooseFolder(source) else { return jsonNull }
             UserDefaults.standard.set(url.path, forKey: Self.folderKey(source))
             restart()
             return RecentFolder(path: url.path, custom: true).json()
         case "recentFiles.resetFolder":
-            UserDefaults.standard.removeObject(forKey: Self.folderKey(try decode(SourceParams.self, params).source))
+            let source = try decode(SourceParams.self, params).source
+            guard source != .shelf else { throw ServiceError("the shelf has no folder to reset") }
+            UserDefaults.standard.removeObject(forKey: Self.folderKey(source))
             restart()
         case "recentFiles.cancelDownload":
             let url = URL(fileURLWithPath: try decode(IdParams.self, params).id)
@@ -183,8 +239,13 @@ public final class RecentFilesService: NotchService {
         let cleared = Dictionary(uniqueKeysWithValues: [RecentFile.Source.downloads, .screenshots].map {
             ($0, UserDefaults.standard.double(forKey: Self.clearedKey($0)))
         })
+        let (shelf, limit, expiry) = (shelf, Self.limitBytes, Self.expiryHours)
         Task {
-            let (state, next) = await Task.detached { Self.read(previous: previous, cleared: cleared, now: Date()) }.value
+            let (state, next) = await Task.detached {
+                var (state, next) = Self.read(previous: previous, cleared: cleared, now: Date())
+                state.addShelf(shelf, limitBytes: limit, expiryHours: expiry)
+                return (state, next)
+            }.value
             scanning = false
             guard current == generation else { return }
             partial = next
@@ -297,3 +358,18 @@ public final class RecentFilesService: NotchService {
         return froms.lazy.compactMap { URL(string: $0)?.host }.first.map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
     }
 }
+
+extension RecentFilesState {
+    /// Trims the shelf, then lists its copies with the folders' files (newest first) and its use.
+    mutating func addShelf(_ shelf: Shelf, limitBytes: Double, expiryHours: Double?, now: Date = Date()) {
+        shelf.trim(limitBytes: limitBytes, expiryHours: expiryHours, now: now)
+        let items = shelf.items()
+        let kept = items.prefix(RecentFilesService.perSource).map {
+            RecentFile(id: $0.url.path, name: $0.url.lastPathComponent, size: $0.bytes, addedAt: $0.addedAt, source: .shelf, from: nil)
+        }
+        files = (files + kept).sorted { $0.addedAt > $1.addedAt }
+        self.shelf = ShelfState(bytes: items.reduce(0) { $0 + $1.bytes }, limitBytes: limitBytes, expiryHours: expiryHours)
+    }
+}
+
+struct KeepResult: Encodable { var kept: [String]; var skipped: [String] }

@@ -69,6 +69,12 @@ struct Shelf: Sendable {
 
     /// Drops what expired, then the oldest until the shelf fits in `limitBytes`.
     func trim(limitBytes: Double, expiryHours: Double?, now: Date = Date()) {
+        let fm = FileManager.default
+        // A copy moved to the Trash (`files.trash`) leaves its folder behind.
+        for folder in (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        where (try? fm.contentsOfDirectory(atPath: folder.path))?.filter({ !$0.hasPrefix(".") }).isEmpty == true {
+            try? fm.removeItem(at: folder)
+        }
         var items = items()
         if let expiryHours {
             let cutoff = (now.timeIntervalSince1970 - expiryHours * 3600) * 1000
