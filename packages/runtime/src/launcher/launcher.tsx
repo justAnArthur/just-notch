@@ -140,7 +140,7 @@ const LOADING_AFTER_MS = 150
 const SPLIT = motionScale.small
 const QUICK = motionScale.micro
 /** The close's fade, in seconds. */
-const CLOSE_S = 0.06
+const CLOSE_S = 0.05
 /** After the keyboard goes back, before an action runs: the app in front takes it, so a paste lands there. */
 const HANDOFF_MS = 40
 /** How long a first ↩ on an action that can't be undone waits for the second. */
@@ -331,6 +331,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     if (phaseRef.current === 'closed' || phaseRef.current === 'closing') return
     const token = ++run.current
     const alive = () => token === run.current
+    // Closing has no drop: a quick fade and settle, so it gets out of the way at once. It starts before the
+    // re-render below, which would otherwise delay its first frame.
+    const fading = reduced ? undefined : animate(fade, 0, { duration: CLOSE_S, ease: [0.4, 0, 1, 1] })
     setPhase('closing')
     setContent(false)
     setOutlined(false)
@@ -343,10 +346,8 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       setLauncherOpen(false)
       setLauncherRegions([])
     }
-    if (reduced) return finish()
-
-    // Closing has no drop: a quick fade and settle, so it gets out of the way at once.
-    await animate(fade, 0, { duration: CLOSE_S, ease: [0.4, 0, 1, 1] })
+    if (!fading) return finish()
+    await fading
     if (!alive()) return
     finish()
   }
