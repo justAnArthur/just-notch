@@ -250,6 +250,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         }
     }
 
+    /// A call just found Accessibility missing or stale: the menu's warning follows at once.
+    func accessibilityChanged() {
+        refreshStatusItem()
+    }
+
     /// The warning item and the icon's tooltip while Accessibility is broken.
     private func refreshStatusItem() {
         let broken = Accessibility.state() == .broken

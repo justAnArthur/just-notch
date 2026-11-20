@@ -262,7 +262,54 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             guard let service = services.first(where: { $0.methods.contains(method) }) else {
                 throw ServiceError("unknown method \(method)")
             }
-            return try await service.handle(method: method, params: params)
+            if let answer = try await withoutAccessibility(method: method, params: params, service: service) { return answer }
+            do {
+                let result = try await service.handle(method: method, params: params)
+                if method == "windows.setFrame" { Accessibility.reportSuccess() }
+                return result
+            } catch let error as ServiceError where error.message.hasPrefix(Self.accessibilityError) {
+                // Trusted, yet macOS refused the call: a stale grant. The menu and Permissions show Needs reset.
+                Accessibility.reportFailure()
+                app.accessibilityChanged()
+                AccessibilitySheet.explain(Self.accessibilityFeature(method), state: .broken)
+                throw error
+            }
+        }
+    }
+
+    /// How WindowsService starts the error for a missing or stale grant.
+    private static let accessibilityError = "Just Notch needs Accessibility"
+
+    private static func accessibilityFeature(_ method: String) -> AccessibilitySheet.Feature {
+        method.hasPrefix("windows.") ? .windows : method == "clipboard.paste" ? .paste : .overlay
+    }
+
+    /// The calls that need Accessibility, answered here while it isn't allowed, so a service's own system prompt
+    /// never comes first: the sheet explains, then asks. A paste still copies the clip.
+    private func withoutAccessibility(method: String, params: Data, service: NotchService) async throws -> Data? {
+        switch method {
+        case "windows.front", "windows.setFrame", "clipboard.paste":
+            break
+        case "hud.setEnabled" where (try? decode(EnabledFlag.self, params).enabled) == true:
+            break
+        default:
+            return nil
+        }
+        let state = Accessibility.state()
+        if state == .allowed { return nil }
+        AccessibilitySheet.explain(Self.accessibilityFeature(method), state: state)
+        app.accessibilityChanged()
+        switch method {
+        case "clipboard.paste":
+            let id = try decode(ClipIdParams.self, params).id
+            _ = try await service.handle(method: "clipboard.copy", params: try JSONEncoder().encode(ClipIdParams(id: id)))
+            return try JSONSerialization.data(withJSONObject: ["pasted": false])
+        case "hud.setEnabled":
+            return try JSONSerialization.data(withJSONObject: ["enabled": false])
+        default:
+            throw ServiceError(state == .broken
+                ? "Just Notch needs Accessibility to move windows: it's on in System Settings but needs a reset. Open Settings › Permissions and click Fix."
+                : "Just Notch needs Accessibility to move windows: allow it in System Settings › Privacy & Security › Accessibility")
         }
     }
 
@@ -445,20 +492,41 @@ struct PermissionStateReply: Encodable {
 
 /// Accessibility as macOS honours it, not as System Settings shows it. After an update re-signs the app the
 /// toggle can stay on while `AXIsProcessTrusted()` says no, or say yes while every AX call fails: both are broken.
+@MainActor
 enum Accessibility {
     enum State { case allowed, notAsked, broken }
 
     /// Set once the app has been seen trusted, so losing it later reads as broken rather than never asked.
     private static let grantedKey = "permissions.accessibility.granted"
+    /// A call failed with `.apiDisabled` while macOS said the app is trusted: the grant is stale until a move
+    /// works again or the app is seen untrusted (the user removed it from the list to re-add it).
+    private static var failed = false
 
     static func state() -> State {
         guard AXIsProcessTrusted() else {
+            failed = false
             return UserDefaults.standard.bool(forKey: grantedKey) ? .broken : .notAsked
         }
         var value: CFTypeRef?
         let probe = AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &value)
-        if probe == .apiDisabled { return .broken }
+        if probe == .apiDisabled || failed { return .broken }
         UserDefaults.standard.set(true, forKey: grantedKey)
         return .allowed
     }
+
+    static func reportFailure() { failed = true }
+    static func reportSuccess() { failed = false }
+
+    /// macOS's own prompt, which offers to open System Settings.
+    static func prompt() {
+        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+    }
+}
+
+private struct EnabledFlag: Decodable {
+    var enabled: Bool
+}
+
+private struct ClipIdParams: Codable {
+    var id: String
 }
