@@ -19,6 +19,8 @@ final class PanelController {
     private var fileDragActive = false
     /// A file drag from another app is in flight (set by the app's pointer polling).
     private var externalFileDrag = false
+    /// Faded out for a full-screen app on this screen, or a call (`ScreenLayout.hideWhen`).
+    private(set) var steppedAside = false
 
     init(screen: NSScreen, events: EventDispatcher, makeWebView: (NSRect) -> NotchWebView) {
         let layout = ScreenLayout.layout(screen)
@@ -30,6 +32,7 @@ final class PanelController {
         webView.registerForDraggedTypes([.fileURL])
         panel.contentView = webView
         panel.orderFrontRegardless()
+        PresenceMonitor.shared.add(self)
     }
 
     func move(to screen: NSScreen) {
@@ -41,6 +44,7 @@ final class PanelController {
     }
 
     func close() {
+        PresenceMonitor.shared.remove(self)
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
         panel.close()
     }
@@ -64,7 +68,7 @@ final class PanelController {
             events.send("hover", HoverPayload(inside: inZone), key: "hover", to: [webView])
         }
 
-        let interactive = inRegion || ((externalFileDrag || fileDragActive) && inZone)
+        let interactive = !steppedAside && (inRegion || ((externalFileDrag || fileDragActive) && inZone))
         // Keep a press that started on the island (a drag gesture, a text selection) inside the panel.
         let pressed = NSEvent.pressedMouseButtons != 0 && !panel.ignoresMouseEvents && !externalFileDrag
         if panel.ignoresMouseEvents == interactive, interactive || !pressed {
@@ -83,6 +87,22 @@ final class PanelController {
 
     private func panelPoint(screen point: NSPoint) -> CGPoint {
         CGPoint(x: point.x - panel.frame.minX, y: panel.frame.maxY - point.y)
+    }
+
+    // MARK: stepping aside
+
+    /// Fades the island out (or back) for what `PresenceMonitor` saw; never while the launcher is open here.
+    func updatePresence(fullScreen: Set<String>, call: Bool) {
+        let rules = ScreenLayout.hideWhen
+        let aside = !panel.launcher && ((rules.fullScreen && fullScreen.contains(geometry.screenId)) || (rules.calls && call))
+        guard aside != steppedAside else { return }
+        steppedAside = aside
+        if aside { panel.ignoresMouseEvents = true }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.2
+            panel.animator().alphaValue = aside ? 0 : 1
+        }
+        if !aside { pointerMoved() }
     }
 
     // MARK: files
@@ -136,4 +156,74 @@ final class PanelController {
 
 struct PathsPayload: Encodable {
     var paths: [String]
+}
+
+/// Watches what makes the island step aside, for every panel: Space and app switches (a full-screen app), screen
+/// changes, and the microphone (a call). A Space switch animates, so the check runs again once it has settled.
+@MainActor
+final class PresenceMonitor {
+    static let shared = PresenceMonitor()
+
+    private var panels: [ObjectIdentifier: PanelController] = [:]
+    private var observers: [NSObjectProtocol] = []
+    private var stopMicrophone: (() -> Void)?
+    private var settle: Task<Void, Never>?
+
+    func add(_ panel: PanelController) {
+        panels[ObjectIdentifier(panel)] = panel
+        if observers.isEmpty { start() }
+        check()
+    }
+
+    func remove(_ panel: PanelController) {
+        panels[ObjectIdentifier(panel)] = nil
+        if panels.isEmpty { stop() }
+    }
+
+    /// Settings changed (`ScreenLayout.hideWhen`): apply at once.
+    func check() {
+        let screens = Dictionary(NSScreen.screens.map { (ScreenLayout.id($0), CGDisplayBounds(ScreenLayout.displayId($0))) }) { a, _ in a }
+        let rules = ScreenLayout.hideWhen
+        var fullScreen = rules.fullScreen ? Presence.fullScreenNow(screens: screens) : []
+        // The app in front says so itself; it sits on the main screen (the one with the menu bar it hid).
+        if rules.fullScreen, fullScreen.isEmpty, NSApp.currentSystemPresentationOptions.contains(.fullScreen), let main = NSScreen.main {
+            fullScreen.insert(ScreenLayout.id(main))
+        }
+        let call = rules.calls && Presence.microphoneInUse()
+        for panel in panels.values { panel.updatePresence(fullScreen: fullScreen, call: call) }
+    }
+
+    private func start() {
+        let center = NSWorkspace.shared.notificationCenter
+        let names = [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification,
+                     NSWorkspace.didDeactivateApplicationNotification]
+        observers = names.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.checkSettled() } }
+        }
+        observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkSettled() }
+        })
+        stopMicrophone = Presence.watchMicrophone { Task { @MainActor in PresenceMonitor.shared.check() } }
+    }
+
+    private func stop() {
+        for observer in observers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            NotificationCenter.default.removeObserver(observer)
+        }
+        observers = []
+        stopMicrophone?()
+        stopMicrophone = nil
+        settle?.cancel()
+    }
+
+    private func checkSettled() {
+        check()
+        settle?.cancel()
+        settle = Task {
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            check()
+        }
+    }
 }

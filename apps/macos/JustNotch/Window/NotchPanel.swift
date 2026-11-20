@@ -29,6 +29,8 @@ final class NotchPanel: NSPanel {
         isReleasedWhenClosed = false
         acceptsMouseMovedEvents = true
         ignoresMouseEvents = true
+        // Kept out of screen shares and recordings, where the island would only distract.
+        sharingType = .none
     }
 
     /// The default keeps windows below the menu bar; the panel's top edge must be flush with the screen top.
@@ -99,20 +101,85 @@ enum ScreenLayout {
         return CFUUIDCreateString(nil, uuid) as String
     }
 
-    /// `panel.screens` in the app's defaults; anything but `all` means `notched`.
+    /// `panel.screens` in the app's defaults; anything but `all` means `notched`. Superseded by per-display modes,
+    /// and still read for a display without one.
     static var screens: AppPreferences.Screens {
         get { UserDefaults.standard.string(forKey: "panel.screens") == "all" ? .all : .notched }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "panel.screens") }
     }
 
-    /// The screens that get a panel: by default only the notched (else built-in, else main) screen.
-    static func targetScreens() -> [NSScreen] {
-        let screens = NSScreen.screens
-        if Self.screens == .all { return screens }
-        let preferred = screens.first { $0.safeAreaInsets.top > 0 }
+    /// What the island does on a display: nothing (`hidden`), keep to activities and hover (`pill`), or stay (`full`).
+    enum DisplayMode: String, Codable {
+        case hidden, pill, full
+    }
+
+    struct DisplayInfo: Codable, Equatable {
+        var id: String
+        var name: String
+        var hasNotch: Bool
+        var mode: DisplayMode
+    }
+
+    /// When the island steps aside on its own.
+    struct HideWhen: Codable, Equatable {
+        var fullScreen = true
+        var calls = true
+    }
+
+    private static let modesKey = "panel.displayModes"
+    private static let hideWhenKey = "panel.hideWhen"
+
+    /// The modes the user chose, by display id.
+    static var modes: [String: DisplayMode] {
+        get {
+            let raw = UserDefaults.standard.dictionary(forKey: modesKey) as? [String: String] ?? [:]
+            return raw.compactMapValues(DisplayMode.init(rawValue:))
+        }
+        set { UserDefaults.standard.set(newValue.mapValues(\.rawValue), forKey: modesKey) }
+    }
+
+    /// Merges `changes` into the chosen modes.
+    static func setModes(_ changes: [String: DisplayMode]) {
+        modes.merge(changes) { $1 }
+    }
+
+    static var hideWhen: HideWhen {
+        get {
+            UserDefaults.standard.data(forKey: hideWhenKey).flatMap { try? JSONDecoder().decode(HideWhen.self, from: $0) } ?? HideWhen()
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: hideWhenKey) }
+    }
+
+    /// The display the island belongs on when nothing says otherwise: the notched, else built-in, else main one.
+    private static func preferred(_ screens: [NSScreen]) -> NSScreen? {
+        screens.first { $0.safeAreaInsets.top > 0 }
             ?? screens.first { CGDisplayIsBuiltin(displayId($0)) != 0 }
             ?? NSScreen.main
             ?? screens.first
-        return preferred.map { [$0] } ?? []
+    }
+
+    /// A display's mode: the user's choice, else `full` on the preferred display (every display with the legacy
+    /// `all`) and `hidden` elsewhere.
+    static func mode(_ screen: NSScreen, among screens: [NSScreen] = NSScreen.screens) -> DisplayMode {
+        mode(id: id(screen), preferred: preferred(screens).map(id) == id(screen), chosen: modes, legacyAll: Self.screens == .all)
+    }
+
+    static func mode(id: String, preferred: Bool, chosen: [String: DisplayMode], legacyAll: Bool) -> DisplayMode {
+        chosen[id] ?? (preferred || legacyAll ? .full : .hidden)
+    }
+
+    /// Every connected display with its mode, for Settings.
+    static func displays() -> [DisplayInfo] {
+        let screens = NSScreen.screens
+        return screens.map { DisplayInfo(id: id($0), name: $0.localizedName, hasNotch: $0.safeAreaInsets.top > 0, mode: mode($0, among: screens)) }
+    }
+
+    /// The screens that get a panel: those not `hidden`. With every display hidden the preferred one keeps its
+    /// panel, island hidden, since the launcher drops out of a panel.
+    static func targetScreens() -> [NSScreen] {
+        let screens = NSScreen.screens
+        let shown = screens.filter { mode($0, among: screens) != .hidden }
+        if shown.isEmpty, let fallback = preferred(screens) { return [fallback] }
+        return shown
     }
 }
