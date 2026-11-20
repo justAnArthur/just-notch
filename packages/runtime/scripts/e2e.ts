@@ -344,6 +344,14 @@ await away()
 await mock(page, 'hover(false)')
 await mock(page, 'stopMedia()')
 await waitState(page, 'idle')
+// Plugin pages are reached through Settings › Plugins (one path since kit 0.6); System starts off.
+const openSystemSettings = async () => {
+  await enable(page, 'system', true)
+  // Settings reopens on the page it was left on.
+  if (await page.locator('#island').getByRole('switch', { name: /CPU load/ }).isVisible()) return
+  await page.locator('#island').getByRole('button', { name: 'Plugins', exact: true }).first().click()
+  await page.locator('#island').getByRole('button', { name: /^System/ }).first().click()
+}
 // Settings is a page of the island, on its tall snap.
 await host(page, 'window.openSettings', {})
 await waitState(page, 'expanded')
@@ -352,7 +360,7 @@ await settle(page)
 const sheet = (await page.locator('#island > svg path').first().boundingBox())!
 check(sheet.height > 500, `settings opens in the island on the tall snap (${Math.round(sheet.height)}px)`)
 await shoot(page, '10-settings')
-await page.locator('#island').getByRole('button', { name: 'System' }).click()
+await openSystemSettings()
 await page.locator('#island').getByRole('switch', { name: /CPU load/ }).click()
 await page.keyboard.press('Escape')
 await away()
@@ -361,7 +369,7 @@ await waitState(page, 'compact')
 check(true, "a plugin's switch in settings takes effect: the System wings show")
 await host(page, 'window.openSettings', {})
 await waitState(page, 'expanded')
-await page.locator('#island').getByRole('button', { name: 'System' }).click()
+await openSystemSettings()
 await page.locator('#island').getByRole('switch', { name: /CPU load/ }).click()
 await page.keyboard.press('Escape')
 
