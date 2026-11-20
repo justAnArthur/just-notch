@@ -4,6 +4,7 @@ import CoreBluetooth
 import CoreLocation
 import EventKit
 import NotchServices
+import UserNotifications
 import WebKit
 
 /// JS → Swift: the `host` message handler. Checks permissions, answers host methods,
@@ -197,7 +198,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             return nil
 
         case "permissions.status":
-            return GrantedResult(granted: permissionGranted(try decode(PermissionParams.self, params).permission)).json()
+            return GrantedResult(granted: await permissionGranted(try decode(PermissionParams.self, params).permission)).json()
 
         case "shortcuts.register":
             let id = try hotKeys.register(try decode(AcceleratorParams.self, params).accelerator, owner: ObjectIdentifier(webView))
@@ -344,10 +345,10 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         )
     }
 
-    private func permissionGranted(_ permission: String) -> Bool {
+    private func permissionGranted(_ permission: String) async -> Bool {
         switch permission {
         case "accessibility":
-            return AXIsProcessTrusted()
+            return Accessibility.state() == .allowed
         case "calendar":
             return EKEventStore.authorizationStatus(for: .event) == .fullAccess
         case "bluetooth":
@@ -358,6 +359,8 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             // Music is the usual automation target (media control); there is no app-independent check.
             let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.Music")
             return AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, false) == noErr
+        case "notifications":
+            return [.authorized, .provisional].contains(await UNUserNotificationCenter.current().notificationSettings().authorizationStatus)
         default:
             return false
         }
@@ -381,5 +384,25 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         } catch {
             throw ServiceError("invalid params: \(error.localizedDescription)")
         }
+    }
+}
+
+/// Accessibility as macOS honours it, not as System Settings shows it. After an update re-signs the app the
+/// toggle can stay on while `AXIsProcessTrusted()` says no, or say yes while every AX call fails: both are broken.
+enum Accessibility {
+    enum State { case allowed, notAsked, broken }
+
+    /// Set once the app has been seen trusted, so losing it later reads as broken rather than never asked.
+    private static let grantedKey = "permissions.accessibility.granted"
+
+    static func state() -> State {
+        guard AXIsProcessTrusted() else {
+            return UserDefaults.standard.bool(forKey: grantedKey) ? .broken : .notAsked
+        }
+        var value: CFTypeRef?
+        let probe = AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &value)
+        if probe == .apiDisabled { return .broken }
+        UserDefaults.standard.set(true, forKey: grantedKey)
+        return .allowed
     }
 }
