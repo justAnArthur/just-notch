@@ -29,6 +29,21 @@ final class Updater: NSObject {
 
     var canCheck: Bool { enabled && controller.updater.canCheckForUpdates }
 
+    /// Sparkle's own scheduled check (once a day), as Settings shows it.
+    var automaticChecks: Bool {
+        get { enabled && controller.updater.automaticallyChecksForUpdates }
+        set { if enabled { controller.updater.automaticallyChecksForUpdates = newValue } }
+    }
+
+    /// Downloads a found update in the background and installs it on quit.
+    var automaticDownloads: Bool {
+        get { enabled && controller.updater.automaticallyDownloadsUpdates }
+        set { if enabled { controller.updater.automaticallyDownloadsUpdates = newValue } }
+    }
+
+    /// The last check, scheduled or not; nil before the first one.
+    var lastChecked: Date? { enabled ? controller.updater.lastUpdateCheckDate : nil }
+
     /// The standard flow: Sparkle's alert, download and Install and Relaunch.
     func install() {
         guard enabled else { return }
@@ -39,12 +54,35 @@ final class Updater: NSObject {
 
     /// Asks the appcast without UI.
     func check() async -> UpdateState {
-        guard enabled else { return .error("Updates are off in this build.") }
-        guard controller.updater.canCheckForUpdates else { return .error("An update is already in progress.") }
+        guard enabled else { return .error(Self.offMessage) }
+        guard controller.updater.canCheckForUpdates else { return .error("An update is already under way.") }
         return await withCheckedContinuation { continuation in
             checks.append(continuation)
             found = nil
             controller.updater.checkForUpdateInformation()
+        }
+    }
+
+    static let offMessage = "This copy doesn't update itself. Get new versions from the website."
+
+    /// What went wrong, in words a buyer understands; Sparkle's own text goes to the log.
+    static func message(for error: NSError) -> String {
+        log.error("update: \(error.domain, privacy: .public) \(error.code) \(error.localizedDescription, privacy: .public)")
+        let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        if error.domain == NSURLErrorDomain || underlying?.domain == NSURLErrorDomain {
+            return "Couldn't reach the update server. Check your connection and try again."
+        }
+        switch error.domain == SUSparkleErrorDomain ? SUError(rawValue: OSStatus(error.code)) : nil {
+        case .appcastError, .appcastParseError, .downloadError:
+            return "Couldn't reach the update server. Try again later."
+        case .signatureError, .validationError:
+            return "The update didn't pass its security check, so it wasn't installed. Try again later."
+        case .installationWriteNoPermissionError:
+            return "Just Notch can't replace itself where it is. Move it to Applications and try again."
+        case .installationError, .installationCanceledError, .relaunchError, .unarchivingError:
+            return "The update couldn't be installed. Quit Just Notch and try again."
+        default:
+            return "Something went wrong while updating. Try again later."
         }
     }
 
@@ -89,10 +127,10 @@ extension Updater: SPUUpdaterDelegate {
         // Closing Sparkle's window or putting the install off ends the session without failing it.
         let failure = noUpdate || code == .installationCanceledError || code == .installationAuthorizeLaterError ? nil : error
         guard updateCheck == .updateInformation else {
-            if noUpdate { onState?(.idle) } else if let failure { onState?(.error(failure.localizedDescription)) }
+            if noUpdate { onState?(.idle) } else if let failure { onState?(.error(Self.message(for: failure))) }
             return
         }
-        let state: UpdateState = if let failure { .error(failure.localizedDescription) } else { found.map(available) ?? .idle }
+        let state: UpdateState = if let failure { .error(Self.message(for: failure)) } else { found.map(available) ?? .idle }
         checks.forEach { $0.resume(returning: state) }
         checks = []
     }
