@@ -1,0 +1,26 @@
+{
+  "name": "@just-notch/plugin-controls",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "notch build",
+    "dev": "notch dev",
+    "check": "notch check",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@just-notch/sdk": "workspace:*",
+    "lucide-react": "^1.72.0"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@justanarthur/modo-ui": "^2.2.0",
+    "@justanarthur/modo-ui-notch": "^0.6.0",
+    "@just-notch/cli": "workspace:*",
+    "@types/react": "^19.2.0",
+    "react": "^19.2.0"
+  }
+}
