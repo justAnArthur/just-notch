@@ -25,16 +25,13 @@ const ALL: Sources = { downloads: true, screenshots: true }
 const toDownload = (d: ActiveDownload | undefined): RecentDownload | null =>
   d?.total ? { id: d.id, name: d.name, received: d.received, total: d.total, rate: d.rate, from: d.from } : null
 
-/** A file the kit can list: its lists know only the watched folders. */
-type FolderFile = RecentFile & { source: WatchedSource }
-const fromFolder = (f: RecentFile): f is FolderFile => f.source !== 'shelf'
-/** Until the kit has a shelf tab, kept copies list with the downloads, marked as kept. */
-const listed = (f: RecentFile): FolderFile => (fromFolder(f) ? f : { ...f, source: 'downloads', from: 'kept on the shelf' })
+/** Landed in a watched folder, as opposed to kept on the shelf by a drop. */
+const landedInFolder = (f: RecentFile) => f.source !== 'shelf'
 
 const thumbnails = new Map<string, string | null>()
 
 /** QuickLook thumbnails for the files shown, fetched once each. */
-function useThumbnails(files: FolderFile[]) {
+function useThumbnails(files: RecentFile[]) {
   const { call } = usePlugin()
   const [, rerender] = useState(0)
   useEffect(() => {
@@ -51,26 +48,28 @@ function useThumbnails(files: FolderFile[]) {
       live = false
     }
   }, [call, files])
-  return (file: FolderFile): KitFile => ({ ...file, thumbnail: thumbnails.get(file.id) ?? undefined })
+  return (file: RecentFile): KitFile => ({ ...file, thumbnail: thumbnails.get(file.id) ?? undefined })
 }
 
 function useFiles() {
   const state = useTopic('recentFiles')
   const [sources] = useStorage(SOURCES, ALL)
   const [show] = useStorage(SHOW, 12)
-  const files = (state?.files ?? []).map(listed).filter((f) => sources[f.source])
-  const shown = (['downloads', 'screenshots'] as const).flatMap((s) => files.filter((f) => f.source === s).slice(0, show))
-  return { state, files: shown, download: sources.downloads ? toDownload(state?.downloads[0]) : null }
+  // The shelf needs no folder, so it stays even with both folders off or out of reach.
+  const denied = state?.access === 'denied'
+  const offered: RecentFile['source'][] = [...(['downloads', 'screenshots'] as const).filter((s) => sources[s] && !denied), 'shelf']
+  const files = offered.flatMap((s) => (state?.files ?? []).filter((f) => f.source === s).slice(0, show))
+  return { state, files, offered, download: sources.downloads && !denied ? toDownload(state?.downloads[0]) : null }
 }
 
 function Files() {
   const { call, storage } = usePlugin()
   useEffect(() => void storage.set(WATCHING, true), [storage])
-  const { state, files, download } = useFiles()
+  const { state, files, offered, download } = useFiles()
   const withThumbnail = useThumbnails(files)
   const layout = useSheet()
 
-  if (state?.access === 'denied')
+  if (state?.access === 'denied' && !files.length)
     return (
       <Widget.Message
         icon={FolderLock}
@@ -88,10 +87,13 @@ function Files() {
     <RecentFiles
       layout={layout}
       files={files.map(withThumbnail)}
+      sources={offered}
+      shelf={state?.shelf}
       download={download}
       onOpen={(file) => void call('files.open', { path: file.id })}
       onReveal={(file) => void call('files.reveal', { path: file.id })}
       onCopy={(file) => void call('files.copy', { paths: [file.id] })}
+      onAirDrop={(file) => void call('files.airdrop', { paths: [file.id] })}
       onDelete={(file) => void call('files.trash', { path: file.id })}
       onClear={(source) => void call('recentFiles.clear', { source })}
       onCancelDownload={(d) => void call('recentFiles.cancelDownload', { id: d.id })}
@@ -164,8 +166,9 @@ const EXPIRY = [
   { value: '168', label: '1 week' },
   { value: 'never', label: 'Until cleared' },
 ]
-const GB = 1024 ** 3
-const LIMITS = [0.5, 2, 10].map((gb) => ({ value: String(gb * GB), label: gb < 1 ? `${gb * 1024} MB` : `${gb} GB` }))
+/** Decimal, as the kit and Finder count. */
+const GB = 1e9
+const LIMITS = [0.5, 2, 10].map((gb) => ({ value: String(gb * GB), label: gb < 1 ? `${gb * 1000} MB` : `${gb} GB` }))
 
 function Shelf() {
   const { call } = usePlugin()
@@ -194,7 +197,8 @@ function Shelf() {
         label="Up to"
         description="Past this the oldest go first, and a bigger file isn't kept."
         options={LIMITS}
-        value={limit}
+        // 1.10 stored binary gigabytes; show the nearest option.
+        value={LIMITS.find((o) => Math.abs(Number(o.value) - Number(limit)) < Number(o.value) / 10)?.value ?? limit}
         onValueChange={(v) => {
           setLimit(v)
           void call('recentFiles.setShelf', { limitBytes: Number(v) })
@@ -325,7 +329,7 @@ function activate(ctx: PluginContext) {
     if (!download && shown) ctx.activity.hide()
     shown = !!download
 
-    const fresh = seen ? state.files.filter(fromFolder).filter((f) => !seen?.has(f.id) && sources[f.source]) : []
+    const fresh = seen ? state.files.filter((f) => landedInFolder(f) && !seen?.has(f.id) && sources[f.source as WatchedSource]) : []
     seen = new Set(state.files.map((f) => f.id))
     const newest = fresh.sort((a, b) => b.addedAt - a.addedAt)[0]
     if (!newest || ctx.island.get() === 'expanded' || (await ctx.storage.get<boolean>(FLASH)) === false) return
