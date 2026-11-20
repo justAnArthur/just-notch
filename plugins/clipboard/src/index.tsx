@@ -74,7 +74,7 @@ function IgnoredApps() {
   }
 
   return (
-    <List.Section title="Never record from" aside={`${shown.length} apps`}>
+    <List.Section title="Never record from" aside={`${shown.length} ${shown.length === 1 ? 'app' : 'apps'}`}>
       {shown.map((id) => (
         <List.Row key={id} label={<AppLabel app={byId.get(id) ?? { bundleId: id, name: id }} />}>
           <Button variant="ghost" size="icon" aria-label={`Remove ${byId.get(id)?.name ?? id}`} onClick={() => set(ignored.filter((a) => a !== id))}>
