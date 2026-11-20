@@ -17,7 +17,7 @@ describe('root ranking', () => {
       { title: 'Actions', rows: [] },
       { title: 'Files', rows: scored('rea', 'README.md', 'Already read.txt') },
     ]
-    expect(titles(rankRoot({ query: 'rea', groups, frecency: {}, knowledge: {}, web: row('web', 'Search Google'), now }))).toEqual([
+    expect(titles(rankRoot({ query: 'rea', groups, frecency: {}, knowledge: {}, web: [row('web', 'Search Google')], now }))).toEqual([
       'Top Hit: README.md',
       'Applications: Reality Composer',
       'Files: Already read.txt',
@@ -39,7 +39,7 @@ describe('root ranking', () => {
       { title: 'Applications', rows: scored('cal', 'Calculator') },
     ]
     const answer = { title: 'Calculator', rows: [row('answer:math', '4')] }
-    expect(titles(rankRoot({ query: 'cal', groups, frecency: {}, knowledge: {}, answer, web: row('web'), now }))).toEqual([
+    expect(titles(rankRoot({ query: 'cal', groups, frecency: {}, knowledge: {}, answer, web: [row('web')], now }))).toEqual([
       'Calculator: 4',
       'Top Hit: Calculator',
       "GitHub: Couldn't reach GitHub",

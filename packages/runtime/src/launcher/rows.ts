@@ -5,6 +5,10 @@ import type { InlineAnswer } from './engines'
 /** Something a row does: the first runs on ↩, the second on ⌘↩, the third on ⇧↩. */
 export interface RowAction {
   title: string
+  /** A glyph beside it in the ⌘K list. */
+  icon?: ComponentType<IconProps>
+  /** Asks for a second ↩ before it runs (Empty Trash), with this line in the row meanwhile. */
+  confirm?: string
   run(): void | Promise<void>
   /** Runs it while its row is selected, in accelerator syntax (`Command+.`); shown in the ⌘K list. */
   shortcut?: string

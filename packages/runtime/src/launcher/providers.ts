@@ -1,16 +1,18 @@
 import type { AppInfo, CurrencyRates, FileHit, Method, Methods, SystemAction } from '@just-notch/bridge-schema'
 import type { IconProps, SearchItem } from '@just-notch/sdk'
-import { AppWindow, CircleAlert, Folder, Globe, Layers, Moon, MonitorOff, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
+import { AppWindow, ArrowUpRight, CircleAlert, Copy, Folder, FolderSearch, Globe, Layers, Moon, MonitorOff, Play, Search, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useState } from 'react'
 import { call } from '../host/client'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
-import { searchApps, useAppIndex, useFrecency } from './apps'
+import { searchApps, useAppIndex } from './apps'
 import { inlineAnswer } from './engines'
 import { type Frecency, frecencyScore, type Knowledge, queryBoost, rankScore } from './frecency'
 import { bestScore, FUZZY_MAX, matchScore, normalize } from './match'
-import { type Group, rankRoot } from './rank'
+import { aliasedIds, fallbackUrl, type ItemSnapshot, recentIds, shownFallbacks } from './prefs'
+import { type Group, rankRoot, type Scored } from './rank'
 import type { Row, Section } from './rows'
 import { type Source, useSources } from './sources'
+import type { LauncherStore } from './store'
 
 /** A round button beside the bar: a built-in scope or a plugin's. */
 export interface Scope {
@@ -34,6 +36,10 @@ const BUILT_IN: Scope[] = [
 export const MAX_SCOPES = 6
 const SCOPE_LIMIT = 50
 const FILES_DEBOUNCE_MS = 110
+/** The empty root's Recent, under any favourites. */
+const RECENT_LIMIT = 8
+/** An alias typed exactly: above any match and habit. */
+const ALIAS_MATCH = 5000
 /** Spotlight on a cold index can take a while; past this the Files section says so. */
 const FILES_TIMEOUT_MS = 2000
 
@@ -49,11 +55,11 @@ export function useScopes(): Scope[] {
   return [...BUILT_IN, ...own].slice(0, MAX_SCOPES)
 }
 
-const SYSTEM_ACTIONS: { action: SystemAction; title: string; keywords: string[]; icon: ComponentType<IconProps> }[] = [
+const SYSTEM_ACTIONS: { action: SystemAction; title: string; keywords: string[]; icon: ComponentType<IconProps>; confirm?: string }[] = [
   { action: 'sleep', title: 'Sleep', keywords: ['sleep', 'suspend'], icon: Moon },
   { action: 'displaySleep', title: 'Turn Off Display', keywords: ['display', 'screen off'], icon: MonitorOff },
   { action: 'screenSaver', title: 'Start Screen Saver', keywords: ['screen saver', 'screensaver'], icon: Sparkles },
-  { action: 'emptyTrash', title: 'Empty Trash', keywords: ['trash', 'bin'], icon: Trash2 },
+  { action: 'emptyTrash', title: 'Empty Trash', keywords: ['trash', 'bin'], icon: Trash2, confirm: 'Press ↩ again to empty the Trash' },
   { action: 'toggleDarkMode', title: 'Toggle Dark Mode', keywords: ['dark mode', 'appearance', 'light mode'], icon: SunMoon },
 ]
 
@@ -83,6 +89,12 @@ export function formatBytes(bytes: number): string {
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
+/** Show in Finder and Copy Path, for anything with a path. */
+const pathActions = (path: string): Row['actions'] => [
+  { title: 'Show in Finder', icon: FolderSearch, shortcut: 'Command+Shift+R', run: () => run('files.reveal', { path }) },
+  { title: 'Copy Path', icon: Copy, shortcut: 'Command+Shift+C', run: () => run('clipboard.writeText', { text: path }) },
+]
+
 function fileRow(hit: FileHit): Row {
   return {
     id: `file:${hit.path}`,
@@ -100,9 +112,8 @@ function fileRow(hit: FileHit): Row {
       ],
     },
     actions: [
-      { title: 'Open', run: () => run('files.open', { path: hit.path }) },
-      { title: 'Show in Finder', run: () => run('files.reveal', { path: hit.path }) },
-      { title: 'Copy Path', run: () => run('clipboard.writeText', { text: hit.path }) },
+      { title: 'Open', icon: ArrowUpRight, run: () => run('files.open', { path: hit.path }) },
+      ...pathActions(hit.path),
     ],
   }
 }
@@ -110,6 +121,63 @@ function fileRow(hit: FileHit): Row {
 function pluginRow(scope: Scope, item: SearchItem): Row {
   const icon = typeof item.icon === 'string' ? { src: item.icon } : item.icon ? { glyph: item.icon } : { glyph: scope.icon }
   return { id: `${scope.id}:${item.id}`, title: item.title, subtitle: item.subtitle, icon, accessory: item.accessory, actions: item.actions, preview: item.preview, plugin: scope.plugin?.installed.manifest.id }
+}
+
+function appRow(id: string, name: string, path: string): Row {
+  return {
+    id,
+    title: name,
+    icon: { path },
+    accessory: 'Application',
+    actions: [{ title: 'Open', icon: ArrowUpRight, run: () => run('apps.launch', { path }) }, ...pathActions(path)],
+  }
+}
+
+function actionRow({ id, title, action, shortcut }: Pick<ActionMatch, 'id' | 'title' | 'action' | 'shortcut'>): Row {
+  const system = action && SYSTEM_ACTIONS.find((a) => a.action === action)
+  return {
+    id,
+    title,
+    icon: { glyph: system?.icon ?? Workflow },
+    accessory: action ? 'Action' : 'Shortcut',
+    actions: [
+      {
+        title: 'Run',
+        icon: Play,
+        confirm: system?.confirm,
+        run: () => (action ? run('actions.system', { action }) : run('actions.runShortcut', { name: shortcut! })),
+      },
+    ],
+  }
+}
+
+/**
+ * A kept result as a row again, without searching: for Recent, Favourites, an alias or a hotkey. A plugin's result is
+ * asked of its provider again when it runs (by its title, inside its scope), since only the plugin can run it.
+ */
+export function rowFromSnapshot(snap: ItemSnapshot, scopes: Scope[]): Row | undefined {
+  const [kind, ...rest] = snap.id.split(':')
+  const key = rest.join(':')
+  if (kind === 'app' && snap.path) return appRow(snap.id, snap.title, snap.path)
+  if (kind === 'file' && snap.path) return { ...fileRow({ path: snap.path, name: snap.title, kind: snap.fileKind ?? 'other' }), id: snap.id }
+  if (kind === 'action') {
+    const system = SYSTEM_ACTIONS.find((a) => a.action === key)
+    return system && actionRow({ id: snap.id, title: system.title, action: system.action })
+  }
+  if (kind === 'shortcut') return actionRow({ id: snap.id, title: key, shortcut: key })
+  if (kind === 'plugin') {
+    const scope = scopes.find((s) => snap.id.startsWith(`${s.id}:`))
+    const search = scope?.plugin?.definition.search
+    if (!scope || !search) return undefined
+    const runFirst = async () => {
+      const items = await search.provide(snap.title, { ctx: scope.plugin!.ctx, signal: new AbortController().signal, root: false })
+      const item = items.find((i) => `${scope.id}:${i.id}` === snap.id)
+      if (!item?.actions[0]) throw new Error(`${snap.title} is gone from ${scope.title}`)
+      await item.actions[0].run()
+    }
+    return { id: snap.id, title: snap.title, subtitle: snap.subtitle, icon: { glyph: scope.icon }, accessory: scope.title, plugin: scope.plugin?.installed.manifest.id, actions: [{ title: 'Open', icon: ArrowUpRight, run: runFirst }] }
+  }
+  return undefined
 }
 
 /** A system action or a Shortcut that matches the query, best first. */
@@ -145,7 +213,7 @@ export interface SearchView {
   /** A provider is still answering the current query. */
   loading: boolean
   /** Remembers that the row was picked for what's typed now. */
-  record(id: string): void
+  record(row: Row): void
   /** Asks the providers again, after an action that changed their results (Pin, Delete). */
   refresh(): void
 }
@@ -171,15 +239,15 @@ function errorRow(id: string, title: string, error: 'failed' | 'timeout', net: b
  * Everything the launcher shows for `query` in `scope` (root when undefined): the inline answer, apps, plugin
  * scopes, actions, files and a web search, each from its own provider. The root ranks them as one list (rank.ts).
  */
-export function useSearch(query: string, scope: Scope | undefined, scopes: Scope[], open: boolean): SearchView {
+export function useSearch(query: string, scope: Scope | undefined, scopes: Scope[], open: boolean, store: LauncherStore): SearchView {
   const apps = useAppIndex(open)
-  const { frecency, knowledge, launched } = useFrecency()
+  const { frecency, knowledge, prefs, snapshots } = store
   const [rates, setRates] = useState<CurrencyRates | null>(null)
   const [shortcuts, setShortcuts] = useState<string[]>([])
   const q = query.trim()
   const known = normalize(q)
   const root = scope === undefined
-  const record = (id: string) => launched(id, known)
+  const record = (row: Row) => store.launched(row, known)
 
   useEffect(() => {
     if (!open) return
@@ -218,39 +286,21 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
   }
 
   const appResults = (limit: number) => (q ? searchApps(q, apps, frecency, limit) : root ? [] : allApps(apps))
-  const appRow = ({ id, app }: { id: string; app: AppInfo & { path: string } }): Row => ({
-    id,
-    title: app.name,
-    icon: { path: app.path },
-    accessory: 'Application',
-    actions: [
-      { title: 'Open', run: () => run('apps.launch', { path: app.path }) },
-      { title: 'Show in Finder', run: () => run('files.reveal', { path: app.path }) },
-      { title: 'Copy Path', run: () => run('clipboard.writeText', { text: app.path }) },
-    ],
-  })
-
   const actionResults = (limit: number) => matchActions(q, root, shortcuts, {}).slice(0, limit)
-  const actionRow = ({ id, title, action, shortcut }: ActionMatch): Row => ({
-    id,
-    title,
-    icon: { glyph: action ? SYSTEM_ACTIONS.find((a) => a.action === action)!.icon : Workflow },
-    accessory: action ? 'Action' : 'Shortcut',
-    actions: [{ title: 'Run', run: () => (action ? run('actions.system', { action }) : run('actions.runShortcut', { name: shortcut! })) }],
-  })
-
-  const webRow = (): Row => ({
-    id: 'web',
-    title: `Search Google for “${q}”`,
-    icon: { glyph: Globe },
-    actions: [{ title: 'Search', run: () => run('system.openUrl', { url: `https://www.google.com/search?q=${encodeURIComponent(q)}` }) }],
-  })
+  const fallbackRows = (others: boolean): Row[] =>
+    shownFallbacks(prefs.fallbacks, others).map((f) => ({
+      id: `fallback:${f.id}`,
+      title: `Search ${f.title} for “${q}”`,
+      icon: { glyph: f.builtIn ? Globe : Search },
+      actions: [{ title: 'Search', icon: ArrowUpRight, run: () => run('system.openUrl', { url: fallbackUrl(f, q) }) }],
+    }))
+  const kept = (ids: string[]) => ids.flatMap((id) => (snapshots[id] ? (rowFromSnapshot(snapshots[id], scopes) ?? []) : []))
 
   // Inside a scope: only its rows, in the provider's order, lifted by what was picked for this query before.
   if (scope) {
     let rows: Row[] | undefined
     let failed = false
-    if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map(appRow)
+    if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map((r) => appRow(r.id, r.app.name, r.app.path))
     else if (scope.id === 'actions') rows = matchActions(q, false, shortcuts, frecency).slice(0, SCOPE_LIMIT).map(actionRow)
     else if (scope.id === 'files' && !q) return { sections: [], note: 'Type to search your files.', ...state }
     else ({ rows, failed = false } = rowsOf(scope.id === 'files' ? 'files' : scope.id, scope.title, scope.plugin ? net(scope) : false))
@@ -260,10 +310,20 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     return { sections: [{ title: scope.title, rows }], ...state }
   }
 
-  if (!q) return { sections: [], ...state }
+  // The empty root: favourites, then the results used most lately.
+  if (!q) {
+    const favourites = kept(prefs.favourites)
+    const recent = kept(recentIds(frecency, snapshots, prefs.favourites)).slice(0, RECENT_LIMIT)
+    return {
+      sections: [...(favourites.length ? [{ title: 'Favourites', rows: favourites }] : []), ...(recent.length ? [{ title: 'Recent', rows: recent }] : [])],
+      ...state,
+    }
+  }
   const answer = inlineAnswer(q, { rates })
   const groups: Group[] = [
-    { title: 'Applications', rows: appResults(BUILT_IN[0].rootLimit as number).map((r) => ({ row: appRow(r), match: r.match })) },
+    // A result whose alias is what's typed outranks everything.
+    { title: 'Alias', rows: kept(aliasedIds(prefs, q)).map((row): Scored => ({ row, match: ALIAS_MATCH })) },
+    { title: 'Applications', rows: appResults(BUILT_IN[0].rootLimit as number).map((r) => ({ row: appRow(r.id, r.app.name, r.app.path), match: r.match })) },
     { title: 'Actions', rows: actionResults(BUILT_IN[2].rootLimit as number).map((a) => ({ row: actionRow(a), match: a.match })) },
   ]
   const files = rowsOf('files', 'Files')
@@ -278,7 +338,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     groups,
     frecency,
     knowledge,
-    web: webRow(),
+    web: fallbackRows(groups.some((g) => g.rows.length) || answer !== null),
     answer: answer ? {
       title: answerTitle[answer.kind],
       rows: [{ id: `answer:${answer.kind}`, title: answer.result, answer, actions: [{ title: 'Copy', run: () => run('clipboard.writeText', { text: answer.copy }) }] }],

@@ -24,10 +24,12 @@ interface ResultsProps {
   compact?: boolean
   /** ⌘1–⌘9 run the first nine rows (a scope that takes number keys): each shows its key. */
   numbered?: boolean
+  /** A row waiting for a second ↩, and what it says meanwhile. */
+  confirming?: { id: string; text: string }
 }
 
 /** Grouped rows under the bar; the selected one shows its main action. Indexes run across sections. */
-export function Results({ sections, selected, onSelect, onRun, compact, numbered }: ResultsProps) {
+export function Results({ sections, selected, onSelect, onRun, compact, numbered, confirming }: ResultsProps) {
   const paths = sections.flatMap((s) => s.rows.flatMap((r) => (r.icon && 'path' in r.icon ? [r.icon.path] : [])))
   const icons = useIcons(paths)
   const list = useRef<HTMLDivElement>(null)
@@ -58,7 +60,11 @@ export function Results({ sections, selected, onSelect, onRun, compact, numbered
                 onPointerMove={() => !active && onSelect(i)}
                 onClick={() => onRun(i)}
               >
-                {row.answer ? <Answer row={row} /> : <Plain row={row} icon={row.icon} icons={icons} compact={compact} />}
+                {row.answer ? (
+                  <Answer row={row} />
+                ) : (
+                  <Plain row={confirming?.id === row.id ? { ...row, title: confirming.text, subtitle: undefined } : row} icon={row.icon} icons={icons} compact={compact} warn={confirming?.id === row.id} />
+                )}
                 <span className="shrink-0 text-caption text-muted-foreground">
                   {active ? (
                     <>
@@ -81,12 +87,12 @@ export function Results({ sections, selected, onSelect, onRun, compact, numbered
   )
 }
 
-function Plain({ row, icon, icons, compact }: { row: Row; icon?: RowIcon; icons: Map<string, string>; compact?: boolean }) {
+function Plain({ row, icon, icons, compact, warn }: { row: Row; icon?: RowIcon; icons: Map<string, string>; compact?: boolean; warn?: boolean }) {
   return (
     <>
       <Icon icon={icon} icons={icons} />
       <span className="flex min-w-0 flex-1 items-baseline gap-2">
-        <span className="truncate">{row.title}</span>
+        <span className={`truncate ${warn ? 'text-status-warning' : ''}`}>{row.title}</span>
         {row.subtitle && !compact && <span className="truncate text-caption text-muted-foreground">{row.subtitle}</span>}
       </span>
     </>

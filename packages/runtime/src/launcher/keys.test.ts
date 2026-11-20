@@ -44,11 +44,10 @@ describe('a result action’s own shortcut', () => {
   })
 
   it('shows in the ⌘K list, after ↩, ⌘↩ and ⇧↩', () => {
-    const run = () => {}
-    expect(actionKey({ title: 'Paste', run }, 0)).toBe('↩')
-    expect(actionKey({ title: 'Pin', run, shortcut: 'Command+.' }, 3)).toBe('⌘.')
-    expect(actionKey({ title: 'Delete', run, shortcut: 'Command+Backspace' }, 4)).toBe('⌘⌫')
-    expect(actionKey({ title: 'Copy Path', run }, 5)).toBeUndefined()
+    expect(actionKey({}, 0)).toBe('↩')
+    expect(actionKey({ shortcut: 'Command+.' }, 3)).toBe('⌘.')
+    expect(actionKey({ shortcut: 'Command+Backspace' }, 4)).toBe('⌘⌫')
+    expect(actionKey({}, 5)).toBeUndefined()
     expect(formatAccelerator('Command+Backspace')).toBe('⌘⌫')
   })
 })

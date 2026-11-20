@@ -2,13 +2,11 @@ import type { AppInfo } from '@just-notch/bridge-schema'
 import { useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call } from '../host/client'
-import { type Frecency, frecencyScore, type Knowledge, learn, rankScore, record } from './frecency'
+import { type Frecency, frecencyScore, rankScore } from './frecency'
 import { bestScore } from './match'
 
 /** Icons at 28 pt on a Retina screen. */
 const ICON_SIZE = 56
-const FRECENCY_KEY = 'launcher.frecency'
-const KNOWLEDGE_KEY = 'launcher.knowledge'
 
 export interface AppResult {
   id: string
@@ -71,7 +69,7 @@ export function useIcons(paths: string[]): Map<string, string> {
 }
 
 /** A value in the runtime's storage, shared by every screen's panel and kept in step with the others. */
-function useStored<T extends object>(key: string): [T, (next: T) => void] {
+export function useStored<T extends object>(key: string): [T, (next: T) => void] {
   const [value, setValue] = useState<T>({} as T)
   useEffect(() => {
     void call('runtime', 'storage.get', { key }).then((stored) => stored && setValue(stored as T), () => {})
@@ -84,15 +82,4 @@ function useStored<T extends object>(key: string): [T, (next: T) => void] {
     void call('runtime', 'storage.set', { key, value: next }).catch(() => {})
   }
   return [value, save]
-}
-
-/** Launch history, and what was picked for what was typed. `launched` records both. */
-export function useFrecency(): { frecency: Frecency; knowledge: Knowledge; launched(id: string, query: string): void } {
-  const [frecency, setFrecency] = useStored<Frecency>(FRECENCY_KEY)
-  const [knowledge, setKnowledge] = useStored<Knowledge>(KNOWLEDGE_KEY)
-  const launched = (id: string, query: string) => {
-    setFrecency(record(frecency, id))
-    if (query) setKnowledge(learn(knowledge, query, id))
-  }
-  return { frecency, knowledge, launched }
 }

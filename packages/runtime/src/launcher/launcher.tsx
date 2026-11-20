@@ -11,15 +11,18 @@ import { setLauncherRegions } from '../island/hit-regions'
 import { useReduceMotion } from '../island/motion'
 import { motionScale, settle } from '@justanarthur/modo-ui-notch/lib/motion'
 import { bridgePath, type Circle } from './metaball'
-import { ActionPanel, filterActions, panelHeight } from './actions'
+import { ActionPanel, filterActions, type LauncherCommand, launcherActions, type ListedAction, type PanelMode, panelHeight } from './actions'
+import { useItemHotkeys } from './hotkeys'
+import { cleanAlias, type ItemPrefs } from './prefs'
+import { useLauncherStore } from './store'
 import { hasPreviews, Preview, PREVIEW_MIN_H } from './preview'
-import { MAX_SCOPES, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
+import { MAX_SCOPES, rowFromSnapshot, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
 import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
 import type { Row } from './rows'
 import { animatesHeight, moveSelection, type Selection, selectedIndex } from './selection'
 import { setLauncherOpen } from './state'
 import { showFailure } from './failure'
-import { actionForKey, numberKey } from './shortcut'
+import { acceleratorOf, actionForKey, numberKey } from './shortcut'
 import { useHeld } from './sources'
 
 const PILL_H = 52
@@ -138,6 +141,8 @@ const QUICK = motionScale.micro
 const CLOSE_S = 0.06
 /** After the keyboard goes back, before an action runs: the app in front takes it, so a paste lands there. */
 const HANDOFF_MS = 40
+/** How long a first ↩ on an action that can't be undone waits for the second. */
+const CONFIRM_MS = 3000
 
 /**
  * The launcher: a drop of the island's black swells under the notch, pinches off, falls to the upper third of the
@@ -162,7 +167,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const [scope, setScope] = useState<number>()
   const [selection, setSelection] = useState<Selection>()
   /** The selected row's actions (⌘K), with what was typed into it and its own selection. */
-  const [panel, setPanel] = useState<{ filter: string; selected: number }>()
+  const [panel, setPanel] = useState<{ filter: string; selected: number; mode: PanelMode }>()
+  /** A row whose action asks for a second ↩ (Empty Trash), waiting for it. */
+  const [confirming, setConfirming] = useState<string>()
   /** The preview pane in the root search, toggled with ⌘Y; scopes with previews always show it. */
   const [quickLook, setQuickLook] = useState(false)
   const scopes = useScopes()
@@ -369,17 +376,31 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   }, [typing, phase === 'open'])
 
   const active: Scope | undefined = scope === undefined ? undefined : scopes[scope]
-  const view = useSearch(query, active, scopes, phase === 'opening' || phase === 'open')
+  const store = useLauncherStore()
+  const view = useSearch(query, active, scopes, phase === 'opening' || phase === 'open', store)
+
+  /** Runs a kept result's first action with the launcher closed (its hotkey). */
+  const runKept = async (row: Row) => {
+    performance.mark('launcher.hotkey')
+    store.launched(row, '')
+    try {
+      await row.actions[0]?.run()
+    } catch (error) {
+      showFailure(row, error)
+    }
+  }
+  useItemHotkeys(store, geometry.screenId, (id) => store.snapshots[id] && rowFromSnapshot(store.snapshots[id], scopes), (row) => void runKept(row))
   const flat = view.sections.flatMap((s) => s.rows)
   const selected = selectedIndex(flat, selection)
   const current = flat[selected]
-  const listed = panel && current ? filterActions(current.actions, panel.filter) : []
+  const own = current ? launcherActions(current, store.prefs) : []
+  const listed = panel && current ? filterActions(current.actions, panel.filter, own) : []
   const panelOpen = panel !== undefined && current !== undefined && view.note === undefined
   const showPane = view.note === undefined && flat.length > 0 && (active ? hasPreviews(flat) : quickLook)
   const rowsH = Math.min(sectionsHeight(view.sections), RESULTS_MAX)
   const listH = view.note ? NOTE_H : showPane ? Math.max(rowsH, PREVIEW_MIN_H) : rowsH
   // The sheet grows to hold the panel when it has fewer rows than the panel has actions.
-  const sheetH = panelOpen ? Math.max(listH, panelHeight(listed.length) + 2 * SHEET_PAD) : listH
+  const sheetH = panelOpen ? Math.max(listH, panelHeight(listed) + 2 * SHEET_PAD) : listH
   // Results show with the field, not after the buttons split off.
   const loadingShown = useHeld(view.loading && content && (phase === 'opening' || phase === 'open'), LOADING_AFTER_MS)
   const showResults = content && (phase === 'opening' || phase === 'open') && (view.note !== undefined || flat.length > 0)
@@ -388,6 +409,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   useEffect(() => setSelection(undefined), [query, scope])
   // The panel belongs to one row: another row, query or scope closes it.
   useEffect(() => setPanel(undefined), [query, scope, current?.id])
+  useEffect(() => setConfirming(undefined), [query, scope, current?.id])
 
   // The sheet's height springs when it grows by more than a row (or on open), and changes at once otherwise.
   const shownH = useRef(0)
@@ -417,6 +439,13 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const runRow = (row: Row | undefined, action = 0) => {
     const run = row?.actions[action] ?? row?.actions[0]
     if (!row || !run) return
+    // An action that can't be undone waits for a second ↩ within a few seconds.
+    if (run.confirm && confirming !== row.id) {
+      setConfirming(row.id)
+      setTimeout(() => setConfirming((id) => (id === row.id ? undefined : id)), CONFIRM_MS)
+      return
+    }
+    setConfirming(undefined)
     if (run.stay) {
       const index = flat.indexOf(row)
       if (index >= 0) setSelection({ id: row.id, index })
@@ -431,7 +460,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       })()
       return
     }
-    view.record(row.id)
+    view.record(row)
     void closeSequence()
     setTimeout(async () => {
       performance.mark('launcher.run')
@@ -449,8 +478,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       if (event.isComposing) return
       if (event.metaKey && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        if (!panel && current?.actions.length) setSelection({ id: current.id, index: selected })
-        setPanel((p) => (p || !current?.actions.length ? undefined : { filter: '', selected: 0 }))
+        const any = current && (current.actions.length || own.length)
+        if (!panel && any) setSelection({ id: current.id, index: selected })
+        setPanel((p) => (p || !any ? undefined : { filter: '', selected: 0, mode: { kind: 'filter' } }))
         return
       }
       if (panelOpen) {
@@ -484,6 +514,12 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         runRow(current, shortcut)
         return
       }
+      const command = actionForKey(own, event)
+      if (command >= 0) {
+        event.preventDefault()
+        runCommand(own[command].command)
+        return
+      }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         setSelection(moveSelection(flat, selection, event.key === 'ArrowDown' ? 1 : -1))
@@ -506,15 +542,78 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, query, scope, selection, flat, scopes, panel, panelOpen, listed])
+  }, [phase, query, scope, selection, flat, scopes, panel, panelOpen, listed, store.prefs, confirming])
 
-  /** While the panel is open it takes the keys: arrows, Return, Escape, and typing, which filters it. */
+  /** Sets (or clears, with undefined) an alias or hotkey on the selected row. */
+  const setItem = (row: Row, change: ItemPrefs) =>
+    store.update(
+      (prefs) => {
+        const item = Object.fromEntries(Object.entries({ ...prefs.items[row.id], ...change }).filter(([, v]) => v !== undefined)) as ItemPrefs
+        const { [row.id]: _, ...others } = prefs.items
+        return { ...prefs, items: Object.keys(item).length ? { ...others, [row.id]: item } : others }
+      },
+      [row],
+    )
+
+  /** The launcher's own actions on the selected row: alias and hotkey take the panel's line, the others run at once. */
+  function runCommand(command: LauncherCommand) {
+    const row = current
+    if (!row) return
+    setSelection({ id: row.id, index: selected })
+    if (command === 'alias') return setPanel({ filter: '', selected: 0, mode: { kind: 'alias', draft: store.prefs.items[row.id]?.alias ?? '' } })
+    if (command === 'hotkey') return setPanel({ filter: '', selected: 0, mode: { kind: 'hotkey' } })
+    if (command === 'favourite') {
+      const has = store.prefs.favourites.includes(row.id)
+      store.update((prefs) => ({ ...prefs, favourites: has ? prefs.favourites.filter((id) => id !== row.id) : [...prefs.favourites, row.id] }), [row])
+    } else store.resetRanking(row.id)
+    setPanel(undefined)
+  }
+
+  const runListed = (item: ListedAction) => (item.command ? runCommand(item.command) : runRow(current, item.index))
+
+  /** While the panel is open it takes the keys: arrows, Return, Escape, and typing, which goes to its bottom line. */
   function onPanelKey(event: KeyboardEvent) {
-    if (!panel) return
+    if (!panel || !current) return
     const key = event.key
+    const plain = !event.metaKey && !event.ctrlKey && !event.altKey
+    const back = () => setPanel((p) => p && { filter: '', selected: 0, mode: { kind: 'filter' } })
+    if (panel.mode.kind === 'hotkey') {
+      event.preventDefault()
+      if (key === 'Escape' && plain) return back()
+      if (key === 'Backspace' && plain) {
+        setItem(current, { hotkey: undefined })
+        return setPanel(undefined)
+      }
+      const accelerator = acceleratorOf(event)
+      if (!accelerator) return
+      setItem(current, { hotkey: accelerator })
+      return setPanel(undefined)
+    }
+    if (panel.mode.kind === 'alias') {
+      const draft = panel.mode.draft
+      if (key === 'Escape') {
+        event.preventDefault()
+        return back()
+      }
+      if (key === 'Enter') {
+        event.preventDefault()
+        setItem(current, { alias: cleanAlias(draft) })
+        return setPanel(undefined)
+      }
+      if (key === 'Backspace') {
+        event.preventDefault()
+        return setPanel({ ...panel, mode: { kind: 'alias', draft: draft.slice(0, -1) } })
+      }
+      if (key.length === 1 && plain) {
+        event.preventDefault()
+        return setPanel({ ...panel, mode: { kind: 'alias', draft: draft + key } })
+      }
+      if (key === 'Tab') event.preventDefault()
+      return
+    }
     if (key === 'Escape') {
       event.preventDefault()
-      setPanel((p) => (p?.filter ? { filter: '', selected: 0 } : undefined))
+      setPanel((p) => (p?.filter ? { ...p, filter: '', selected: 0 } : undefined))
     } else if (key === 'ArrowDown' || key === 'ArrowUp') {
       event.preventDefault()
       if (!listed.length) return
@@ -523,14 +622,18 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     } else if (key === 'Enter') {
       event.preventDefault()
       const pick = listed[panel.selected]
-      if (pick) runRow(current, pick.index)
+      if (pick) runListed(pick)
     } else if (key === 'Backspace') {
       event.preventDefault()
-      setPanel((p) => p && { filter: p.filter.slice(0, -1), selected: 0 })
-    } else if (key.length === 1 && !event.metaKey && !event.ctrlKey) {
+      setPanel((p) => p && { ...p, filter: p.filter.slice(0, -1), selected: 0 })
+    } else if (!plain && actionForKey(listed.map((l) => l.action), event) >= 0) {
+      // An action's own shortcut runs it from the panel too.
+      event.preventDefault()
+      runListed(listed[actionForKey(listed.map((l) => l.action), event)])
+    } else if (key.length === 1 && plain) {
       // Kept out of the search field: it filters the panel instead.
       event.preventDefault()
-      setPanel((p) => p && { filter: p.filter + key, selected: 0 })
+      setPanel((p) => p && { ...p, filter: p.filter + key, selected: 0 })
     } else if (key === 'Tab') event.preventDefault()
   }
 
@@ -642,6 +745,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
                     onRun={(i) => runRow(flat[i])}
                     compact={showPane}
                     numbered={active?.numberKeys}
+                    confirming={confirming === undefined ? undefined : { id: confirming, text: current?.actions.find((a) => a.confirm)?.confirm ?? '' }}
                   />
                 </div>
                 {showPane && <Preview row={current} />}
@@ -652,9 +756,10 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
                 row={current}
                 listed={listed}
                 filter={panel.filter}
+                mode={panel.mode}
                 selected={panel.selected}
                 onSelect={(i) => setPanel({ ...panel, selected: i })}
-                onRun={(i) => runRow(current, i)}
+                onRun={runListed}
               />
             )}
           </motion.div>
