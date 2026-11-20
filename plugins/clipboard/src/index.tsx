@@ -1,6 +1,6 @@
 import { type ClipboardClip, ClipboardHistory } from '@justanarthur/modo-ui-notch'
-import { Button, Combobox, List } from '@justanarthur/modo-ui'
-import { type AppInfo, type Clip, definePlugin, type PluginContext, type SearchItem, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
+import { Button, Combobox, List, Select } from '@justanarthur/modo-ui'
+import { type AppInfo, type Clip, type ClipboardRetention, definePlugin, type PluginContext, type SearchItem, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { ClipboardList, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -103,6 +103,68 @@ function IgnoredApps() {
   )
 }
 
+const MINUTE = 60_000
+const KEEP_DAYS = [
+  { value: '1', label: '1 day' },
+  { value: '7', label: '7 days' },
+  { value: '30', label: '30 days' },
+  { value: 'forever', label: 'Forever' },
+]
+const KEEP_CLIPS = [100, 500, 1000, 5000].map((n) => ({ value: String(n), label: `${n.toLocaleString()} clips` }))
+const DELETE_SPANS = [
+  { value: String(5 * MINUTE), label: 'Last 5 minutes' },
+  { value: String(60 * MINUTE), label: 'Last hour' },
+  { value: String(24 * 60 * MINUTE), label: 'Last day' },
+  { value: 'all', label: 'Everything' },
+]
+const STANDARD: ClipboardRetention = { limit: 1000, days: 30 }
+
+function Retention() {
+  const { call } = usePlugin()
+  // The host leaves `days` out when there is no age limit.
+  const retention = useTopic('clipboard')?.retention ?? STANDARD
+  const days = retention.days ?? null
+  const set = (next: Partial<ClipboardRetention>) => void call('clipboard.setRetention', { limit: retention.limit, days, ...next })
+  const [span, setSpan] = useState(DELETE_SPANS[0].value)
+  const remove = () => void call('clipboard.clear', span === 'all' ? {} : { since: Date.now() - Number(span) })
+
+  return (
+    <List.Section title="Keep">
+      <SelectRow
+        label="Keep history"
+        description="Older clips are deleted. Pinned clips are kept."
+        options={KEEP_DAYS}
+        value={days === null ? 'forever' : String(days)}
+        onValueChange={(v) => set({ days: v === 'forever' ? null : Number(v) })}
+      />
+      <SelectRow
+        label="Keep at most"
+        description="The oldest go first when there are more."
+        options={KEEP_CLIPS.some((o) => o.value === String(retention.limit)) ? KEEP_CLIPS : [...KEEP_CLIPS, { value: String(retention.limit), label: `${retention.limit.toLocaleString()} clips` }]}
+        value={String(retention.limit)}
+        onValueChange={(v) => set({ limit: Number(v) })}
+      />
+      <List.Row label="Delete history" description="Pinned clips are kept.">
+        <span className="flex items-center gap-2">
+          <Select value={span} onValueChange={setSpan}>
+            <Select.Trigger variant="borderless" className="min-w-0" aria-label="What to delete" />
+            <Select.Content>
+              {DELETE_SPANS.map((o) => (
+                <Select.Item key={o.value} value={o.value}>
+                  {o.label}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select>
+          <Button variant="secondary" size="compact" onClick={remove}>
+            Delete
+          </Button>
+        </span>
+      </List.Row>
+    </List.Section>
+  )
+}
+
 function Settings() {
   const { call } = usePlugin()
   const state = useTopic('clipboard')
@@ -122,12 +184,8 @@ function Settings() {
           checked={flash}
           onCheckedChange={setFlash}
         />
-        <List.Row label="Clear history" description="Pinned clips are kept.">
-          <Button variant="secondary" size="compact" onClick={() => void call('clipboard.clear', {})}>
-            Clear
-          </Button>
-        </List.Row>
       </List.Section>
+      <Retention />
       <IgnoredApps />
       <p className="px-3 text-caption text-muted-foreground">History stays on this Mac. Copies marked as passwords are never saved.</p>
     </List>
