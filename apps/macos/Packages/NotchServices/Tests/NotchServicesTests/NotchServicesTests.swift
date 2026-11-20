@@ -394,6 +394,73 @@ struct NewServiceTests {
         #expect(ClipboardService.seed([], seeded: Array(defaults.dropLast())) == [defaults.last!])
     }
 
+    @Test func clipboardRetention() {
+        let day = 86_400_000.0
+        let now = 100 * day
+        func clip(_ id: String, daysAgo: Double, pinned: Bool = false) -> Clip {
+            Clip(id: id, kind: .text, content: id, copiedAt: now - daysAgo * day, pinned: pinned)
+        }
+        let clips = [clip("a", daysAgo: 0), clip("p", daysAgo: 90, pinned: true), clip("b", daysAgo: 2), clip("c", daysAgo: 8), clip("d", daysAgo: 40)]
+        var state = ClipboardState(clips: clips, paused: false, ignoredApps: [], retention: .init(limit: 1000, days: 7))
+        ClipboardService.trim(&state, now: now)
+        #expect(state.clips.map(\.id) == ["a", "p", "b"])
+        state = ClipboardState(clips: clips, paused: false, ignoredApps: [], retention: .init(limit: 2, days: nil))
+        ClipboardService.trim(&state, now: now)
+        // Pinned clips never count and never expire.
+        #expect(state.clips.map(\.id) == ["a", "p", "b"])
+    }
+
+    @MainActor @Test func clipboardSetRetentionAndClearSince() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("clip-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let defaults = try #require(UserDefaults(suiteName: "clip-test-\(UUID().uuidString)"))
+        let now = Date().timeIntervalSince1970 * 1000
+        let clips = (0..<10).map { Clip(id: "\($0)", kind: .text, content: "\($0)", copiedAt: now - Double($0) * 60_000, pinned: $0 == 1) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try JSONEncoder().encode(ClipboardState(clips: clips, paused: false, ignoredApps: [])).write(to: folder.appendingPathComponent("history.json"))
+        let service = ClipboardService(folder: folder, defaults: defaults)
+        func ids() async throws -> [String] {
+            let data = try #require(await service.snapshot(topic: "clipboard"))
+            return try JSONDecoder().decode(ClipboardState.self, from: data).clips.map(\.id)
+        }
+        // Delete the last 5 minutes: clips 0–4 go, pinned 1 stays.
+        _ = try await service.handle(method: "clipboard.clear", params: Data(#"{"since":\#(now - 5 * 60_000 + 1)}"#.utf8))
+        #expect(try await ids() == ["1", "5", "6", "7", "8", "9"])
+        _ = try await service.handle(method: "clipboard.setRetention", params: Data(#"{"limit":2,"days":null}"#.utf8))
+        #expect(try await ids() == ["1", "5", "6"])
+        _ = try await service.handle(method: "clipboard.clear", params: Data("{}".utf8))
+        #expect(try await ids() == ["1"])
+    }
+
+    /// 1,000 clips (50 of them images with their thumbnails) held and published: well under 30 MB.
+    @Test func clipboardThousandClipsMemory() throws {
+        let rep = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 160, pixelsHigh: 100, bitsPerSample: 8, samplesPerPixel: 4,
+                                                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        // Noise: the worst case for PNG, heavier than a photo's thumbnail.
+        let pixels = try #require(rep.bitmapData)
+        for i in 0..<(rep.bytesPerRow * rep.pixelsHigh) { pixels[i] = i % 4 == 3 ? 255 : .random(in: 0...255) }
+        let thumbnail = "data:image/png;base64," + (try #require(rep.representation(using: .png, properties: [:]))).base64EncodedString()
+        let text = String(repeating: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ", count: 8)
+        let before = residentBytes()
+        let clips = (0..<1000).map { i in
+            i % 20 == 0
+                ? Clip(id: "img\(i)", kind: .image, content: "1920×1080", detail: "412 KB", preview: thumbnail, copiedAt: Double(i), pinned: false)
+                : Clip(id: "\(i)", kind: .text, content: "\(i) \(text)", copiedAt: Double(i), pinned: false)
+        }
+        let json = try #require(ClipboardState(clips: clips, paused: false, ignoredApps: []).json())
+        let growth = residentBytes() - before
+        print("clipboard 1000 clips: json \(json.count / 1024) KB, thumbnail \(thumbnail.count / 1024) KB, resident growth \(growth / 1_048_576) MB")
+        #expect(json.count < 6_000_000)
+        #expect(growth < 30 * 1_048_576)
+    }
+
+    private func residentBytes() -> Int {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count) } }
+        return result == KERN_SUCCESS ? Int(info.resident_size) : 0
+    }
+
     @Test func busiestProcesses() {
         var old = ProcessTimes()
         old.at = Date(timeIntervalSince1970: 0)
