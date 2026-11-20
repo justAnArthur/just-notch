@@ -160,7 +160,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     const answers = await Promise.all(
       asked.map(async (s) => {
         try {
-          const items = await s.plugin!.definition.search!.provide(q, { ctx: s.plugin!.ctx, signal })
+          const items = await s.plugin!.definition.search!.provide(q, { ctx: s.plugin!.ctx, signal, root })
           return [s.id, items.map((item) => pluginRow(s, item))] as const
         } catch {
           return [s.id, []] as const

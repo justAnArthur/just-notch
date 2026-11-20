@@ -176,9 +176,10 @@ export interface SearchProvider {
   root?: { limit: number } | false
   /**
    * The results for `query` (empty inside the scope before typing: show the newest). Runs on every keystroke;
-   * `signal` aborts when a newer query replaces it. Slow providers are shown when they answer.
+   * `signal` aborts when a newer query replaces it. Slow providers are shown when they answer. `root` is true in the
+   * root search and false inside the plugin's own scope.
    */
-  provide(query: string, env: { ctx: PluginContext; signal: AbortSignal }): SearchItem[] | Promise<SearchItem[]>
+  provide(query: string, env: { ctx: PluginContext; signal: AbortSignal; root: boolean }): SearchItem[] | Promise<SearchItem[]>
 }
 
 export interface PluginDefinition {
