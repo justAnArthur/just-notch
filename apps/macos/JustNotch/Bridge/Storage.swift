@@ -44,8 +44,7 @@ final class Storage {
 }
 
 enum Paths {
-    static let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("JustNotch", isDirectory: true)
+    static let support = AppSupport.folder
     static let userPlugins = support.appendingPathComponent("Plugins", isDirectory: true)
     /// The library's catalog cache and `installed.json`.
     static let library = support.appendingPathComponent("Library", isDirectory: true)

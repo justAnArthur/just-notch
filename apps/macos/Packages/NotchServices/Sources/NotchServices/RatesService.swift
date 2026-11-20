@@ -33,7 +33,7 @@ public final class RatesService: NotchService {
     }
 
     public nonisolated static var defaultFolder: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("JustNotch", isDirectory: true)
+        AppSupport.folder
     }
 
     public func handle(method: String, params: Data) async throws -> Data? {

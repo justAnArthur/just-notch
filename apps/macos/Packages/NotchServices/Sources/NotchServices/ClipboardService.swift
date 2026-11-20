@@ -62,8 +62,7 @@ public final class ClipboardService: NotchService {
     }
 
     public nonisolated static var defaultFolder: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("JustNotch/clipboard", isDirectory: true)
+        AppSupport.folder.appendingPathComponent("clipboard", isDirectory: true)
     }
 
     public func start(topic: String) {

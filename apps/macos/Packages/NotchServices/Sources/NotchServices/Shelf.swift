@@ -11,8 +11,7 @@ struct Shelf: Sendable {
     static let defaultExpiryHours: Double? = 24
 
     static var standard: Shelf {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return Shelf(root: support.appendingPathComponent("JustNotch/Shelf", isDirectory: true))
+        Shelf(root: AppSupport.folder.appendingPathComponent("Shelf", isDirectory: true))
     }
 
     struct Item: Equatable, Sendable {
