@@ -15,6 +15,7 @@ import { hasPreviews, Preview, PREVIEW_MIN_H } from './preview'
 import { MAX_SCOPES, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
 import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
 import type { Row } from './rows'
+import { moveSelection, type Selection, selectedIndex } from './selection'
 import { setLauncherOpen } from './state'
 
 const PILL_H = 52
@@ -146,7 +147,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const [outlined, setOutlined] = useState(false)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<number>()
-  const [selected, setSelected] = useState(0)
+  const [selection, setSelection] = useState<Selection>()
   /** The selected row's actions (⌘K), with what was typed into it and its own selection. */
   const [panel, setPanel] = useState<{ filter: string; selected: number }>()
   /** The preview pane in the root search, toggled with ⌘Y; scopes with previews always show it. */
@@ -227,7 +228,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     setOutlined(false)
     setQuery('')
     setScope(undefined)
-    setSelected(0)
+    setSelection(undefined)
     setPanel(undefined)
     setQuickLook(false)
     dispatch({ type: 'collapse' })
@@ -358,6 +359,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const active: Scope | undefined = scope === undefined ? undefined : scopes[scope]
   const view = useSearch(query, active, scopes, phase === 'opening' || phase === 'open')
   const flat = view.sections.flatMap((s) => s.rows)
+  const selected = selectedIndex(flat, selection)
   const current = flat[selected]
   const listed = panel && current ? filterActions(current.actions, panel.filter) : []
   const panelOpen = panel !== undefined && current !== undefined && view.note === undefined
@@ -369,9 +371,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
 
   // A new query or scope starts at the top.
-  useEffect(() => setSelected(0), [query, scope])
+  useEffect(() => setSelection(undefined), [query, scope])
   // The panel belongs to one row: another row, query or scope closes it.
-  useEffect(() => setPanel(undefined), [query, scope, selected])
+  useEffect(() => setPanel(undefined), [query, scope, current?.id])
 
   // A scope's keyword and a space enter it: `clip `, `file `.
   useEffect(() => {
@@ -407,6 +409,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       if (event.isComposing) return
       if (event.metaKey && event.key.toLowerCase() === 'k') {
         event.preventDefault()
+        if (!panel && current?.actions.length) setSelection({ id: current.id, index: selected })
         setPanel((p) => (p || !current?.actions.length ? undefined : { filter: '', selected: 0 }))
         return
       }
@@ -434,14 +437,12 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        if (!flat.length) return
-        const step = event.key === 'ArrowDown' ? 1 : -1
-        setSelected((i) => (i + step + flat.length) % flat.length)
+        setSelection(moveSelection(flat, selection, event.key === 'ArrowDown' ? 1 : -1))
         return
       }
       if (event.key === 'Enter') {
         event.preventDefault()
-        void runRow(flat[selected], event.metaKey ? 1 : event.shiftKey ? 2 : 0)
+        void runRow(current, event.metaKey ? 1 : event.shiftKey ? 2 : 0)
         return
       }
       if (event.key === 'Backspace' && query === '' && scope !== undefined) {
@@ -451,13 +452,12 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       }
       if (event.key === 'Tab' && !event.shiftKey) {
         event.preventDefault()
-        const row = flat[selected]
-        if (row && !row.answer && row.id !== 'web') setQuery(row.title)
+        if (current && !current.answer && current.id !== 'web') setQuery(current.title)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, query, scope, selected, flat, scopes, panel, panelOpen, listed])
+  }, [phase, query, scope, selection, flat, scopes, panel, panelOpen, listed])
 
   /** While the panel is open it takes the keys: arrows, Return, Escape, and typing, which filters it. */
   function onPanelKey(event: KeyboardEvent) {
@@ -574,7 +574,13 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             ) : (
               <div className="flex h-full">
                 <div className="min-w-0 flex-1">
-                  <Results sections={view.sections} selected={selected} onSelect={panelOpen ? () => {} : setSelected} onRun={(i) => void runRow(flat[i])} compact={showPane} />
+                  <Results
+                    sections={view.sections}
+                    selected={selected}
+                    onSelect={(i) => !panelOpen && setSelection({ id: flat[i].id, index: i })}
+                    onRun={(i) => void runRow(flat[i])}
+                    compact={showPane}
+                  />
                 </div>
                 {showPane && <Preview row={current} />}
               </div>
