@@ -19,18 +19,20 @@ export interface Box {
 
 /** The open panel the notch kit's widgets are laid out for; its first snap fits the content up to `h`. */
 export const EXPANDED = { w: 648, h: 240 }
-/** The tall snap, for settings and any tab pulled down. */
+/** The tall snap's cap: settings fills it, a tab pulled down grows only as far as its tall layout needs. */
 const SHEET_H = 560
 /** The least the first snap shrinks to. */
 const FIT_MIN = 140
 /** The open island's height around its content: the tab row (the notch's height), the gap above the content (pt-1) and the bottom inset (pb-5, as the sides). */
 export const chromeHeight = (g: ScreenGeometry) => g.notch.h + 4 + 20
 
-/** How tall the open island is: on the first snap it fits `content`, on the second it is the tall sheet. */
+/** How tall the open island is: each snap fits `content`, the first up to EXPANDED.h, the tall one up to SHEET_H. */
 export interface Sheet {
   snap: 0 | 1
-  /** The content's own height; unknown until measured. */
+  /** The content's own height at this snap; unknown until measured. */
   content?: number
+  /** The page fills the tall snap whatever its content (settings). */
+  fill?: boolean
 }
 /** Room for one compact slot beside the notch: about as wide as the notch is tall. */
 export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
@@ -88,8 +90,9 @@ export function shapeFor(state: IslandState, g: ScreenGeometry, sheet: Sheet = {
   if (state === 'compact' || state === 'split') return { w: notch.w + 2 * slot, h: notch.h, radius: RADIUS.compact, shoulder: 8 }
   if (state === 'flash') return { w: notch.w + 2 * (slot + 64), h: notch.h + 48, radius: RADIUS.flash, shoulder: 10 }
   const room = panel.h - 24
-  const fit = sheet.content === undefined ? EXPANDED.h : Math.max(FIT_MIN, Math.min(EXPANDED.h, Math.ceil(sheet.content + chromeHeight(g))))
-  const h = sheet.snap === 1 ? Math.min(SHEET_H, room) : Math.min(fit, room)
+  const cap = sheet.snap === 1 ? SHEET_H : EXPANDED.h
+  const fits = sheet.content !== undefined && !(sheet.snap === 1 && sheet.fill)
+  const h = Math.min(room, fits ? Math.max(FIT_MIN, Math.min(cap, Math.ceil(sheet.content! + chromeHeight(g)))) : cap)
   return { w: Math.min(EXPANDED.w, panel.w - 28), h, radius: RADIUS.expanded, shoulder: 14 }
 }
 

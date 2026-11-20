@@ -2,7 +2,7 @@ import type { Rect, ScreenGeometry } from '@just-notch/bridge-schema'
 import type { IslandState } from '@just-notch/sdk'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'motion/react'
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { present, SETTINGS_TAB } from '../activity/reducer'
+import { present, SETTINGS_TAB, type Snap } from '../activity/reducer'
 import { dispatch, getState, holdFlash, useActivityState } from '../activity/store'
 import { on } from '../host/bus'
 import { call } from '../host/client'
@@ -234,9 +234,10 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   useEffect(() => (root.current ? trackPopups(root.current) : undefined), [])
   useEffect(() => on('settings.open', () => dispatch({ type: 'expand', tab: SETTINGS_TAB })), [])
   const { snap } = activity
-  const [fit, setFit] = useState<number>()
+  // Measured per snap, so the tall snap never borrows the first snap's height for a frame.
+  const [fit, setFit] = useState<{ snap: Snap; height: number }>()
 
-  const shape = shapeFor(island, geometry, { snap, content: fit })
+  const shape = shapeFor(island, geometry, { snap, content: fit?.snap === snap ? fit.height : undefined, fill: activity.tab === SETTINGS_TAB })
   const split = island === 'split'
   const bubble = bubbleFor(shape, geometry, split)
   const cx = centerX(geometry)

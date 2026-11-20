@@ -24,12 +24,15 @@ interface ExpandedProps {
   geometry: ScreenGeometry
   /** Set while mounted, for the swipe gestures. */
   step: RefObject<TabStep | null>
-  /** The content's own height at the first snap, for the island to fit it. */
-  onFit: (height: number) => void
+  /** The content's own height at the current snap, for the island to fit it. */
+  onFit: (fit: { snap: Snap; height: number }) => void
 }
 
-/** Reports `ref`'s layout height as it changes; `offsetHeight`, not the box on screen, which the island's open animation scales. */
-function useHeight(ref: RefObject<HTMLElement | null>, onHeight: (height: number) => void, active: boolean) {
+/**
+ * Reports `ref`'s layout height as it changes, and again whenever `key` does (the snap: a tall layout may measure
+ * the same); `offsetHeight`, not the box on screen, which the island's open animation scales.
+ */
+function useHeight(ref: RefObject<HTMLElement | null>, onHeight: (height: number) => void, active: boolean, key: unknown) {
   const report = useRef(onHeight)
   report.current = onHeight
   useLayoutEffect(() => {
@@ -39,7 +42,7 @@ function useHeight(ref: RefObject<HTMLElement | null>, onHeight: (height: number
     const observer = new ResizeObserver(([entry]) => entry && report.current(entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height))
     observer.observe(el)
     return () => observer.disconnect()
-  }, [ref, active])
+  }, [ref, active, key])
 }
 
 /** Remembers whether the tab in `ref` shows only its empty state, as it changes. */
@@ -57,8 +60,8 @@ function useEmptyMemory(ref: RefObject<HTMLElement | null>, tab: string | undefi
 
 /**
  * The open island: icon tabs in the wings around the notch and settings at the far right, then the tab's view.
- * No title row: the selected icon says where you are, and each icon names itself on hover (its aria-label). On the first snap the island fits the view (it scrolls
- * past the snap's cap); on the tall snap the view fills it. Settings is a page of its own, on the tall snap.
+ * No title row: the selected icon says where you are, and each icon names itself on hover (its aria-label). Each snap fits the view (it scrolls
+ * past the snap's cap: 240 px, then 560 on the tall snap). Settings is a page of its own that fills the tall snap.
  */
 export default function Expanded({ primary, shape, geometry, step, onFit }: ExpandedProps) {
   const plugins = usePlugins()
@@ -74,7 +77,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
   const layout = stripLayout(tabs.length, shape.w, geometry)
   const fills: boolean = settings || (snap as Snap) === 1
   useEdgeFade(content, 'y', settings ? SETTINGS_TAB : tab?.id)
-  useHeight(measure, onFit, !fills)
+  useHeight(measure, (height) => onFit({ snap, height }), !settings, snap)
   useEmptyMemory(content, settings ? undefined : tab?.id)
 
   const select = (id: string | undefined) => id && dispatch({ type: 'tab', tab: id })
@@ -137,7 +140,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
           data-swipe-through={fills ? undefined : ''}
           className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pt-1 pb-5 scrollbar-hide"
         >
-          <div ref={measure} className={fills ? 'h-full' : undefined}>
+          <div ref={measure} className={settings ? 'h-full' : undefined}>
             {settings ? (
               <Settings />
             ) : tab ? (

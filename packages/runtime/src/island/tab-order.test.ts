@@ -3,7 +3,7 @@ import type { ActivitySpec } from '@just-notch/sdk'
 import { describe, expect, test } from 'vitest'
 import type { ActivityEntry } from '../activity/reducer'
 import type { LoadedPlugin } from '../plugins/loader'
-import { EXPANDED, stripLayout } from './geometry'
+import { EXPANDED, shapeFor, stripLayout } from './geometry'
 import { openingTab, rememberEmpty, tabsOf } from './tab-order'
 
 const View = () => null
@@ -82,5 +82,25 @@ describe('stripLayout', () => {
     const layout = stripLayout(8, EXPANDED.w, g)
     expect(layout.before).toBeLessThan(8)
     expect(layout.overflow).toBe(false)
+  })
+})
+
+describe('shapeFor', () => {
+  const g = { notch: { x: 0, y: 0, w: 185, h: 32 }, panel: { x: 0, y: 0, w: 800, h: 620 } } as unknown as ScreenGeometry
+  const chrome = 32 + 4 + 20
+
+  test('the tall snap fits its content too, capped at 560', () => {
+    expect(shapeFor('expanded', g, { snap: 1, content: 300 }).h).toBe(300 + chrome)
+    expect(shapeFor('expanded', g, { snap: 1, content: 900 }).h).toBe(560)
+    expect(shapeFor('expanded', g, { snap: 1 }).h).toBe(560)
+  })
+
+  test('settings fills the tall snap whatever its content', () => {
+    expect(shapeFor('expanded', g, { snap: 1, content: 200, fill: true }).h).toBe(560)
+  })
+
+  test('the first snap still caps at 240', () => {
+    expect(shapeFor('expanded', g, { snap: 0, content: 120 }).h).toBe(120 + chrome)
+    expect(shapeFor('expanded', g, { snap: 0, content: 400 }).h).toBe(240)
   })
 })
