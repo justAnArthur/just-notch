@@ -21,6 +21,8 @@ export interface Rect {
   h: number
 }
 
+export type PermissionState = 'allowed' | 'notAsked' | 'off' | 'stale'
+
 export interface UpdaterPreferences {
   automaticChecks: boolean
   automaticDownloads: boolean
@@ -857,6 +859,11 @@ export interface Methods {
     params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' | 'notifications' }
     result: { granted: boolean }
   }
+  /** One permission's state for the Permissions page; `stale` is granted in System Settings but not working (a re-signed app). */
+  'permissions.state': {
+    params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' | 'notifications' }
+    result: { state: PermissionState }
+  }
 
   'plugins.setEnabled': { params: { id: string; enabled: boolean }; result: null }
   /** The library's catalog, cached by the host; `refresh` fetches it again. */
@@ -978,6 +985,7 @@ export const RUNTIME_ONLY: Method[] = [
   'updater.install',
   'updater.preferences',
   'updater.setPreferences',
+  'permissions.state',
   'net.revokeHost',
   'library.catalog',
   'library.install',

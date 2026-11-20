@@ -724,6 +724,7 @@ const handlers: Handlers = {
   },
   'updater.preferences': () => updaterPreferences,
   'updater.setPreferences': (changes) => (updaterPreferences = { ...updaterPreferences, ...changes }),
+  'permissions.state': ({ permission }) => ({ state: ({ accessibility: 'stale', notifications: 'notAsked', bluetooth: 'off' } as const)[permission as 'accessibility'] ?? 'allowed' }),
   'permissions.status': ({ permission }) => ({ granted: permission !== 'accessibility' }),
   'plugins.setEnabled': ({ id, enabled }) => {
     localStorage.setItem(enabledKey(id), String(enabled))

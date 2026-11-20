@@ -191,6 +191,7 @@ enum Schema {
         "updater.install",
         "updater.preferences",
         "updater.setPreferences",
+        "permissions.state",
         "net.revokeHost",
         "library.catalog",
         "library.install",
