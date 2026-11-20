@@ -6,8 +6,8 @@ import { call } from '../host/client'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import { searchApps, useAppIndex, useFrecency } from './apps'
 import { inlineAnswer } from './engines'
-import { frecencyScore, rankScore } from './frecency'
-import { bestScore } from './match'
+import { type Frecency, frecencyScore, rankScore } from './frecency'
+import { bestScore, FUZZY_MAX } from './match'
 import type { Row, Section } from './rows'
 
 /** A round button beside the bar: a built-in scope or a plugin's. */
@@ -126,6 +126,30 @@ function useAsync<T>(key: string, enabled: boolean, load: (signal: AbortSignal) 
   return state?.key === key ? state.value : undefined
 }
 
+/** A system action or a Shortcut that matches the query, best first. */
+export interface ActionMatch {
+  id: string
+  title: string
+  action?: SystemAction
+  shortcut?: string
+  score: number
+}
+
+/**
+ * The system actions and Shortcuts for `query` (all of them for none), best first. The root shows them only for a
+ * close match, not for letters scattered through their names: "term" is Terminal's, not Toggle Dark Mode's.
+ */
+export function matchActions(query: string, root: boolean, shortcuts: string[], frecency: Frecency): ActionMatch[] {
+  const least = root ? FUZZY_MAX + 1 : 1
+  const matches: ActionMatch[] = []
+  const add = (match: Omit<ActionMatch, 'score'>, score: number) => {
+    if (score >= least) matches.push({ ...match, score: rankScore(score, frecencyScore(frecency, match.id)) })
+  }
+  for (const a of SYSTEM_ACTIONS) add({ id: `action:${a.action}`, title: a.title, action: a.action }, query ? bestScore(query, a.title, a.keywords) : least)
+  for (const name of shortcuts) add({ id: `shortcut:${name}`, title: name, shortcut: name }, query ? bestScore(query, name) : least)
+  return matches.sort((a, b) => b.score - a.score)
+}
+
 export interface SearchView {
   sections: Section[]
   /** One line instead of results: nothing found, or nothing typed in a scope that needs a query. */
@@ -183,34 +207,21 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
       ],
     }))
 
-  const actionRows = (limit: number): Row[] => {
-    const candidates: (Row & { score: number })[] = []
-    for (const a of SYSTEM_ACTIONS) {
-      const score = q ? bestScore(q, a.title, a.keywords) : 1
-      if (score > 0)
-        candidates.push({
-          id: `action:${a.action}`,
-          title: a.title,
-          icon: { glyph: a.icon },
-          accessory: 'Action',
-          actions: [{ title: 'Run', run: () => void call('runtime', 'actions.system', { action: a.action }) }],
-          score: rankScore(score, frecencyScore(frecency, `action:${a.action}`)),
-        })
-    }
-    for (const name of shortcuts) {
-      const score = q ? bestScore(q, name) : 1
-      if (score > 0)
-        candidates.push({
-          id: `shortcut:${name}`,
-          title: name,
-          icon: { glyph: Workflow },
-          accessory: 'Shortcut',
-          actions: [{ title: 'Run', run: () => void call('runtime', 'actions.runShortcut', { name }) }],
-          score: rankScore(score, frecencyScore(frecency, `shortcut:${name}`)),
-        })
-    }
-    return candidates.sort((a, b) => b.score - a.score).slice(0, limit)
-  }
+  const actionRows = (limit: number): Row[] =>
+    matchActions(q, root, shortcuts, frecency)
+      .slice(0, limit)
+      .map(({ id, title, action, shortcut }) => ({
+        id,
+        title,
+        icon: { glyph: action ? SYSTEM_ACTIONS.find((a) => a.action === action)!.icon : Workflow },
+        accessory: action ? 'Action' : 'Shortcut',
+        actions: [
+          {
+            title: 'Run',
+            run: () => void (action ? call('runtime', 'actions.system', { action }) : call('runtime', 'actions.runShortcut', { name: shortcut! })),
+          },
+        ],
+      }))
 
   const webRow = (): Row => ({
     id: 'web',

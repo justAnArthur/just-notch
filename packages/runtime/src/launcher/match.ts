@@ -1,3 +1,8 @@
+/** The best a fuzzy match (letters in order, apart) scores; every contiguous match scores more. */
+export const FUZZY_MAX = 500
+/** Letters in order but apart ("sfri" in Safari) count only from this many letters on: shorter, almost anything matches. */
+const FUZZY_MIN = 4
+
 /** How well a query matches a name, 0 for no match; higher is better. Same-tier ties go to the shorter name. */
 export function matchScore(query: string, text: string): number {
   const q = normalize(query)
@@ -16,8 +21,9 @@ export function matchScore(query: string, text: string): number {
   const index = t.indexOf(q)
   if (index >= 0) return 600 - Math.min(index, 50)
 
-  const fuzzy = subsequence(q, t, new Set(words))
-  return fuzzy > 0 ? Math.min(fuzzy, 500) : 0
+  if (q.replace(/ /g, '').length < FUZZY_MIN) return 0
+  const fuzzy = subsequence(q, t, words)
+  return Math.min(fuzzy, FUZZY_MAX)
 }
 
 /** The best score over a name and its other names; other names count a little less. */
@@ -54,22 +60,24 @@ function initialsMatch(query: string, text: string, starts: number[]): boolean {
 }
 
 /**
- * Every query letter in order, anywhere: scored by how tight and word-aligned the match is.
- * "sfr" in "Safari" scores low, but scores.
+ * Every query letter in order from the start of a word: scored by how tight and word-aligned the match is.
+ * "sfri" in "Safari" scores low, but scores. It still lets "term" into "Toggle Dark Mode", so the root keeps this
+ * tier for apps only (see FUZZY_MAX).
  */
-function subsequence(query: string, text: string, starts: Set<number>): number {
+function subsequence(query: string, text: string, words: number[]): number {
+  const q = query.replace(/ /g, '')
+  const first = words.find((start) => text[start] === q[0])
+  if (first === undefined) return 0
+  const starts = new Set(words)
   let score = 300
-  let ti = 0
-  let previous = -2
-  for (const char of query) {
-    if (char === ' ') continue
-    const found = text.indexOf(char, ti)
+  let previous = first
+  for (const char of q.slice(1)) {
+    const found = text.indexOf(char, previous + 1)
     if (found < 0) return 0
     if (found === previous + 1) score += 15
     else score -= Math.min(found - previous, 10) * 3
     if (starts.has(found)) score += 10
     previous = found
-    ti = found + 1
   }
   return Math.max(score, 1)
 }

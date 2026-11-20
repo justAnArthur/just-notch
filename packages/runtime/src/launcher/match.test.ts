@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { frecencyScore, rankScore, record } from './frecency'
-import { bestScore, matchScore, normalize } from './match'
+import { bestScore, FUZZY_MAX, matchScore, normalize } from './match'
 import { acceleratorOf, formatAccelerator } from './shortcut'
 
 const rank = (query: string, names: string[]) =>
@@ -17,13 +17,27 @@ describe('matchScore', () => {
     const word = matchScore('set', 'System Settings')
     const initials = matchScore('vsc', 'Visual Studio Code')
     const inside = matchScore('fari', 'Safari')
-    const fuzzy = matchScore('sfr', 'Safari')
+    const fuzzy = matchScore('sfri', 'Safari')
     expect(exact).toBeGreaterThan(prefix)
     expect(prefix).toBeGreaterThan(word)
     expect(word).toBeGreaterThan(initials)
     expect(initials).toBeGreaterThan(inside)
     expect(inside).toBeGreaterThan(fuzzy)
     expect(fuzzy).toBeGreaterThan(0)
+  })
+
+  it('takes letters apart only from four on, and from the start of a word', () => {
+    expect(matchScore('sfr', 'Safari')).toBe(0)
+    expect(matchScore('sfri', 'Safari')).toBeGreaterThan(0)
+    expect(matchScore('afri', 'Safari')).toBe(0)
+    expect(matchScore('tgdm', 'Toggle Dark Mode')).toBeGreaterThan(0)
+  })
+
+  it('scores every contiguous match above every fuzzy one', () => {
+    expect(matchScore('term', 'Toggle Dark Mode')).toBeGreaterThan(0)
+    expect(matchScore('term', 'Toggle Dark Mode')).toBeLessThanOrEqual(FUZZY_MAX)
+    expect(matchScore('ings', 'System Settings with a long name for the index penalty')).toBeGreaterThan(FUZZY_MAX)
+    expect(bestScore('ings', 'x', ['System Settings with a long name for the index penalty'])).toBeGreaterThan(FUZZY_MAX)
   })
 
   it('misses what has the letters out of order', () => {
