@@ -297,3 +297,16 @@ describe('parseNumber', () => {
     expect(formatNumber(-0, 'en')).toBe('0')
   })
 })
+
+describe('ans', () => {
+  it('stands for the last result, alone or in a sum, in any locale', () => {
+    expect(inlineAnswer('ans', { ans: 12 })?.result).toBe('12')
+    expect(inlineAnswer('ans * 2', { ans: 12, locale: 'en-US' })).toMatchObject({ expression: 'ans * 2', copy: '24' })
+    expect(inlineAnswer('ans/2', { ans: 1.5, locale: 'de-DE' })?.copy).toBe('0.75')
+    expect(inlineAnswer('ans + 1')).toBeNull()
+  })
+
+  it('leaves words that only contain it alone', () => {
+    expect(inlineAnswer('answer', { ans: 3 })).toBeNull()
+  })
+})

@@ -17,4 +17,6 @@ export interface AnswerEnv {
   now?: Date
   locale?: string
   timeZone?: string
+  /** The last result copied or pasted, which `ans` stands for. */
+  ans?: number
 }
