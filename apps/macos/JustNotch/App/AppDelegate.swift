@@ -3,7 +3,7 @@ import ServiceManagement
 import WebKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenuDelegate {
     /// `NOTCH_DEV_URL` (e.g. http://localhost:5174): load the runtime and plugins from the Vite dev server.
     let devServer: URL? = ProcessInfo.processInfo.environment["NOTCH_DEV_URL"]
         .flatMap { URL(string: $0.hasSuffix("/") ? String($0.dropLast()) : $0) }
@@ -18,7 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private var panels: [String: PanelController] = [:]
     private var statusItem: NSStatusItem?
-    private var launchAtLoginItem: NSMenuItem?
+    private var launcherItem: NSMenuItem?
+    private var warningItems: [NSMenuItem] = []
+    private var reloadItem: NSMenuItem?
     private var monitors: [Any] = []
     private var pressTimer: Timer?
     private var dragChangeCount = 0
@@ -55,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         probe = DebugProbe { [weak self] in self?.panels.values.first?.webView }
         #endif
 
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshStatusItem() }
+        }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.rebuildPanels() }
         }
@@ -195,6 +200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     // MARK: status item
 
+    /// Primary actions first, then the app's own; a warning only while a permission is broken; Reload UI only
+    /// in Debug builds or with ⌥ held. Launch at Login lives in Settings › General.
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let image = NSImage(named: "StatusIcon") ?? NSImage(systemSymbolName: "capsule.fill", accessibilityDescription: nil)
@@ -202,21 +209,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         image?.accessibilityDescription = "Just Notch"
         item.button?.image = image
         let menu = NSMenu()
-        menu.addItem(withTitle: "About Just Notch", action: #selector(showAbout), keyEquivalent: "").target = self
+        menu.delegate = self
+        launcherItem = menu.addItem(withTitle: "Open Launcher", action: #selector(openLauncher), keyEquivalent: "")
+        launcherItem?.target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         let update = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         update.target = self
         updater.menuItem = update
+        let warningSeparator = NSMenuItem.separator()
+        menu.addItem(warningSeparator)
+        let warning = menu.addItem(withTitle: "Accessibility Needs Attention…", action: #selector(openPermissions), keyEquivalent: "")
+        warning.target = self
+        warning.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Warning")
+        warningItems = [warningSeparator, warning]
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "Reload UI", action: #selector(reloadUIAction), keyEquivalent: "r").target = self
-        let launch = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        launch.target = self
-        launch.state = launchAtLogin ? .on : .off
-        launchAtLoginItem = launch
-        menu.addItem(.separator())
+        menu.addItem(withTitle: "About Just Notch", action: #selector(showAbout), keyEquivalent: "").target = self
+        reloadItem = menu.addItem(withTitle: "Reload UI", action: #selector(reloadUIAction), keyEquivalent: "r")
+        reloadItem?.target = self
         menu.addItem(withTitle: "Quit Just Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
         statusItem = item
+        refreshStatusItem()
+    }
+
+    /// Runs as the menu opens, so ⌥ and the permission state are read at that moment.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshStatusItem()
+        #if DEBUG
+        reloadItem?.isHidden = false
+        #else
+        reloadItem?.isHidden = !NSEvent.modifierFlags.contains(.option)
+        #endif
+        let enabled = Launcher.enabled
+        launcherItem?.isHidden = !enabled
+        if let launcherItem, enabled {
+            let (key, modifiers) = Self.keyEquivalent(Launcher.shortcut)
+            launcherItem.keyEquivalent = key
+            launcherItem.keyEquivalentModifierMask = modifiers
+        }
+    }
+
+    /// The warning item and the icon's tooltip while Accessibility is broken.
+    private func refreshStatusItem() {
+        let broken = Accessibility.state() == .broken
+        for item in warningItems { item.isHidden = !broken }
+        statusItem?.button?.toolTip = broken ? "Just Notch: Accessibility needs attention" : "Just Notch"
+    }
+
+    @objc private func openLauncher() {
+        launcher.toggle()
+    }
+
+    /// The island's settings on the Permissions page, through the same path as a `justnotch://settings/…` link.
+    @objc private func openPermissions() {
+        guard let payload = try? JSONSerialization.data(withJSONObject: ["url": "justnotch://settings/permissions"]) else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        events.send("deepLink.open", payload: payload, to: webViews)
+    }
+
+    /// An Electron-style accelerator (`Alt+Space`) as a menu key equivalent, for display.
+    static func keyEquivalent(_ accelerator: String) -> (String, NSEvent.ModifierFlags) {
+        var modifiers: NSEvent.ModifierFlags = []
+        var key = ""
+        for part in accelerator.split(separator: "+").map({ $0.lowercased() }) {
+            switch part {
+            case "alt", "option": modifiers.insert(.option)
+            case "cmd", "command", "commandorcontrol", "cmdorctrl", "super", "meta": modifiers.insert(.command)
+            case "ctrl", "control": modifiers.insert(.control)
+            case "shift": modifiers.insert(.shift)
+            case "space": key = " "
+            case "return", "enter": key = "\r"
+            case "tab": key = "\t"
+            default: key = part.count == 1 ? part : ""
+            }
+        }
+        return (key, key.isEmpty ? [] : modifiers)
     }
 
     @objc private func reloadUIAction() { reloadUI() }
@@ -253,14 +321,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return credits
     }
 
-    @objc private func toggleLaunchAtLogin() {
-        do {
-            try setLaunchAtLogin(!launchAtLogin)
-        } catch {
-            log.error("launch at login: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         item.action != #selector(checkForUpdates) || updater.canCheck
     }
@@ -270,7 +330,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var launchAtLogin: Bool { SMAppService.mainApp.status == .enabled }
 
     func setLaunchAtLogin(_ enabled: Bool) throws {
-        defer { launchAtLoginItem?.state = launchAtLogin ? .on : .off }
         if enabled {
             try SMAppService.mainApp.register()
         } else {
