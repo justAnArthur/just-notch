@@ -127,6 +127,7 @@ enum Schema {
         "weather": .weatherRead,
         "clipboard": .clipboard,
         "recentFiles": .filesRecent,
+        "frontApp": .windows,
     ]
 
     static let methodPermission: [String: Permission] = [
@@ -175,6 +176,7 @@ enum Schema {
         "secrets.delete": .secrets,
         "windows.front": .windows,
         "windows.setFrame": .windows,
+        "windows.tiling": .windows,
     ]
 
     static let runtimeOnly: Set<String> = [

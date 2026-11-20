@@ -142,6 +142,7 @@ const values: Topics = {
       { id: 'c4', kind: 'image', content: '1280×720', detail: '412 KB', preview: artwork(4), app: 'Preview', copiedAt: Date.now() - 2 * hour, pinned: false },
     ],
   },
+  frontApp: { bundleId: 'com.apple.Safari', name: 'Safari' },
   recentFiles: {
     access: 'granted',
     files: [
@@ -607,11 +608,12 @@ const handlers: Handlers = {
     actions.push(`system ${action}`)
     return null
   },
-  'windows.front': () => ({ app: 'Safari', pid: 1, title: 'Just Notch', frame: { ...mockWindow }, screen: 0, screens: [{ x: 0, y: 33, w: 1512, h: 949 }] }),
+  'windows.front': () => ({ app: 'Safari', bundleId: 'com.apple.Safari', pid: 1, title: 'Just Notch', frame: { ...mockWindow }, screen: 0, screens: [{ x: 0, y: 33, w: 1512, h: 949 }] }),
   'windows.setFrame': ({ frame }) => {
     mockWindow = frame
     return null
   },
+  'windows.tiling': () => ({ edgeDrag: true, topEdgeDrag: true, optionDrag: true, margins: false }),
   'recentFiles.clear': ({ source }) => {
     publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
     return null

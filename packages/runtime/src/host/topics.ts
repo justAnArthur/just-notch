@@ -24,6 +24,7 @@ const NULLABLE: { [T in Topic]: null extends Topics[T] ? true : false } = {
   weather: false,
   clipboard: false,
   recentFiles: false,
+  frontApp: true,
 }
 
 /** The host answers a subscription with `null` until its first sample; plugins wait for a real value instead. */

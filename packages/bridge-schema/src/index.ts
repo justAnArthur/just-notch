@@ -32,6 +32,7 @@ export interface UpdaterPreferences {
 /** `windows.front`. */
 export interface FrontWindow {
   app: string
+  bundleId: string
   pid: number
   title: string
   frame: Rect
@@ -531,6 +532,20 @@ export interface DisplayState {
   keyboardBacklight?: number
 }
 
+/** `frontApp`: the app in front, or null when none (or Just Notch itself). */
+export interface FrontApp {
+  bundleId: string
+  name: string
+}
+
+/** `windows.tiling`: macOS's own window tiling settings (read only). */
+export interface TilingSettings {
+  edgeDrag: boolean
+  topEdgeDrag: boolean
+  optionDrag: boolean
+  margins: boolean
+}
+
 export interface Topics {
   media: MediaState | null
   power: PowerState
@@ -543,6 +558,7 @@ export interface Topics {
   weather: WeatherState
   clipboard: ClipboardState
   recentFiles: RecentFilesState
+  frontApp: FrontApp | null
 }
 export type Topic = keyof Topics
 
@@ -559,6 +575,7 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
   weather: 'weather.read',
   clipboard: 'clipboard',
   recentFiles: 'files.recent',
+  frontApp: 'windows',
 }
 
 // ── Methods: JS → Swift requests ──
@@ -796,7 +813,10 @@ export interface Methods {
    */
   'windows.front': { params: Record<string, never>; result: FrontWindow }
   /** Moves and resizes the front app's focused window, in the same space as `windows.front`. */
-  'windows.setFrame': { params: { frame: Rect }; result: null }
+  /** `animate` (default true) eases the move; Reduce Motion always turns it off. */
+  'windows.setFrame': { params: { frame: Rect; animate?: boolean }; result: null }
+  /** macOS's own tiling settings, read from com.apple.WindowManager and never written. */
+  'windows.tiling': { params: Record<string, never>; result: TilingSettings }
 
   /** Hides a source's current files from `recentFiles`; nothing is deleted. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
@@ -969,6 +989,7 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'secrets.delete': 'secrets',
   'windows.front': 'windows',
   'windows.setFrame': 'windows',
+  'windows.tiling': 'windows',
 }
 
 /** Methods only the runtime (`plugin: 'runtime'`) may call. */
