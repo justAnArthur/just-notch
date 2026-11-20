@@ -508,7 +508,7 @@ export interface CurrencyRates {
 }
 
 /** System actions the launcher offers (its Actions scope). */
-export type SystemAction = 'sleep' | 'displaySleep' | 'screenSaver' | 'emptyTrash' | 'toggleDarkMode'
+export type SystemAction = 'sleep' | 'displaySleep' | 'screenSaver' | 'emptyTrash' | 'toggleDarkMode' | 'lockScreen' | 'restart' | 'shutDown' | 'logOut' | 'quitFrontApp'
 
 export interface RecentFile {
   /** Also the absolute path. */

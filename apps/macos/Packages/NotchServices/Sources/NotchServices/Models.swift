@@ -207,7 +207,7 @@ public struct CurrencyRates: Codable, Equatable, Sendable {
 }
 
 public enum SystemAction: String, Codable, Sendable {
-    case sleep, displaySleep, screenSaver, emptyTrash, toggleDarkMode
+    case sleep, displaySleep, screenSaver, emptyTrash, toggleDarkMode, lockScreen, restart, shutDown, logOut, quitFrontApp
 }
 
 public struct RecentFile: Codable, Equatable, Sendable {

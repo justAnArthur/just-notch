@@ -21,7 +21,16 @@ describe('root ranking', () => {
     expect(titles('pomo')).toEqual(['Start Pomodoro'])
   })
 
-  it('no longer runs Turn Off Display for "lock"', () => {
-    expect(titles('lock')).not.toContain('Turn Off Display')
+  it('locks the screen for "lock", not Turn Off Display', () => {
+    expect(titles('lock')).toEqual(['Lock Screen'])
+  })
+
+  it('offers restart, shut down and log out, and quits the app in front by name', () => {
+    expect(titles('rest')[0]).toBe('Restart…')
+    expect(titles('shut')[0]).toBe('Shut Down…')
+    expect(titles('log out')[0]).toBe('Log Out…')
+    expect(matchActions('quit', true, [], {}, 'Safari').map((m) => m.title)).toEqual(['Quit Safari'])
+    expect(matchActions('quit saf', true, [], {}, 'Safari').map((m) => m.title)).toEqual(['Quit Safari'])
+    expect(titles('quit')).toEqual([])
   })
 })

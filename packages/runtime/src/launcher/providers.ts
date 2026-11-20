@@ -1,8 +1,9 @@
 import type { AppInfo, CurrencyRates, FileHit, Method, Methods, SystemAction } from '@just-notch/bridge-schema'
 import type { IconProps, SearchItem } from '@just-notch/sdk'
-import { AppWindow, ArrowUpRight, CircleAlert, Copy, Folder, FolderSearch, Globe, Layers, Moon, MonitorOff, Play, Search, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
+import { AppWindow, ArrowUpRight, CircleX, Lock, LogOut, Power, RotateCcw, CircleAlert, Copy, Folder, FolderSearch, Globe, Layers, Moon, MonitorOff, Play, Search, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useState } from 'react'
 import { call } from '../host/client'
+import { subscribeTopic } from '../host/topics'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import { searchApps, useAppIndex } from './apps'
 import { inlineAnswer } from './engines'
@@ -61,6 +62,13 @@ const SYSTEM_ACTIONS: { action: SystemAction; title: string; keywords: string[];
   { action: 'screenSaver', title: 'Start Screen Saver', keywords: ['screen saver', 'screensaver'], icon: Sparkles },
   { action: 'emptyTrash', title: 'Empty Trash', keywords: ['trash', 'bin'], icon: Trash2, confirm: 'Press ↩ again to empty the Trash' },
   { action: 'toggleDarkMode', title: 'Toggle Dark Mode', keywords: ['dark mode', 'appearance', 'light mode'], icon: SunMoon },
+  { action: 'lockScreen', title: 'Lock Screen', keywords: ['lock'], icon: Lock },
+  // macOS asks for these itself, with its own countdown and Cancel.
+  { action: 'restart', title: 'Restart…', keywords: ['restart', 'reboot'], icon: RotateCcw },
+  { action: 'shutDown', title: 'Shut Down…', keywords: ['shut down', 'shutdown', 'power off', 'turn off'], icon: Power },
+  { action: 'logOut', title: 'Log Out…', keywords: ['log out', 'logout', 'sign out'], icon: LogOut },
+  // Named after the app in front when the launcher opened: "Quit Safari".
+  { action: 'quitFrontApp', title: 'Quit App', keywords: ['quit', 'close app'], icon: CircleX },
 ]
 
 const fileKind: Record<FileHit['kind'], string> = {
@@ -195,13 +203,18 @@ export interface ActionMatch {
  * The system actions and Shortcuts for `query` (all of them for none), best first. The root shows them only for a
  * close match, not for letters scattered through their names: "term" is Terminal's, not Toggle Dark Mode's.
  */
-export function matchActions(query: string, root: boolean, shortcuts: string[], frecency: Frecency): ActionMatch[] {
+export function matchActions(query: string, root: boolean, shortcuts: string[], frecency: Frecency, frontApp?: string): ActionMatch[] {
   const least = root ? FUZZY_MAX + 1 : 1
   const matches: ActionMatch[] = []
   const add = (found: Omit<ActionMatch, 'match' | 'score'>, match: number) => {
     if (match >= least) matches.push({ ...found, match, score: rankScore(match, frecencyScore(frecency, found.id)) })
   }
-  for (const a of SYSTEM_ACTIONS) add({ id: `action:${a.action}`, title: a.title, action: a.action }, query ? bestScore(query, a.title, a.keywords) : least)
+  for (const a of SYSTEM_ACTIONS) {
+    // Quit needs an app in front to name and quit.
+    if (a.action === 'quitFrontApp' && !frontApp) continue
+    const title = a.action === 'quitFrontApp' ? `Quit ${frontApp}` : a.title
+    add({ id: `action:${a.action}`, title, action: a.action }, query ? bestScore(query, title, a.keywords) : least)
+  }
   for (const name of shortcuts) add({ id: `shortcut:${name}`, title: name, shortcut: name }, query ? bestScore(query, name) : least)
   return matches.sort((a, b) => b.score - a.score)
 }
@@ -244,6 +257,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
   const { frecency, knowledge, prefs, snapshots } = store
   const [rates, setRates] = useState<CurrencyRates | null>(null)
   const [shortcuts, setShortcuts] = useState<string[]>([])
+  const [frontApp, setFrontApp] = useState<string>()
   const q = query.trim()
   const known = normalize(q)
   const root = scope === undefined
@@ -253,6 +267,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     if (!open) return
     void call('runtime', 'rates.currency', {}).then(setRates, () => {})
     void call('runtime', 'actions.shortcuts', {}).then(setShortcuts, () => {})
+    return subscribeTopic('frontApp', (app) => setFrontApp(app?.name))
   }, [open])
 
   // Files and plugin scopes answer later. The root asks the plugins that show there, a scope only itself.
@@ -286,7 +301,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
   }
 
   const appResults = (limit: number) => (q ? searchApps(q, apps, frecency, limit) : root ? [] : allApps(apps))
-  const actionResults = (limit: number) => matchActions(q, root, shortcuts, {}).slice(0, limit)
+  const actionResults = (limit: number) => matchActions(q, root, shortcuts, {}, frontApp).slice(0, limit)
   const fallbackRows = (others: boolean): Row[] =>
     shownFallbacks(prefs.fallbacks, others).map((f) => ({
       id: `fallback:${f.id}`,
@@ -301,7 +316,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     let rows: Row[] | undefined
     let failed = false
     if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map((r) => appRow(r.id, r.app.name, r.app.path))
-    else if (scope.id === 'actions') rows = matchActions(q, false, shortcuts, frecency).slice(0, SCOPE_LIMIT).map(actionRow)
+    else if (scope.id === 'actions') rows = matchActions(q, false, shortcuts, frecency, frontApp).slice(0, SCOPE_LIMIT).map(actionRow)
     else if (scope.id === 'files' && !q) return { sections: [], note: 'Type to search your files.', ...state }
     else ({ rows, failed = false } = rowsOf(scope.id === 'files' ? 'files' : scope.id, scope.title, scope.plugin ? net(scope) : false))
     if (!rows) return { sections: [], ...state }

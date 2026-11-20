@@ -56,7 +56,33 @@ public final class ActionsService: NotchService {
             _ = try await Self.run("/usr/bin/osascript", ["-e", #"tell application "Finder" to empty trash"#])
         case .toggleDarkMode:
             _ = try await Self.run("/usr/bin/osascript", ["-e", #"tell application "System Events" to tell appearance preferences to set dark mode to not dark mode"#])
+        case .lockScreen:
+            try Self.lockScreen()
+        // loginwindow's "show the dialog" events: macOS asks itself (with its countdown and Cancel), as the Apple menu does.
+        case .restart:
+            _ = try await Self.run("/usr/bin/osascript", ["-e", #"tell application "loginwindow" to «event aevtrrst»"#])
+        case .shutDown:
+            _ = try await Self.run("/usr/bin/osascript", ["-e", #"tell application "loginwindow" to «event aevtrsdn»"#])
+        case .logOut:
+            _ = try await Self.run("/usr/bin/osascript", ["-e", #"tell application "loginwindow" to «event aevtlogo»"#])
+        case .quitFrontApp:
+            // The launcher's panel never activates, so the app in front is the one it opened over.
+            guard let app = NSWorkspace.shared.frontmostApplication, app.bundleIdentifier != Bundle.main.bundleIdentifier else {
+                throw ServiceError("no app in front to quit")
+            }
+            guard app.terminate() else { throw ServiceError("\(app.localizedName ?? "The app") didn't quit") }
         }
+    }
+
+    /// Locks at once, as ⌃⌘Q does: `SACLockScreenImmediate` from the login framework, the call the Apple menu's Lock
+    /// Screen makes.
+    private static func lockScreen() throws {
+        typealias Lock = @convention(c) () -> Int32
+        guard let framework = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_LAZY),
+              let symbol = dlsym(framework, "SACLockScreenImmediate") else {
+            throw ServiceError("this macOS can't lock the screen from here")
+        }
+        _ = unsafeBitCast(symbol, to: Lock.self)()
     }
 
     /// Runs a tool off the main thread; its standard output, or its standard error as the failure.
