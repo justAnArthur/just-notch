@@ -1,8 +1,9 @@
-import { Agenda, type AgendaEvent } from '@justanarthur/modo-ui-notch'
+import { Agenda, type AgendaEvent, formatShort, useEdgeClock } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
 import { type CalendarEvent, definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { CalendarDays } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { ringFigure } from './wings'
 
 const MINUTE = 60_000
 /** The activity stays this long into the event, for a late Join. */
@@ -52,19 +53,64 @@ function Widget() {
   )
 }
 
+const SECOND = 1000
+
+/** Time to the event's start, re-read on each `unit`'s edge until it starts. */
+function useLeft(event: AgendaEvent, unit: number) {
+  return event.start - useEdgeClock(event.start, Date.now() < event.start + SECOND, unit)
+}
+
+/** The compact left wing: one mark, the calendar's color as a dot. */
 function Leading() {
   const event = next.use()
-  return event ? <Agenda.Leading event={event} /> : null
+  if (!event) return null
+  return <span aria-hidden style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: event.color }} />
 }
 
+/** The compact right wing: the time to go alone (`8m`, then `45s`, as the flash counts), the color already on the left. */
 function Trailing() {
   const event = next.use()
-  return event ? <Agenda.Trailing event={event} /> : null
+  return event ? <TrailingFigure event={event} /> : null
 }
 
+function TrailingFigure({ event }: { event: AgendaEvent }) {
+  const left = useLeft(event, MINUTE)
+  return <span className="text-caption weight-semibold text-foreground tabular-nums">{left > 0 ? formatShort(left / SECOND) : 'now'}</span>
+}
+
+/** The split bubble: a ring in the calendar's color that empties as the start nears, with the minutes to go inside. */
 function Minimal() {
   const event = next.use()
-  return event ? <Agenda.Minimal event={event} /> : null
+  return event ? <Ring event={event} /> : null
+}
+
+const R = 9
+const RING = 2 * Math.PI * R
+
+function Ring({ event }: { event: AgendaEvent }) {
+  const [lead] = useStorage(LEAD, 10)
+  const left = Math.max(0, useLeft(event, SECOND))
+  const figure = ringFigure(left)
+  return (
+    <svg role="img" aria-label={`${event.title}, in ${formatShort(left / SECOND)}`} viewBox="0 0 22 22" width={24} height={24}>
+      <circle cx="11" cy="11" r={R} fill="none" strokeWidth="2" stroke="currentColor" opacity={0.2} />
+      <circle
+        cx="11"
+        cy="11"
+        r={R}
+        fill="none"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray={RING}
+        strokeDashoffset={RING * (1 - Math.min(1, left / (lead * MINUTE)))}
+        transform="rotate(-90 11 11)"
+        style={{ stroke: event.color }}
+      />
+      <text x="11" y="11" textAnchor="middle" dominantBaseline="central" fill="currentColor" fontSize={figure === 'now' ? 6 : 9} fontWeight={600}>
+        {figure}
+      </text>
+    </svg>
+  )
 }
 
 function Starting() {
