@@ -1,7 +1,7 @@
 import type { AppPreferences, InstalledPlugin, LibraryEntry, Methods, UpdaterPreferences, UpdateState } from '@just-notch/bridge-schema'
 import { Badge, Button, LIST_SWITCH, List, Switch } from '@justanarthur/modo-ui'
 import { type PermissionState, type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
-import { Library, Search } from 'lucide-react'
+import { Library, Monitor, Search } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call } from '../host/client'
@@ -9,6 +9,7 @@ import { useHostInfo, useInstalled } from '../host/session'
 import { subscribeTopic } from '../host/topics'
 import { usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
+import DisplaysPage from './displays'
 import LauncherPage, { type PreferenceChange } from './launcher'
 import LibraryPage, { useLibrary } from './library'
 import { entryState, updateCount } from './library-state'
@@ -316,6 +317,7 @@ export default function Settings() {
       after: 'general',
       content: <LauncherPage preferences={preferences} error={preferencesError} onChange={setPreferences} />,
     },
+    { id: 'displays', label: 'Displays', lead: 'Where the island shows, and when it steps aside.', icon: Monitor, after: 'launcher', content: <DisplaysPage preferences={preferences} onChange={setPreferences} /> },
     {
       id: 'library',
       label: 'Library',
