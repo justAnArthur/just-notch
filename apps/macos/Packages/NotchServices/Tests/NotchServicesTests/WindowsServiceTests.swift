@@ -37,4 +37,17 @@ struct WindowsServiceTests {
         #expect(!WindowsService.animates(from: from, to: from.offsetBy(dx: 300, dy: 0), reduceMotion: true))
         #expect(!WindowsService.animates(from: from, to: from.offsetBy(dx: 2, dy: 3), reduceMotion: false))
     }
+
+    @Test func tilingIsOnUnlessTurnedOff() {
+        let all = MacTiling(edgeDrag: true, topEdgeDrag: true, optionDrag: true, margins: true)
+        #expect(WindowsService.tiling({ _ in nil }, macOS15: true) == all)
+        let off = WindowsService.tiling({ $0 == "EnableTilingByEdgeDrag" ? false : nil }, macOS15: true)
+        #expect(!off.edgeDrag && off.topEdgeDrag)
+        #expect(WindowsService.tiling({ _ in true }, macOS15: false) == MacTiling(edgeDrag: false, topEdgeDrag: false, optionDrag: false, margins: false))
+    }
+
+    @Test func noAppInFrontIsNull() throws {
+        let none: FrontApp? = nil
+        #expect(String(decoding: try #require(none.json()), as: UTF8.self) == "null")
+    }
 }

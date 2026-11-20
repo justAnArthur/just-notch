@@ -1,13 +1,51 @@
 import AppKit
 
 /// `windows.front` and `windows.setFrame`: the front app's focused window through Accessibility. Frames are global
-/// points with the origin at the top left of the main screen, y down, as Accessibility gives them.
+/// points with the origin at the top left of the main screen, y down, as Accessibility gives them. Also
+/// `windows.tiling` (macOS's own tiling settings, read only) and the `frontApp` topic.
 @MainActor
 public final class WindowsService: NotchService {
-    public let methods = ["windows.front", "windows.setFrame"]
+    public let methods = ["windows.front", "windows.setFrame", "windows.tiling"]
+    public let topics = ["frontApp"]
     public weak var sink: ServiceSink?
+    private var activation: NSObjectProtocol?
 
     public init() {}
+
+    public func start(topic: String) {
+        activation = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let value = Self.frontApp().json() else { return }
+                self.sink?.publish(topic: "frontApp", value: value)
+            }
+        }
+    }
+
+    public func stop(topic: String) {
+        if let activation { NSWorkspace.shared.notificationCenter.removeObserver(activation) }
+        activation = nil
+    }
+
+    public func snapshot(topic: String) async -> Data? {
+        Self.frontApp().json()
+    }
+
+    /// Encodes as `null` when nothing (or Just Notch itself) is in front.
+    static func frontApp() -> FrontApp? {
+        guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid() else { return nil }
+        return FrontApp(bundleId: app.bundleIdentifier ?? "", name: app.localizedName ?? "")
+    }
+
+    /// macOS 15's tiling settings (Desktop & Dock › Windows), on unless the user turned them off; none before 15.
+    /// Read, never written: changing Apple's defaults behind the user's back is theirs to do.
+    static func tiling(_ read: (String) -> Any? = { CFPreferencesCopyAppValue($0 as CFString, "com.apple.WindowManager" as CFString) },
+                       macOS15: Bool = ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0))) -> MacTiling {
+        func on(_ key: String) -> Bool { macOS15 && (read(key) as? Bool ?? true) }
+        return MacTiling(edgeDrag: on("EnableTilingByEdgeDrag"), topEdgeDrag: on("EnableTopTilingByEdgeDrag"),
+                         optionDrag: on("EnableTilingOptionAccelerator"), margins: on("EnableTiledWindowMargins"))
+    }
 
     public func handle(method: String, params: Data) async throws -> Data? {
         switch method {
@@ -17,6 +55,7 @@ public final class WindowsService: NotchService {
             let screens = NSScreen.screens.map { Self.flip($0.visibleFrame) }
             return FrontWindow(
                 app: app.localizedName ?? "",
+                bundleId: app.bundleIdentifier ?? "",
                 pid: Int(app.processIdentifier),
                 title: string(window, kAXTitleAttribute) ?? "",
                 frame: Rect(frame),
@@ -24,10 +63,12 @@ public final class WindowsService: NotchService {
                 screens: screens.map(Rect.init)
             ).json()
         case "windows.setFrame":
-            let target = try decode(SetFrameParams.self, params).frame
+            let p = try decode(SetFrameParams.self, params)
             let (app, window) = try focusedWindow()
-            try await setFrame(window, app: app, to: CGRect(x: target.x, y: target.y, width: target.w, height: target.h))
+            try await setFrame(window, app: app, to: CGRect(x: p.frame.x, y: p.frame.y, width: p.frame.w, height: p.frame.h), animate: p.animate ?? true)
             return nil
+        case "windows.tiling":
+            return Self.tiling().json()
         default:
             throw ServiceError("unknown method \(method)")
         }
@@ -122,7 +163,7 @@ public final class WindowsService: NotchService {
     /// Steps the window toward `frame`, then sets it: size, position, then size again, since a window too large
     /// for the screen it's leaving can't move until it shrinks, and one moving to a larger screen can't grow until
     /// it has moved. A window that won't resize (a fixed-size panel) still moves; one that won't move is an error.
-    private func setFrame(_ window: AXUIElement, app: NSRunningApplication, to frame: CGRect) async throws {
+    private func setFrame(_ window: AXUIElement, app: NSRunningApplication, to frame: CGRect, animate: Bool) async throws {
         generation += 1
         let mine = generation
         // With enhanced UI on (VoiceOver, some Electron and Chromium apps) the app animates every step, slowly.
@@ -133,7 +174,7 @@ public final class WindowsService: NotchService {
         if wasEnhanced { AXUIElementSetAttributeValue(appElement, enhanced, kCFBooleanFalse) }
         defer { if wasEnhanced { AXUIElementSetAttributeValue(appElement, enhanced, kCFBooleanTrue) } }
 
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduceMotion = !animate || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if !wasEnhanced, let start = try? self.frame(of: window, app: app), Self.animates(from: start, to: frame, reduceMotion: reduceMotion) {
             let began = Date()
             while true {
@@ -215,6 +256,7 @@ private struct Rect: Codable {
 
 private struct FrontWindow: Encodable {
     var app: String
+    var bundleId: String
     var pid: Int
     var title: String
     var frame: Rect
@@ -224,4 +266,17 @@ private struct FrontWindow: Encodable {
 
 private struct SetFrameParams: Decodable {
     var frame: Rect
+    var animate: Bool?
+}
+
+struct FrontApp: Encodable {
+    var bundleId: String
+    var name: String
+}
+
+struct MacTiling: Encodable, Equatable {
+    var edgeDrag: Bool
+    var topEdgeDrag: Bool
+    var optionDrag: Bool
+    var margins: Bool
 }
