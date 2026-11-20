@@ -9,7 +9,12 @@ import NotchServices
 /// menu bar and gets the keyboard back) and lets the keyboard go once the page says it's closed.
 @MainActor
 final class Launcher {
+    #if DEBUG
+    /// ⌃⌥Space, so a Debug build can run beside the installed app, which keeps ⌥Space.
+    static let defaultShortcut = "Control+Alt+Space"
+    #else
     static let defaultShortcut = "Alt+Space"
+    #endif
     private static let shortcutKey = "launcher.shortcut"
     private static let enabledKey = "launcher.enabled"
 
