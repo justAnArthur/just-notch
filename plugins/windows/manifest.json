@@ -2,13 +2,14 @@
   "id": "windows",
   "name": "Window Management",
   "version": "0.1.0",
-  "description": "Halves, quarters, thirds, sixths, maximize and other screens, from the launcher.",
+  "description": "Halves, quarters, thirds, sixths, maximize and other screens, from the launcher or ⌃⌥ hotkeys.",
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [
-    "windows"
+    "windows",
+    "hotkeys"
   ],
   "engines": {
-    "notch": "^1.4.0"
+    "notch": "^1.5.0"
   }
 }

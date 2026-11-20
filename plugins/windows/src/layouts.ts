@@ -14,9 +14,9 @@ export interface Layout {
   op?: Op
 }
 
-const T = 1 / 3
+export const T = 1 / 3
 
-const part = (id: string, title: string, x: number, y: number, w: number, h: number, keywords?: string[]): Layout => ({ id, title, part: { x, y, w, h }, keywords })
+export const part = (id: string, title: string, x: number, y: number, w: number, h: number, keywords?: string[]): Layout => ({ id, title, part: { x, y, w, h }, keywords })
 const op = (id: Op, title: string, keywords?: string[]): Layout => ({ id, title, op: id, keywords })
 
 /** Every layout, in the order the scope lists them. */
@@ -63,6 +63,8 @@ export const LAYOUTS: Layout[] = [
   op('smaller', 'Make Smaller', ['shrink']),
   op('restore', 'Restore', ['undo', 'original']),
 ]
+
+export const layout = (id: string): Layout => LAYOUTS.find((l) => l.id === id)!
 
 /** The layouts every word of `query` starts a word of, those whose title starts with it first. */
 export function findLayouts(query: string): Layout[] {
