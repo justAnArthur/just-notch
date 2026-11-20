@@ -226,14 +226,13 @@ await swipe(page, '#island [data-island-content]', 12, 0)
 check((await selectedTab(page)) === names.at(-2), 'a swipe to the right goes back one tab (one per gesture)')
 await swipe(page, '#island [data-island-content]', -12, 0)
 check((await selectedTab(page)) === names.at(-1), 'a swipe to the left goes forward one tab')
-const title = () => page.locator('#island [data-island-title]').textContent()
-// Off the tab strip, so the title shows the selection, not the hovered tab's preview.
+const settingsOpen = async () => (await page.locator('#island button[aria-label="Settings"]').getAttribute('aria-pressed')) === 'true'
 const middle = (await page.locator('#island [data-island-content]').boundingBox())!
 await page.mouse.move(middle.x + middle.width / 2, middle.y + middle.height / 2)
 await swipe(page, '#island [data-island-content]', -12, 0)
 await settle(page)
-const opened = { title: await title(), h: Math.round((await page.locator('#island > svg path').first().boundingBox())!.height) }
-check(opened.title === 'Settings' && opened.h > 500, `past the last widget a swipe opens settings, on the tall snap (${opened.title}, ${opened.h}px)`)
+const opened = { settings: await settingsOpen(), h: Math.round((await page.locator('#island > svg path').first().boundingBox())!.height) }
+check(opened.settings && opened.h > 500, `past the last widget a swipe opens settings, on the tall snap (${opened.h}px)`)
 await swipe(page, '#island [data-island-content]', -12, 0)
 await settle(page)
 check((await selectedTab(page)) === names[0], 'past settings a swipe wraps round to the first tab')

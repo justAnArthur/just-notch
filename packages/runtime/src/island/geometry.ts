@@ -22,8 +22,8 @@ export const EXPANDED = { w: 648, h: 240 }
 const SHEET_H = 560
 /** The least the first snap shrinks to. */
 const FIT_MIN = 140
-/** The open island's height around its content: the tab row (the notch's height), the title (h-6), the gap above the content (pt-2) and the bottom inset (pb-5, as the sides). */
-export const chromeHeight = (g: ScreenGeometry) => g.notch.h + 24 + 8 + 20
+/** The open island's height around its content: the tab row (the notch's height), the gap above the content (pt-1) and the bottom inset (pb-5, as the sides). */
+export const chromeHeight = (g: ScreenGeometry) => g.notch.h + 4 + 20
 
 /** How tall the open island is: on the first snap it fits `content`, on the second it is the tall sheet. */
 export interface Sheet {
@@ -34,11 +34,11 @@ export interface Sheet {
 /** Room for one compact slot beside the notch: about as wide as the notch is tall. */
 export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
 
-/** The expanded island's one content inset (px-5): header, title and content all start here, clear of the bottom corners. */
+/** The expanded island's one content inset (px-5): the tab row's first glyph and the content both start here, clear of the bottom corners. */
 export const INSET = 20
 /** An icon tab's width (w-7.5): a compact control's height plus the icon's breathing room. */
 export const TAB_W = 30
-/** The tab row's inset (px-3): a tab's 14 px glyph sits centered in its 30 px button, so the first glyph lands on INSET like the title and the content. */
+/** The tab row's inset (px-3): a tab's 14 px glyph sits centered in its 30 px button, so the first glyph lands on INSET like the content. */
 export const STRIP_INSET = INSET - (TAB_W - 14) / 2
 /** Kept free on each side of the notch. */
 const NOTCH_GAP = 8

@@ -50,20 +50,16 @@ interface TabStripProps {
   selected: number
   layout: StripLayout
   onSelect: (index: number) => void
-  /** The tab under the pointer, previewed in the title. */
-  onHover: (index: number | null) => void
 }
 
 /**
  * Icon tabs across both wings: the left wing's tabs, a gap the width of the notch, the right wing's.
  * The selected pill melts from tab to tab (across the notch too); past what both wings hold the strip scrolls behind the notch.
  */
-export default function TabStrip({ tabs, selected, layout, onSelect, onHover }: TabStripProps) {
+export default function TabStrip({ tabs, selected, layout, onSelect }: TabStripProps) {
   const viewport = useRef<HTMLDivElement>(null)
   const hover = useFluidHover(viewport, { axis: 'x' })
   useEdgeFade(viewport, 'x', layout.overflow)
-
-  useEffect(() => onHover(hover.activeIndex), [hover.activeIndex])
 
   // Scrolls only the strip (scrollIntoView would scroll the page under the island too), and moves keyboard focus along.
   useEffect(() => {

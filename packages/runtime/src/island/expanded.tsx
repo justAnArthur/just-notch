@@ -1,7 +1,7 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
 import { Button, SizeProvider } from '@justanarthur/modo-ui'
 import { Puzzle, Settings as SettingsIcon } from 'lucide-react'
-import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type RefObject, useEffect, useLayoutEffect, useRef } from 'react'
 import { type ActivityEntry, SETTINGS_TAB, type Snap } from '../activity/reducer'
 import { dispatch, useActivityState } from '../activity/store'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
@@ -64,14 +64,13 @@ function tabsOf(primary: ActivityEntry | undefined, plugins: LoadedPlugin[]): Ta
 }
 
 /**
- * The open island: icon tabs in both wings around the notch and settings at the far right, the tab's title
- * (or the hovered tab's, as a preview), and its view. On the first snap the island fits the view (it scrolls
+ * The open island: icon tabs in the wings around the notch and settings at the far right, then the tab's view.
+ * No title row: the selected icon says where you are, and each icon names itself on hover (its aria-label). On the first snap the island fits the view (it scrolls
  * past the snap's cap); on the tall snap the view fills it. Settings is a page of its own, on the tall snap.
  */
 export default function Expanded({ primary, shape, geometry, step, onFit }: ExpandedProps) {
   const plugins = usePlugins()
   const { tab: selected, snap } = useActivityState()
-  const [hovered, setHovered] = useState<number | null>(null)
   const content = useRef<HTMLDivElement>(null)
   const measure = useRef<HTMLDivElement>(null)
 
@@ -80,7 +79,6 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
   const found = tabs.findIndex((t) => t.id === selected)
   const index = settings ? -1 : Math.max(0, found)
   const tab = tabs[index]
-  const title = (hovered !== null ? tabs[hovered]?.label : undefined) ?? (settings ? 'Settings' : tab?.label)
   const layout = stripLayout(tabs.length, shape.w, geometry)
   const fills: boolean = settings || (snap as Snap) === 1
   useEdgeFade(content, 'y', settings ? SETTINGS_TAB : tab?.id)
@@ -117,7 +115,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
       <SizeProvider size="compact">
         <div className="flex shrink-0 items-center px-3" style={{ height: geometry.notch.h }}>
           {tabs.length > 0 ? (
-            <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => select(tabs[i]?.id)} onHover={setHovered} />
+            <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => select(tabs[i]?.id)} />
           ) : (
             <div className="flex-1" />
           )}
@@ -136,11 +134,6 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
         </div>
       </SizeProvider>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-6 shrink-0 items-end px-5">
-          <span data-island-title className="truncate text-caption weight-medium text-muted-foreground">
-            {title}
-          </span>
-        </div>
         {/* The bottom inset matches the sides' (INSET), so the content sits evenly in the outline. It is padding
             of the scroller, so what a view draws past its box (an artwork's glow) stays inside it instead of
             making the view scroll. */}
@@ -149,7 +142,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
           data-island-content
           // On the first snap a vertical swipe moves the island (down to the tall snap, where the view fits), not this.
           data-swipe-through={fills ? undefined : ''}
-          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pt-2 pb-5 scrollbar-hide"
+          className="edge-fade edge-fade-y relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pt-1 pb-5 scrollbar-hide"
         >
           <div ref={measure} className={fills ? 'h-full' : undefined}>
             {settings ? (
