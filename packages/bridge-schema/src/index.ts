@@ -844,6 +844,8 @@ export interface Methods {
   'actions.shortcuts': { params: Record<string, never>; result: string[] }
   'actions.runShortcut': { params: { name: string }; result: null }
   'actions.system': { params: { action: SystemAction }; result: null }
+  /** Puts the text on the pasteboard, then ⌘V into the app in front; `pasted` is false without Accessibility (it stays copied). */
+  'actions.pasteText': { params: { text: string }; result: { pasted: boolean } }
 
   /**
    * The front app's focused window: its frame, and every screen's visible frame (without the menu bar and Dock).
@@ -1087,6 +1089,7 @@ export const RUNTIME_ONLY: Method[] = [
   'actions.shortcuts',
   'actions.runShortcut',
   'actions.system',
+  'actions.pasteText',
 ]
 
 /** Methods the runtime may NOT call as `runtime`: they act for one plugin, under its grants and Keychain entries. */

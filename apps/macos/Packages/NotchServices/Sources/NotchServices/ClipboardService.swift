@@ -89,7 +89,7 @@ public final class ClipboardService: NotchService {
         case "clipboard.paste":
             let p = try decode(PasteParams.self, params)
             try copy(try clip(p.id), plain: p.plain ?? false)
-            return PastedResult(pasted: await paste()).json()
+            return PastedResult(pasted: await Paste.intoFrontApp()).json()
         case "clipboard.delete":
             let id = try decode(IdParams.self, params).id
             change { $0.clips.removeAll { $0.id == id } }
@@ -281,28 +281,6 @@ public final class ClipboardService: NotchService {
         item.setData(png, forType: .png)
         if let tiff = NSImage(data: png)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
         return pasteboard.writeObjects([item])
-    }
-
-    private static var askedForAccessibility = false
-
-    /// ⌘V into the app in front, which needs Accessibility; without it, asks once per run and leaves the clip copied.
-    private func paste() async -> Bool {
-        guard AXIsProcessTrusted() else {
-            if !Self.askedForAccessibility {
-                Self.askedForAccessibility = true
-                AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-            }
-            return false
-        }
-        // The launcher has just closed: give the target app the keyboard back first.
-        try? await Task.sleep(for: .milliseconds(60))
-        let source = CGEventSource(stateID: .combinedSessionState)
-        for down in [true, false] {
-            let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
-            event?.flags = .maskCommand
-            event?.post(tap: .cghidEventTap)
-        }
-        return true
     }
 
     // MARK: state

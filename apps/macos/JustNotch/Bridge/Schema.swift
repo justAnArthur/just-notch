@@ -227,6 +227,7 @@ enum Schema {
         "actions.shortcuts",
         "actions.runShortcut",
         "actions.system",
+        "actions.pasteText",
     ]
 
     /// Methods that act for one plugin (its hosts, its Keychain entries): never as `runtime`.

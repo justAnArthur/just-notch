@@ -623,6 +623,10 @@ const handlers: Handlers = {
     actions.push(`system ${action}`)
     return null
   },
+  'actions.pasteText': ({ text }) => {
+    actions.push(`paste ${text}`)
+    return { pasted: true }
+  },
   'windows.front': () => ({ app: 'Safari', bundleId: 'com.apple.Safari', pid: 1, title: 'Just Notch', frame: { ...mockWindow }, screen: 0, screens: [{ x: 0, y: 33, w: 1512, h: 949 }] }),
   'windows.setFrame': ({ frame }) => {
     mockWindow = frame

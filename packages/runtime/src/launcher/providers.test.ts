@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { matchActions } from './providers'
+import { actionKey } from './actions'
+import { answerActions, matchActions } from './providers'
 
 describe('root ranking', () => {
   const shortcuts = ['Start Pomodoro', 'Translate Clipboard', 'Morning Summary', 'Copy Timestamp', 'Resize Images']
@@ -32,5 +33,19 @@ describe('root ranking', () => {
     expect(matchActions('quit', true, [], {}, 'Safari').map((m) => m.title)).toEqual(['Quit Safari'])
     expect(matchActions('quit saf', true, [], {}, 'Safari').map((m) => m.title)).toEqual(['Quit Safari'])
     expect(titles('quit')).toEqual([])
+  })
+})
+
+describe('answer actions', () => {
+  const answer = { kind: 'math' as const, expression: '15% of 80', result: '12', copy: '12' }
+
+  it('copies on ↩ and ⌘C, pastes on ⌘↩, copies the expression on ⌥↩', () => {
+    const actions = answerActions(answer, () => {})
+    expect(actions.map((a) => [a.title, actionKey(a, actions.indexOf(a))])).toEqual([
+      ['Copy', '↩'],
+      ['Paste', '⌘↩'],
+      ['Copy Expression', '⌥↩'],
+    ])
+    expect(actions[0].shortcut).toBe('Command+C')
   })
 })

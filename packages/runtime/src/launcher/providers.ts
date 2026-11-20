@@ -1,6 +1,6 @@
 import type { AppInfo, CurrencyRates, FileHit, Method, Methods, SystemAction } from '@just-notch/bridge-schema'
 import type { IconProps, SearchItem } from '@just-notch/sdk'
-import { AppWindow, ArrowUpRight, CircleX, Lock, LogOut, Power, RotateCcw, CircleAlert, Copy, Folder, FolderSearch, Globe, Layers, Moon, MonitorOff, Play, Search, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
+import { AppWindow, ArrowUpRight, ClipboardPaste, CircleX, Lock, LogOut, Power, RotateCcw, CircleAlert, Copy, Folder, FolderSearch, Globe, Layers, Moon, MonitorOff, Play, Search, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useState } from 'react'
 import { call } from '../host/client'
 import { subscribeTopic } from '../host/topics'
@@ -406,10 +406,10 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
 }
 
 /**
- * An answer's actions: ↩ and ⌘C copy the result, ⌥↩ copies the expression. Copying (or pasting) a number makes it
+ * An answer's actions: ↩ and ⌘C copy the result, ⌘↩ pastes it, ⌥↩ copies the expression. Copying (or pasting) a number makes it
  * `ans` for the next sum.
  */
-function answerActions(answer: InlineAnswer, setAns: (value: number) => void): Row['actions'] {
+export function answerActions(answer: InlineAnswer, setAns: (value: number) => void): Row['actions'] {
   const keep = () => {
     const value = Number(answer.copy)
     if (answer.copy.trim() !== '' && Number.isFinite(value)) setAns(value)
@@ -418,6 +418,11 @@ function answerActions(answer: InlineAnswer, setAns: (value: number) => void): R
     { title: 'Copy', icon: Copy, shortcut: 'Command+C', run: async () => {
       keep()
       await run('clipboard.writeText', { text: answer.copy })
+    } },
+    // Pastes into the app in front (it stays copied without Accessibility).
+    { title: 'Paste', icon: ClipboardPaste, run: async () => {
+      keep()
+      await run('actions.pasteText', { text: answer.copy })
     } },
     { title: 'Copy Expression', icon: Copy, shortcut: 'Alt+Enter', run: () => run('clipboard.writeText', { text: answer.expression }) },
   ]

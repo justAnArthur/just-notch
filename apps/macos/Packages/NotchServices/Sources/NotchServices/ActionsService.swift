@@ -1,9 +1,10 @@
 import AppKit
 
-/// `actions.shortcuts`, `actions.runShortcut` (the Shortcuts app through `/usr/bin/shortcuts`) and `actions.system`.
+/// `actions.shortcuts`, `actions.runShortcut` (the Shortcuts app through `/usr/bin/shortcuts`), `actions.system`, and
+/// `actions.pasteText` (the launcher's answers).
 @MainActor
 public final class ActionsService: NotchService {
-    public let methods = ["actions.shortcuts", "actions.runShortcut", "actions.system"]
+    public let methods = ["actions.shortcuts", "actions.runShortcut", "actions.system", "actions.pasteText"]
     public weak var sink: ServiceSink?
 
     private static let listTTL: TimeInterval = 60
@@ -28,6 +29,12 @@ public final class ActionsService: NotchService {
         case "actions.system":
             try await system(try decode(SystemActionParams.self, params).action)
             return nil
+        case "actions.pasteText":
+            // Copied first, so it stays on the pasteboard even when the paste can't happen.
+            let text = try decode(TextParams.self, params).text
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            return PastedResult(pasted: await Paste.intoFrontApp()).json()
         default:
             throw ServiceError("unknown method \(method)")
         }
