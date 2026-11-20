@@ -65,6 +65,9 @@ final class Onboarding: NSObject, NSWindowDelegate {
         self.webView = webView
     }
 
+    /// The page while the window is on screen (DebugProbe drives it in Debug builds).
+    var openWebView: WKWebView? { window?.isVisible == true ? webView : nil }
+
     /// The page's Finish: done for good, and the window goes.
     func finish() {
         UserDefaults.standard.set(true, forKey: Self.doneKey)

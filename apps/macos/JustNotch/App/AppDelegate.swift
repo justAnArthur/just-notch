@@ -60,7 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         installPointerMonitors()
         registerLauncherShortcut()
         #if DEBUG
-        probe = DebugProbe { [weak self] in self?.panels.values.first?.webView }
+        // The Welcome window's page while it's open, else the island's.
+        probe = DebugProbe { [weak self] in self?.onboarding.openWebView ?? self?.panels.values.first?.webView }
         #endif
 
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
