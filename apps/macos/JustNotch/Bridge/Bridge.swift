@@ -198,7 +198,10 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             return nil
 
         case "permissions.status":
-            return GrantedResult(granted: await permissionGranted(try decode(PermissionParams.self, params).permission)).json()
+            return GrantedResult(granted: await permissionState(try decode(PermissionParams.self, params).permission) == .allowed).json()
+
+        case "permissions.state":
+            return PermissionStateReply(state: await permissionState(try decode(PermissionParams.self, params).permission)).json()
 
         case "shortcuts.register":
             let id = try hotKeys.register(try decode(AcceleratorParams.self, params).accelerator, owner: ObjectIdentifier(webView))
@@ -354,25 +357,59 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         )
     }
 
-    private func permissionGranted(_ permission: String) async -> Bool {
+    /// What macOS says about a permission, without ever prompting.
+    private func permissionState(_ permission: String) async -> PermissionStateValue {
         switch permission {
         case "accessibility":
-            return Accessibility.state() == .allowed
+            return switch Accessibility.state() {
+            case .allowed: .allowed
+            case .notAsked: .notAsked
+            case .broken: .stale
+            }
         case "calendar":
-            return EKEventStore.authorizationStatus(for: .event) == .fullAccess
+            return switch EKEventStore.authorizationStatus(for: .event) {
+            case .fullAccess: .allowed
+            case .notDetermined: .notAsked
+            default: .off
+            }
         case "bluetooth":
-            return CBManager.authorization == .allowedAlways
+            return switch CBManager.authorization {
+            case .allowedAlways: .allowed
+            case .notDetermined: .notAsked
+            default: .off
+            }
         case "location":
-            return [.authorizedAlways, .authorized].contains(CLLocationManager().authorizationStatus)
+            guard CLLocationManager.locationServicesEnabled() else { return .off }
+            return switch CLLocationManager().authorizationStatus {
+            case .authorizedAlways, .authorized: .allowed
+            case .notDetermined: .notAsked
+            default: .off
+            }
         case "automation":
-            // Music is the usual automation target (media control); there is no app-independent check.
-            let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.Music")
-            return AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, false) == noErr
+            return Self.automationState()
         case "notifications":
-            return [.authorized, .provisional].contains(await UNUserNotificationCenter.current().notificationSettings().authorizationStatus)
+            return switch await UNUserNotificationCenter.current().notificationSettings().authorizationStatus {
+            case .authorized, .provisional, .ephemeral: .allowed
+            case .notDetermined: .notAsked
+            default: .off
+            }
         default:
-            return false
+            return .off
         }
+    }
+
+    /// The media players installed, each asked without a prompt: allowed if any is, off if one was refused.
+    /// A player that isn't running can't answer (`procNotFound`), so it reads as not asked.
+    private static func automationState() -> PermissionStateValue {
+        let players = ["com.apple.Music", "com.spotify.client"].filter {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil
+        }
+        let answers = players.map {
+            AEDeterminePermissionToAutomateTarget(NSAppleEventDescriptor(bundleIdentifier: $0).aeDesc, typeWildCard, typeWildCard, false)
+        }
+        if answers.contains(noErr) { return .allowed }
+        if answers.contains(OSStatus(errAEEventNotPermitted)) { return .off }
+        return .notAsked
     }
 
     private func hostLog(level: String, _ message: String) {
@@ -394,6 +431,16 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             throw ServiceError("invalid params: \(error.localizedDescription)")
         }
     }
+}
+
+/// `PermissionState`: `stale` is a grant System Settings shows but macOS no longer honours.
+enum PermissionStateValue: String, Encodable {
+    case allowed, notAsked, off, stale
+}
+
+/// `permissions.state`'s result.
+struct PermissionStateReply: Encodable {
+    var state: PermissionStateValue
 }
 
 /// Accessibility as macOS honours it, not as System Settings shows it. After an update re-signs the app the
