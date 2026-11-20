@@ -2,7 +2,8 @@ import AppKit
 import WebKit
 
 /// The Welcome window: four steps (welcome, the island, the launcher, permissions one by one) in its own page,
-/// `onboarding.html`. Shown once on a fresh profile, again from the menu or Settings › About.
+/// `onboarding.html`. Shown once on a fresh profile, again from the menu or Settings › About; after an update the
+/// same window shows What's New.
 @MainActor
 final class Onboarding: NSObject, NSWindowDelegate {
     private static let doneKey = "onboarding.done"
@@ -11,11 +12,11 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var webView: WKWebView?
     private let makeWebView: (NSRect) -> WKWebView
-    private let load: (WKWebView) -> Void
+    private let load: (WKWebView, String) -> Void
     /// The bridge lets go of the page's subscriptions when the window closes.
     var onClose: ((WKWebView) -> Void)?
 
-    init(makeWebView: @escaping (NSRect) -> WKWebView, load: @escaping (WKWebView) -> Void) {
+    init(makeWebView: @escaping (NSRect) -> WKWebView, load: @escaping (WKWebView, String) -> Void) {
         self.makeWebView = makeWebView
         self.load = load
     }
@@ -31,16 +32,19 @@ final class Onboarding: NSObject, NSWindowDelegate {
         return true
     }
 
-    func show() {
+    /// The tour, or with `whatsNew` the same window on What's New (`onboarding.html#whats-new`).
+    func show(whatsNew: Bool = false) {
         NSApp.activate(ignoringOtherApps: true)
-        if let window {
+        let page = whatsNew ? "onboarding.html#whats-new" : "onboarding.html"
+        if let window, let webView {
+            if webView.url?.absoluteString.hasSuffix(page) != true { load(webView, page) }
             window.makeKeyAndOrderFront(nil)
             return
         }
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: Self.size), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.title = "Welcome to Just Notch"
+        window.title = whatsNew ? "What's New in Just Notch" : "Welcome to Just Notch"
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
@@ -48,7 +52,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         window.delegate = self
         let webView = makeWebView(NSRect(origin: .zero, size: Self.size))
         window.contentView = webView
-        load(webView)
+        load(webView, page)
         // Centred under the notch, so the island opening above it reads as part of the tour.
         if let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main {
             let visible = screen.visibleFrame

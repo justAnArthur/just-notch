@@ -69,6 +69,17 @@ final class Updater: NSObject {
         }
     }
 
+    /// The version Sparkle last installed: the next launch running it shows What's New once.
+    static let installedKey = "updater.installedVersion"
+
+    /// True once, on the first launch of a version Sparkle just installed.
+    static func justUpdated() -> Bool {
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        guard let installed = UserDefaults.standard.string(forKey: installedKey), installed == current else { return false }
+        UserDefaults.standard.removeObject(forKey: installedKey)
+        return true
+    }
+
     static let offMessage = "This copy doesn't update itself. Get new versions from the website."
 
     /// What went wrong, in words a buyer understands; Sparkle's own text goes to the log.
@@ -123,6 +134,7 @@ extension Updater: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        UserDefaults.standard.set(item.displayVersionString, forKey: Updater.installedKey)
         onState?(.ready(item.displayVersionString))
     }
 

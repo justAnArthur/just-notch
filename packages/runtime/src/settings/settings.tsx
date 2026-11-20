@@ -14,6 +14,7 @@ import LauncherPage, { type PreferenceChange } from './launcher'
 import LibraryPage, { useLibrary } from './library'
 import { entryState, updateCount } from './library-state'
 import { setSettingsTarget, useSettingsTarget } from './target'
+import { releasePage } from '../onboarding/whats-new'
 import { lastCheckedText } from './updates'
 import appIcon from '../../../../assets/brand/icon.svg'
 
@@ -218,7 +219,7 @@ function permissionRow(permission: (typeof PERMISSIONS)[number], state: Permissi
   return { id, label, description, state }
 }
 
-/** A plugin row's label: why it doesn't run, a newer version in the library, or where it came from. */
+/** A plugin row's label: why it doesn't run, or a newer version in the library. */
 function pluginBadge(plugin: InstalledPlugin, entry: LibraryEntry | undefined, apiVersion: string): ReactNode {
   if (plugin.incompatible && !(entry && entryState(entry, plugin, apiVersion).status === 'update-available'))
     return (
@@ -232,7 +233,6 @@ function pluginBadge(plugin: InstalledPlugin, entry: LibraryEntry | undefined, a
         Update
       </Badge>
     )
-  if (plugin.source === 'library') return <Badge size="compact">Library</Badge>
 }
 
 /**
@@ -386,6 +386,7 @@ export default function Settings() {
           : []),
         { label: 'Website', value: <Link url="https://justanarthur.github.io/just-notch/">justanarthur.github.io/just-notch</Link> },
         { label: 'License', value: <Link url={`${REPO}/blob/main/LICENSE.md`}>FSL-1.1-MIT</Link> },
+        { label: 'Release notes', value: <Link url={releasePage(info.version)}>{`What's new in ${info.version}`}</Link> },
         {
           label: 'First steps',
           value: (

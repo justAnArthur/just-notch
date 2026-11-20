@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private(set) lazy var updater = Updater()
     private lazy var onboarding = Onboarding(
         makeWebView: { [unowned self] frame in WebViews.make(WKWebView.self, frame: frame, bridge: bridge, scheme: scheme, lifecycle: lifecycle) },
-        load: { [unowned self] webView in WebViews.load(webView, page: "onboarding.html", devServer: devServer) }
+        load: { [unowned self] webView, page in WebViews.load(webView, page: page, devServer: devServer) }
     )
     private(set) lazy var launcher = Launcher(events: events) { [unowned self] in Array(panels.values) }
 
@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         if Onboarding.isFirstRun(launchedBefore: launchedBefore) {
             // After the island's page is up, so it can open above the window.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.showOnboarding() }
+        } else if Updater.justUpdated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.onboarding.show(whatsNew: true) }
         }
         log.info("launched, dev server: \(self.devServer?.absoluteString ?? "none", privacy: .public)")
     }
