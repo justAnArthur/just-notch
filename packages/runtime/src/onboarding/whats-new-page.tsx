@@ -1,4 +1,4 @@
-import { Button, List } from '@justanarthur/modo-ui'
+import { Button } from '@justanarthur/modo-ui'
 import { useEffect, useState } from 'react'
 import { call, log } from '../host/client'
 import { type Area, parseReleaseNotes, REPO, releaseApi, releasePage } from './whats-new'
@@ -41,25 +41,27 @@ export default function WhatsNew({ version }: { version: string }) {
           <p className="m-0 px-2 text-body text-muted-foreground">Small fixes and polish in this one.</p>
         )}
         {notes && 'areas' in notes && notes.areas.length > 0 && (
-          <List>
+          <div className="flex flex-col gap-5 px-2">
             {notes.areas.map((area) => (
-              <List.Section
-                key={area.id}
-                title={area.name}
-                aside={
-                  area.history && (
+              <section key={area.id} className="flex flex-col gap-1.5">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="m-0 text-caption weight-medium text-muted-foreground">{area.name}</h2>
+                  {area.history && (
                     <Button variant="link" size="compact" onClick={() => area.history && openUrl(area.history)}>
                       History
                     </Button>
-                  )
-                }
-              >
-                {area.changes.map((change) => (
-                  <List.Row key={change} label={<span className="whitespace-normal">{change}</span>} />
-                ))}
-              </List.Section>
+                  )}
+                </div>
+                <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                  {area.changes.map((change) => (
+                    <li key={change} className="text-body">
+                      {change}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </List>
+          </div>
         )}
       </div>
       <footer className="flex items-center justify-between">

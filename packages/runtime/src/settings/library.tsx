@@ -156,10 +156,10 @@ export default function LibraryPage({
         <List>
           <List.Row
             label={waitingOnApp.length === 1 ? `${waitingOnApp[0]?.name} needs a newer Just Notch` : `${waitingOnApp.length} plugins need a newer Just Notch`}
-            description="Update Just Notch to install them."
+            description={waitingOnApp.length === 1 ? 'Update Just Notch to install it.' : 'Update Just Notch to install them.'}
           >
             <Button variant="secondary" size="compact" className="mr-3" onClick={() => void call('runtime', 'updater.install', {}).catch(() => {})}>
-              Update Just Notch…
+              Update…
             </Button>
           </List.Row>
         </List>
