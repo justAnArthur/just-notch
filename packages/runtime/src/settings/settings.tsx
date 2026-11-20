@@ -14,6 +14,7 @@ import LibraryPage, { useLibrary } from './library'
 import { entryState, updateCount } from './library-state'
 import { setSettingsTarget, useSettingsTarget } from './target'
 import { lastCheckedText } from './updates'
+import appIcon from '../../../../assets/brand/icon.svg'
 
 type SystemPermission = Methods['permissions.status']['params']['permission']
 const PRIVACY = 'x-apple.systempreferences:com.apple.preference.security?Privacy_'
@@ -89,6 +90,27 @@ function Updates({ onChecked }: { onChecked: () => void }) {
       )}
     </span>
   )
+}
+
+/** Whether ⌥ is held, followed while `active` (the About page is open): keys, and the pointer's modifier flag. */
+function useOptionHeld(active: boolean) {
+  const [held, setHeld] = useState(false)
+  useEffect(() => {
+    if (!active) return setHeld(false)
+    const follow = (event: KeyboardEvent | PointerEvent) => setHeld(event.altKey)
+    const release = () => setHeld(false)
+    window.addEventListener('keydown', follow)
+    window.addEventListener('keyup', follow)
+    window.addEventListener('pointermove', follow)
+    window.addEventListener('blur', release)
+    return () => {
+      window.removeEventListener('keydown', follow)
+      window.removeEventListener('keyup', follow)
+      window.removeEventListener('pointermove', follow)
+      window.removeEventListener('blur', release)
+    }
+  }, [active])
+  return held
 }
 
 /** Each row names what it powers, so a missing grant reads as a feature that won't work, not a setting. */
@@ -250,7 +272,7 @@ export default function Settings() {
   const target = useSettingsTarget()
   const permissionStates = usePermissionStates(target.page === 'permissions')
   const library = useLibrary()
-  const [diagnostics, setDiagnostics] = useState(false)
+  const optionHeld = useOptionHeld(target.page === 'about')
   const [updater, setUpdater, reloadUpdater] = useUpdaterPreferences()
   const apiVersion = info?.apiVersion ?? '0.0.0'
 
@@ -312,17 +334,15 @@ export default function Settings() {
     },
   ]
 
-  // ⌥-click on the version shows what a bug report needs; the build's mode only exists in development.
+  // The header carries the identity; ⌥ held shows what a bug report needs (the build's mode only in development).
+  const aboutHeader = info && {
+    icon: <img src={appIcon} alt="" className="size-16" />,
+    name: 'Just Notch',
+    version: `Version ${info.version}`,
+    copyright: `© ${COPYRIGHT_YEAR} justAnArthur`,
+  }
   const about = info
     ? [
-        {
-          label: 'Version',
-          value: (
-            // biome-ignore lint/a11y/noStaticElementInteractions: a hidden ⌥-click for diagnostics, not a control
-            // biome-ignore lint/a11y/useKeyWithClickEvents: as above
-            <span onClick={(event) => event.altKey && setDiagnostics((shown) => !shown)}>{`Just Notch ${info.version}`}</span>
-          ),
-        },
         { label: updater ? lastCheckedText(updater.lastChecked) : 'Updates', value: <Updates onChecked={reloadUpdater} /> },
         ...(updater
           ? [
@@ -331,30 +351,30 @@ export default function Settings() {
                 label: 'Check automatically',
                 value: (
                   <span className="flex">
-<Switch
-                    aria-label="Check for updates automatically"
-                    checked={updater.automaticChecks}
-                    onCheckedChange={(automaticChecks) => setUpdater({ automaticChecks })}
-                  />
-</span>
+                    <Switch
+                      aria-label="Check for updates automatically"
+                      checked={updater.automaticChecks}
+                      onCheckedChange={(automaticChecks) => setUpdater({ automaticChecks })}
+                    />
+                  </span>
                 ),
               },
               {
                 label: 'Download automatically',
                 value: (
                   <span className="flex">
-<Switch
-                    aria-label="Download updates automatically"
-                    checked={updater.automaticDownloads}
-                    disabled={!updater.automaticChecks}
-                    onCheckedChange={(automaticDownloads) => setUpdater({ automaticDownloads })}
-                  />
-</span>
+                    <Switch
+                      aria-label="Download updates automatically"
+                      checked={updater.automaticDownloads}
+                      disabled={!updater.automaticChecks}
+                      onCheckedChange={(automaticDownloads) => setUpdater({ automaticDownloads })}
+                    />
+                  </span>
                 ),
               },
             ]
           : []),
-        ...(diagnostics
+        ...(optionHeld
           ? [
               ...(info.devMode ? [{ label: 'Mode', value: `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` }] : []),
               { label: 'Screen', value: info.geometry.hasNotch ? 'Hardware notch' : 'Virtual notch' },
@@ -363,7 +383,6 @@ export default function Settings() {
           : []),
         { label: 'Website', value: <Link url="https://justanarthur.github.io/just-notch/">justanarthur.github.io/just-notch</Link> },
         { label: 'License', value: <Link url={`${REPO}/blob/main/LICENSE.md`}>FSL-1.1-MIT</Link> },
-        { label: 'Copyright', value: `© ${COPYRIGHT_YEAR} justAnArthur` },
       ]
     : []
 
@@ -391,6 +410,7 @@ export default function Settings() {
           const url = PERMISSIONS.find((p) => p.id === id)?.url
           if (url) void call('runtime', 'system.openUrl', { url })
         }}
+        aboutHeader={aboutHeader}
         about={about}
       />
     </div>
