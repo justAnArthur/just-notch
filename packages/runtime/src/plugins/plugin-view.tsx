@@ -29,8 +29,17 @@ interface PluginViewProps {
   view?: ComponentType
 }
 
-/** A plugin's view, scoped to its context; a crash shows nothing and is logged, never breaking the island. */
+/**
+ * A plugin's view, scoped to its context; a crash shows nothing and is logged, never breaking the island. The
+ * runtime's own views (`plugin: 'runtime'`, such as the launcher's failure flash) have no plugin context.
+ */
 export default function PluginView({ plugin, view: View }: PluginViewProps) {
+  if (plugin === 'runtime' && View)
+    return (
+      <Boundary plugin={plugin}>
+        <View />
+      </Boundary>
+    )
   const ctx = getPlugin(plugin)?.ctx
   if (!ctx || !View) return null
   return (

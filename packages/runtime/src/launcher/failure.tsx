@@ -13,13 +13,9 @@ function Failed() {
   return <IslandFlash tone="error" icon={<CircleAlert size={20} strokeWidth={1.75} />} title={`Couldn't run “${title}”`} caption="Try again, or check its settings." />
 }
 
-/**
- * Says in the island that a row's action failed, since the launcher has already gone. The flash runs as the row's
- * plugin: a flash is drawn inside its plugin's context, so a built-in row (no plugin) only logs.
- */
+/** Says in the island that a row's action failed, since the launcher has already gone: as the row's plugin, or the runtime. */
 export function showFailure(row: Row, error: unknown) {
   console.error(error)
-  if (!row.plugin) return
   failed.set(row.title)
-  dispatch({ type: 'flash', plugin: row.plugin, spec: { priority: 'alert', key: 'launcher.failed', view: Failed, durationMs: FAILED_MS } })
+  dispatch({ type: 'flash', plugin: row.plugin ?? 'runtime', spec: { priority: 'alert', key: 'launcher.failed', view: Failed, durationMs: FAILED_MS } })
 }
