@@ -113,7 +113,7 @@ const endCap = (body: Body): Circle => {
   return { x: body.x.get() + Math.max(0, body.w.get()) / 2 - r, y: body.y.get(), r }
 }
 
-// Motion tuned to read like water and to be about as quick as Spotlight's own (~0.35 s to the field).
+// Motion tuned to read like water.
 const SWELL = { duration: 0.07, ease: [0.3, 0, 0.6, 1] } as const
 /** The bead hangs and stretches on its neck before it lets go. */
 const HANG_T = { duration: 0.09, ease: [0.45, 0, 0.55, 1] } as const
@@ -126,15 +126,15 @@ const RECOIL = { type: 'spring', visualDuration: 0.2, bounce: 0.5 } as const
 const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
 
 /**
- * The launcher: a drop of the island's black swells under the notch, pinches off, falls to where Spotlight's
- * search sits, squashes as it lands and spreads into the search bar; the scope buttons then pinch off its end. Typing draws them back into
- * the bar, as Spotlight does. Closing is a quick fade.
+ * The launcher: a drop of the island's black swells under the notch, pinches off, falls to the upper third of the
+ * screen, squashes as it lands and spreads into the search bar; the scope buttons then pinch off its end. Typing draws
+ * them back into the bar. Closing is a quick fade.
  *
  * Every shape is a circle, a rounded rect or the liquid bridge between two of them (metaball.ts), one SVG path
  * per frame: no blur filter, so it stays sharp and smooth.
  *
- * Search covers apps for now: ↑↓ select, ↩ opens, ⌘↩ shows in Finder,
- * ⇥ completes the name, ⌘1–⌘4 pick a scope.
+ * ↑↓ select, ↩ runs the row's first action, ⌘↩ and ⇧↩ its next ones, ⌘K lists them all, ⇥ completes the name,
+ * ⌘1–⌘6 pick a scope.
  */
 export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const reduced = useReduceMotion()
@@ -517,7 +517,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
           ref={input}
           aria-label="Search"
           value={query}
-          placeholder={active ? active.title : 'Spotlight Search'}
+          placeholder={active ? active.title : 'Search apps, files and commands'}
           spellCheck={false}
           autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-[20px] text-foreground outline-none placeholder:text-muted-foreground"

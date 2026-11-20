@@ -45,7 +45,7 @@ export function useScopes(): Scope[] {
 
 const SYSTEM_ACTIONS: { action: SystemAction; title: string; keywords: string[]; icon: ComponentType<IconProps> }[] = [
   { action: 'sleep', title: 'Sleep', keywords: ['sleep', 'suspend'], icon: Moon },
-  { action: 'displaySleep', title: 'Turn Off Display', keywords: ['display', 'lock', 'screen off'], icon: MonitorOff },
+  { action: 'displaySleep', title: 'Turn Off Display', keywords: ['display', 'screen off'], icon: MonitorOff },
   { action: 'screenSaver', title: 'Start Screen Saver', keywords: ['screen saver', 'screensaver'], icon: Sparkles },
   { action: 'emptyTrash', title: 'Empty Trash', keywords: ['trash', 'bin'], icon: Trash2 },
   { action: 'toggleDarkMode', title: 'Toggle Dark Mode', keywords: ['dark mode', 'appearance', 'light mode'], icon: SunMoon },
@@ -205,7 +205,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
           title: name,
           icon: { glyph: Workflow },
           accessory: 'Shortcut',
-          actions: [{ title: 'Run Shortcut', run: () => void call('runtime', 'actions.runShortcut', { name }) }],
+          actions: [{ title: 'Run', run: () => void call('runtime', 'actions.runShortcut', { name }) }],
           score: rankScore(score, frecencyScore(frecency, `shortcut:${name}`)),
         })
     }
@@ -214,7 +214,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
 
   const webRow = (): Row => ({
     id: 'web',
-    title: `Search the Web for “${q}”`,
+    title: `Search Google for “${q}”`,
     icon: { glyph: Globe },
     actions: [{ title: 'Search', run: () => void call('runtime', 'system.openUrl', { url: `https://www.google.com/search?q=${encodeURIComponent(q)}` }) }],
   })

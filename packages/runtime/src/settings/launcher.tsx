@@ -52,17 +52,17 @@ export default function LauncherPage({ preferences, error, onChange }: LauncherP
     <List>
       <List.Section title="Launcher">
         <SwitchRow
-          label="Open the launcher with a shortcut"
+          label="Open with a hotkey"
           description="Search drops out of the notch. Esc or a click outside closes it."
           checked={launcher.enabled}
           onCheckedChange={(enabled) => onChange({ launcher: { enabled } })}
         />
-        <List.Row label="Shortcut" description="Click, then press the keys. It needs ⌘, ⌥, ⌃ or ⇧, unless it's a function key.">
+        <List.Row label="Hotkey" description="Click, then press the keys. It needs ⌘, ⌥, ⌃ or ⇧, unless it's a function key.">
           <ShortcutRecorder value={launcher.shortcut} onChange={(next) => onChange({ launcher: { shortcut: next } })} />
         </List.Row>
-        {error && <List.Row label="That shortcut didn't work" description={error} />}
+        {error && <List.Row label="That hotkey didn't work" description={error} />}
         {launcher.enabled && !launcher.active && !error && (
-          <List.Row label={`${shortcut} isn't available`} description="Another app uses it. Pick another shortcut." />
+          <List.Row label={`${shortcut} isn't available`} description="Another app uses it. Pick another hotkey." />
         )}
         {launcher.spotlightConflict && (
           <List.Row
