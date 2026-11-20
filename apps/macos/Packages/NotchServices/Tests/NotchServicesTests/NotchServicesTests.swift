@@ -67,7 +67,7 @@ struct ShapeTests {
     @Test func clipboard() throws {
         let clip = Clip(id: "1", kind: .text, content: "x", copiedAt: 1, pinned: false)
         #expect(try keys(clip) == ["id", "kind", "content", "copiedAt", "pinned"])
-        #expect(try keys(ClipboardState(clips: [], paused: false, ignoredApps: [])) == ["clips", "paused", "ignoredApps"])
+        #expect(try keys(ClipboardState(clips: [], paused: false, ignoredApps: [])) == ["clips", "paused", "ignoredApps", "retention"])
         #expect(try keys(AppInfo(bundleId: "a", name: "A", icon: "data:")) == ["bundleId", "name", "icon"])
     }
 

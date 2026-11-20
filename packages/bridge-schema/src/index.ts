@@ -65,6 +65,8 @@ export type Permission =
   | 'secrets'
   /** `windows.*`: moves and resizes the front window (needs Accessibility). */
   | 'windows'
+  /** `shortcuts.register` / `shortcuts.unregister`: global keyboard shortcuts, delivered as the `shortcut` event. */
+  | 'hotkeys'
 
 /** `manifest.json` at a plugin's root. */
 export interface PluginManifest {
@@ -132,9 +134,9 @@ export interface ScreenGeometry {
  * What plugins are written against: the bridge's methods, topics and events and the SDK. Bump the minor for
  * an addition, the major for a break; user and library plugins whose `engines.notch` doesn't match aren't loaded.
  * 1.0 is the surface plugins first shipped against, 1.1 adds `net` and `secrets`, 1.2 the launcher's `search`, 1.3
- * its result previews, 1.4 `windows`.
+ * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention.
  */
-export const API_VERSION = '1.4.0'
+export const API_VERSION = '1.5.0'
 
 interface Version {
   major: number
@@ -433,6 +435,13 @@ export interface ClipboardState {
   paused: boolean
   /** Bundle ids whose copies are never recorded. */
   ignoredApps: string[]
+  /** How much history is kept: at most `limit` unpinned clips, none older than `days` (null: no age limit). */
+  retention: ClipboardRetention
+}
+
+export interface ClipboardRetention {
+  limit: number
+  days: number | null
 }
 
 /** An app the user can pick, e.g. to ignore its copies. */
@@ -746,6 +755,8 @@ export interface Methods {
   /** Drops every clip but the pinned ones. */
   'clipboard.clear': { params: Record<string, never>; result: null }
   'clipboard.setPaused': { params: { paused: boolean }; result: null }
+  /** Changes how much history is kept; older or extra unpinned clips go at once. */
+  'clipboard.setRetention': { params: ClipboardRetention; result: null }
   'clipboard.setIgnoredApps': { params: { apps: string[] }; result: null }
   /** Running regular apps and those in the Applications folders, one per bundle id, sorted by name. */
   'apps.list': { params: Record<string, never>; result: AppInfo[] }
@@ -918,6 +929,9 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'clipboard.pin': 'clipboard',
   'clipboard.clear': 'clipboard',
   'clipboard.setPaused': 'clipboard',
+  'clipboard.setRetention': 'clipboard',
+  'shortcuts.register': 'hotkeys',
+  'shortcuts.unregister': 'hotkeys',
   'clipboard.setIgnoredApps': 'clipboard',
   'apps.list': 'apps.read',
   'apps.index': 'apps.read',
@@ -958,8 +972,6 @@ export const RUNTIME_ONLY: Method[] = [
   'plugins.setEnabled',
   'app.preferences',
   'app.setPreferences',
-  'shortcuts.register',
-  'shortcuts.unregister',
   'deepLinks.initial',
   'updater.check',
   'updater.install',

@@ -150,6 +150,30 @@ public struct ClipboardState: Codable, Equatable, Sendable {
     public var clips: [Clip]
     public var paused: Bool
     public var ignoredApps: [String]
+    public var retention: ClipboardRetention
+
+    public init(clips: [Clip], paused: Bool, ignoredApps: [String], retention: ClipboardRetention = .standard) {
+        self.clips = clips
+        self.paused = paused
+        self.ignoredApps = ignoredApps
+        self.retention = retention
+    }
+
+    // History saved before retention existed has none: it gets the default.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        clips = try c.decode([Clip].self, forKey: .clips)
+        paused = try c.decode(Bool.self, forKey: .paused)
+        ignoredApps = try c.decode([String].self, forKey: .ignoredApps)
+        retention = try c.decodeIfPresent(ClipboardRetention.self, forKey: .retention) ?? .standard
+    }
+}
+
+/// `clipboard.setRetention`: at most `limit` unpinned clips, none older than `days` (nil: no age limit).
+public struct ClipboardRetention: Codable, Equatable, Sendable {
+    public var limit: Int
+    public var days: Int?
+    public static let standard = ClipboardRetention(limit: 1000, days: 30)
 }
 
 public struct AppInfo: Codable, Equatable, Sendable {

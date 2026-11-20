@@ -30,6 +30,7 @@ const PERMISSION: Record<string, string> = {
   net: 'The network',
   secrets: 'Keychain secrets',
   windows: 'Moving windows',
+  hotkeys: 'Keyboard shortcuts',
 }
 
 interface Plugin {

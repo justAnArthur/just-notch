@@ -134,6 +134,7 @@ const values: Topics = {
   clipboard: {
     paused: false,
     ignoredApps: ['com.1password.1password'],
+    retention: { limit: 1000, days: 30 },
     clips: [
       { id: 'c1', kind: 'link', content: 'https://justanarthur.github.io/modo/notch/', app: 'Safari', copiedAt: Date.now() - 60_000, pinned: false },
       { id: 'c2', kind: 'text', content: 'bun run notch build --cwd plugins/weather', app: 'Terminal', copiedAt: Date.now() - 8 * 60_000, pinned: true },
@@ -568,6 +569,10 @@ const handlers: Handlers = {
   'clipboard.delete': ({ id }) => setClips(values.clipboard.clips.filter((c) => c.id !== id)),
   'clipboard.pin': ({ id, pinned }) => setClips(values.clipboard.clips.map((c) => (c.id === id ? { ...c, pinned } : c))),
   'clipboard.clear': () => setClips(values.clipboard.clips.filter((c) => c.pinned)),
+  'clipboard.setRetention': (retention) => {
+    publish('clipboard', { ...values.clipboard, retention })
+    return null
+  },
   'clipboard.setPaused': ({ paused }) => {
     publish('clipboard', { ...values.clipboard, paused })
     return null

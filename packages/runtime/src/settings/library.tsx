@@ -25,6 +25,7 @@ export const PERMISSION_INFO: Record<Permission, LibraryPermission> = {
   'apps.launch': { label: 'Opening apps', description: 'Opens your apps.' },
   'files.search': { label: 'File search', description: 'Finds your files and folders by name.' },
   net: { label: 'Internet', description: 'Connects to the hosts listed below, and to others only if you allow them.' },
+  hotkeys: { label: 'Keyboard shortcuts', description: 'Listens for the global shortcuts you give it.' },
   windows: { label: 'Windows', description: 'Moves and resizes the window in front.' },
   secrets: { label: 'Keychain', description: 'Keeps passwords and tokens in your Keychain, out of the plugin’s files.' },
 }

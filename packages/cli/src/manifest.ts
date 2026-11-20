@@ -22,6 +22,7 @@ export const PERMISSIONS = [
   'net',
   'secrets',
   'windows',
+  'hotkeys',
 ] as const satisfies readonly Permission[]
 
 const exhaustive: [Exclude<Permission, (typeof PERMISSIONS)[number]>] extends [never] ? true : never = true

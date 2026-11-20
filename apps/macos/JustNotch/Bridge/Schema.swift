@@ -39,6 +39,7 @@ enum Permission: String, Codable {
     case net
     case secrets
     case windows
+    case hotkeys
 }
 
 struct PluginManifest: Codable, Equatable {
@@ -143,6 +144,9 @@ enum Schema {
         "clipboard.pin": .clipboard,
         "clipboard.clear": .clipboard,
         "clipboard.setPaused": .clipboard,
+        "clipboard.setRetention": .clipboard,
+        "shortcuts.register": .hotkeys,
+        "shortcuts.unregister": .hotkeys,
         "clipboard.setIgnoredApps": .clipboard,
         "apps.list": .appsRead,
         "apps.index": .appsRead,
@@ -182,8 +186,6 @@ enum Schema {
         "plugins.setEnabled",
         "app.preferences",
         "app.setPreferences",
-        "shortcuts.register",
-        "shortcuts.unregister",
         "deepLinks.initial",
         "updater.check",
         "updater.install",
