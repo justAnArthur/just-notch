@@ -135,6 +135,14 @@ export interface IconProps {
 export interface SearchAction {
   /** Shown beside the selected result and in its actions list: `Paste`, `Copy`, `Open in browser`. */
   title: string
+  /**
+   * Runs it while its result is selected, in the accelerator syntax of the launcher's shortcuts (`Command+.`,
+   * `Command+Backspace`); shown beside it in the ⌘K list. ↩, ⌘↩ and ⇧↩ stay the first three actions'. A shortcut
+   * the launcher itself uses (⌘K, ⌘Y, ⌘1–9) is ignored. API 1.6.
+   */
+  shortcut?: string
+  /** Runs without closing the launcher, then asks the provider for its results again (pin, delete). API 1.6. */
+  stay?: boolean
   run(): void | Promise<void>
 }
 
@@ -174,6 +182,8 @@ export interface SearchProvider {
   keywords?: string[]
   /** Rows in the root search, under the title; `false` keeps them inside the scope. Default 3. */
   root?: { limit: number } | false
+  /** Inside this scope ⌘1–⌘9 run the first action of the 1st–9th result instead of switching scopes. API 1.6. */
+  numberKeys?: boolean
   /**
    * The results for `query` (empty inside the scope before typing: show the newest). Runs on every keystroke;
    * `signal` aborts when a newer query replaces it. Slow providers are shown when they answer. `root` is true in the
