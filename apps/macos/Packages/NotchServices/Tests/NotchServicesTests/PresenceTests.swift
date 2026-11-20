@@ -22,4 +22,13 @@ struct PresenceTests {
         let ours = window(screens["laptop"]!, pid: 1)
         #expect(Presence.fullScreen(windows: [maximized, menuBar, ours], screens: screens, ownPid: 1).isEmpty)
     }
+
+    @Test func aFullScreenSpaceCountsOnlyForItsDisplay() {
+        let displays: [[String: Any]] = [
+            ["Display Identifier": "laptop", "Current Space": ["type": 4]],
+            ["Display Identifier": "external", "Current Space": ["type": 0]],
+            ["Display Identifier": "broken"],
+        ]
+        #expect(Presence.fullScreenSpaces(displays: displays) == ["laptop"])
+    }
 }

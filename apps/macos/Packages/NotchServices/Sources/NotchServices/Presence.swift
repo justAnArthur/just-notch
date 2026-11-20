@@ -25,6 +25,35 @@ public enum Presence {
     public static func fullScreenNow(screens: [String: CGRect]) -> Set<String> {
         let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         return fullScreen(windows: list, screens: screens, ownPid: getpid())
+            .union(fullScreenSpaces(displays: managedDisplaySpaces()).intersection(screens.keys))
+    }
+
+    /// The displays (by UUID) whose current Space is a full-screen one. On a notched display a full-screen window
+    /// stops below the notch, so its bounds don't match the screen's; the Space's type (4) still says so.
+    /// `displays` is `CGSCopyManagedDisplaySpaces`'s list.
+    public static func fullScreenSpaces(displays: [[String: Any]]) -> Set<String> {
+        var ids = Set<String>()
+        for display in displays {
+            guard let id = display["Display Identifier"] as? String,
+                  let current = display["Current Space"] as? [String: Any],
+                  (current["type"] as? Int) == 4 else { continue }
+            ids.insert(id)
+        }
+        return ids
+    }
+
+    private typealias MainConnection = @convention(c) () -> Int32
+    private typealias CopySpaces = @convention(c) (Int32) -> Unmanaged<CFArray>?
+    private nonisolated(unsafe) static let spaceFunctions: (MainConnection, CopySpaces)? = {
+        let handle = dlopen(nil, RTLD_NOW)
+        guard let connection = dlsym(handle, "CGSMainConnectionID"), let copy = dlsym(handle, "CGSCopyManagedDisplaySpaces") else { return nil }
+        return (unsafeBitCast(connection, to: MainConnection.self), unsafeBitCast(copy, to: CopySpaces.self))
+    }()
+
+    /// The window server's Spaces per display (SkyLight SPI, no permission); empty where it's missing.
+    private static func managedDisplaySpaces() -> [[String: Any]] {
+        guard let (connection, copy) = spaceFunctions else { return [] }
+        return copy(connection())?.takeRetainedValue() as? [[String: Any]] ?? []
     }
 
     /// Whether any app records from the default input: a call, most of the time (also dictation and voice memos).
