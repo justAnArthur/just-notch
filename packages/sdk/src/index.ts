@@ -190,6 +190,13 @@ export interface SearchProvider {
    * root search and false inside the plugin's own scope.
    */
   provide(query: string, env: { ctx: PluginContext; signal: AbortSignal; root: boolean }): SearchItem[] | Promise<SearchItem[]>
+  /**
+   * Waits this long (ms) after the last keystroke before asking `provide`. Default 0, or 150 for a plugin with the
+   * `net` permission, so a network provider isn't asked on every key.
+   */
+  debounce?: number
+  /** Gives up after this long (ms) and shows "took too long" with Retry in the provider's section. Default 800. */
+  timeout?: number
 }
 
 export interface PluginDefinition {
