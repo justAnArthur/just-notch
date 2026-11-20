@@ -126,6 +126,10 @@ const SHEET_SPRING = { type: 'spring', visualDuration: 0.18, bounce: 0.12 } as c
 const SPLIT = { type: 'spring', visualDuration: 0.2, bounce: 0.18 } as const
 const RECOIL = { type: 'spring', visualDuration: 0.2, bounce: 0.5 } as const
 const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
+/** The close's fade, in seconds. */
+const CLOSE_S = 0.06
+/** After the keyboard goes back, before an action runs: the app in front takes it, so a paste lands there. */
+const HANDOFF_MS = 40
 
 /**
  * The launcher: a drop of the island's black swells under the notch, pinches off, falls to the upper third of the
@@ -309,22 +313,22 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     if (phaseRef.current === 'closed' || phaseRef.current === 'closing') return
     const token = ++run.current
     const alive = () => token === run.current
-    const l = layoutRef.current
     setPhase('closing')
     setContent(false)
     setOutlined(false)
     input.current?.blur()
+    // The host lets the keyboard go now, not after the fade: the app in front gets it back at once.
+    void call('runtime', 'launcher.closed', {}).catch(() => {})
     const finish = () => {
       if (!alive()) return
       setPhase('closed')
       setLauncherOpen(false)
       setLauncherRegions([])
-      void call('runtime', 'launcher.closed', {}).catch(() => {})
     }
     if (reduced) return finish()
 
-    // Closing has no drop: a quick fade and settle, as Spotlight dismisses, so it gets out of the way at once.
-    await Promise.all([animate(fade, 0, { duration: 0.14, ease: [0.4, 0, 1, 1] })])
+    // Closing has no drop: a quick fade and settle, so it gets out of the way at once.
+    await animate(fade, 0, { duration: CLOSE_S, ease: [0.4, 0, 1, 1] })
     if (!alive()) return
     finish()
   }
@@ -396,19 +400,20 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     if (phase === 'open') regions(layout, showResults ? sheetH : 0)
   }, [phase, showResults, sheetH, top])
 
-  /** Closes first, so what the action opens or pastes into comes forward over a clean screen with the keyboard. */
-  const runRow = async (row: Row | undefined, action = 0) => {
+  /** Hides at once and runs the action while the launcher fades, once the app in front has the keyboard back. */
+  const runRow = (row: Row | undefined, action = 0) => {
     const run = row?.actions[action] ?? row?.actions[0]
     if (!row || !run) return
     view.record(row.id)
-    await closeSequence()
-    // The host lets the keyboard go on `launcher.closed`; give the app in front a moment to take it back.
-    await new Promise((resolve) => setTimeout(resolve, 40))
-    try {
-      await run.run()
-    } catch (error) {
-      console.error(error)
-    }
+    void closeSequence()
+    setTimeout(async () => {
+      performance.mark('launcher.run')
+      try {
+        await run.run()
+      } catch (error) {
+        console.error(error)
+      }
+    }, HANDOFF_MS)
   }
 
   useEffect(() => {
@@ -450,7 +455,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       }
       if (event.key === 'Enter') {
         event.preventDefault()
-        void runRow(current, event.metaKey ? 1 : event.shiftKey ? 2 : 0)
+        runRow(current, event.metaKey ? 1 : event.shiftKey ? 2 : 0)
         return
       }
       if (event.key === 'Backspace' && query === '' && scope !== undefined) {
@@ -482,7 +487,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     } else if (key === 'Enter') {
       event.preventDefault()
       const pick = listed[panel.selected]
-      if (pick) void runRow(current, pick.index)
+      if (pick) runRow(current, pick.index)
     } else if (key === 'Backspace') {
       event.preventDefault()
       setPanel((p) => p && { filter: p.filter.slice(0, -1), selected: 0 })
@@ -586,7 +591,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
                     sections={view.sections}
                     selected={selected}
                     onSelect={(i) => !panelOpen && setSelection({ id: flat[i].id, index: i })}
-                    onRun={(i) => void runRow(flat[i])}
+                    onRun={(i) => runRow(flat[i])}
                     compact={showPane}
                   />
                 </div>
@@ -600,7 +605,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
                 filter={panel.filter}
                 selected={panel.selected}
                 onSelect={(i) => setPanel({ ...panel, selected: i })}
-                onRun={(i) => void runRow(current, i)}
+                onRun={(i) => runRow(current, i)}
               />
             )}
           </motion.div>
