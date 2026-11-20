@@ -1,9 +1,14 @@
 import type { AppPreferences, Methods } from '@just-notch/bridge-schema'
-import { Button, Kbd, List } from '@justanarthur/modo-ui'
+import { Button, Input, Kbd, List, Switch } from '@justanarthur/modo-ui'
+import { ArrowDown, ArrowUp, X } from 'lucide-react'
 import { SwitchRow } from '@just-notch/sdk'
 import { useEffect, useState } from 'react'
 import { call } from '../host/client'
+import { useStored } from '../launcher/apps'
+import { PROBLEMS_KEY } from '../launcher/hotkeys'
+import { conflicts, type Fallback, moveFallback, quicklinkProblem } from '../launcher/prefs'
 import { acceleratorOf, formatAccelerator } from '../launcher/shortcut'
+import { type LauncherStore, useLauncherStore } from '../launcher/store'
 
 export type PreferenceChange = Methods['app.setPreferences']['params']
 
@@ -11,7 +16,7 @@ export type PreferenceChange = Methods['app.setPreferences']['params']
 const KEYBOARD_SHORTCUTS = 'x-apple.systempreferences:com.apple.Keyboard-Settings.extension'
 
 /** A button that records the next shortcut pressed; Escape cancels. */
-function ShortcutRecorder({ value, onChange }: { value: string; onChange: (accelerator: string) => void }) {
+function ShortcutRecorder({ value, onChange }: { value: string | undefined; onChange: (accelerator: string) => void }) {
   const [recording, setRecording] = useState(false)
 
   useEffect(() => {
@@ -31,7 +36,7 @@ function ShortcutRecorder({ value, onChange }: { value: string; onChange: (accel
 
   return (
     <Button variant="secondary" size="compact" aria-label="Change shortcut" onClick={() => setRecording(!recording)} onBlur={() => setRecording(false)}>
-      {recording ? 'Press a shortcut…' : <Kbd variant="plain">{formatAccelerator(value)}</Kbd>}
+      {recording ? 'Press a shortcut…' : value ? <Kbd variant="plain">{formatAccelerator(value)}</Kbd> : 'Record Hotkey'}
     </Button>
   )
 }
@@ -42,8 +47,12 @@ interface LauncherPageProps {
   onChange: (change: PreferenceChange) => void
 }
 
-/** Settings › Launcher: on or off, and its shortcut; says why the shortcut doesn't work when it can't. */
+/**
+ * Settings › Launcher: on or off and its hotkey, then what was set from ⌘K (aliases and hotkeys, with conflicts),
+ * the fallback searches and their order, and the ranking it learned.
+ */
 export default function LauncherPage({ preferences, error, onChange }: LauncherPageProps) {
+  const store = useLauncherStore()
   if (!preferences) return null
   const { launcher } = preferences
   const shortcut = formatAccelerator(launcher.shortcut)
@@ -75,6 +84,106 @@ export default function LauncherPage({ preferences, error, onChange }: LauncherP
           </List.Row>
         )}
       </List.Section>
+      <AliasesAndHotkeys store={store} launcherHotkey={launcher.shortcut} />
+      <Fallbacks store={store} />
+      <List.Section title="Ranking">
+        <List.Row label="Reset ranking" description="Forget which results you open most and what you pick for what you type. Favourites, aliases and hotkeys stay.">
+          <Button variant="secondary" size="compact" onClick={() => store.resetAll()}>
+            Reset
+          </Button>
+        </List.Row>
+      </List.Section>
     </List>
+  )
+}
+
+/** Every alias and hotkey set from ⌘K, with what's wrong with each; hotkeys can be changed here too. */
+function AliasesAndHotkeys({ store, launcherHotkey }: { store: LauncherStore; launcherHotkey: string }) {
+  const [taken] = useStored<Record<string, string>>(PROBLEMS_KEY)
+  const titles = Object.fromEntries(Object.entries(store.snapshots).map(([id, s]) => [id, s.title]))
+  const problems = conflicts(store.prefs, titles, launcherHotkey, taken)
+  const items = Object.entries(store.prefs.items)
+  const set = (id: string, change: { alias?: string; hotkey?: string }) =>
+    store.update((prefs) => {
+      const item = Object.fromEntries(Object.entries({ ...prefs.items[id], ...change }).filter(([, v]) => v !== undefined))
+      const { [id]: _, ...others } = prefs.items
+      return { ...prefs, items: Object.keys(item).length ? { ...others, [id]: item } : others }
+    })
+  return (
+    <List.Section title="Aliases & Hotkeys">
+      {items.length === 0 && <List.Row label="None yet" description="In the launcher, select a result and press ⌘K: Add Alias… or Assign Hotkey…" />}
+      {items.map(([id, item]) => (
+        <List.Row
+          key={id}
+          label={titles[id] ?? id}
+          description={[item.alias && `Alias “${item.alias}”`, problems[id] && `⚠ ${problems[id]}`].filter(Boolean).join(' · ') || undefined}
+        >
+          <span className="flex items-center gap-2">
+            <ShortcutRecorder value={item.hotkey} onChange={(hotkey) => set(id, { hotkey })} />
+            <Button variant="ghost" size="icon-compact" aria-label={`Remove alias and hotkey of ${titles[id] ?? id}`} onClick={() => set(id, { alias: undefined, hotkey: undefined })}>
+              <X />
+            </Button>
+          </span>
+        </List.Row>
+      ))}
+    </List.Section>
+  )
+}
+
+/** The searches the root offers last: built-in engines and quicklinks, each on or off, in the user's order. */
+function Fallbacks({ store }: { store: LauncherStore }) {
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [tried, setTried] = useState(false)
+  const fallbacks = store.prefs.fallbacks
+  const save = (next: Fallback[]) => store.update((prefs) => ({ ...prefs, fallbacks: next }))
+  const problem = !name.trim() ? 'Give it a name.' : quicklinkProblem(url)
+  const add = () => {
+    setTried(true)
+    if (problem) return
+    save([...fallbacks, { id: `quicklink-${Date.now()}`, title: name.trim(), url: url.trim(), enabled: true }])
+    setName('')
+    setUrl('')
+    setTried(false)
+  }
+  return (
+    <List.Section title="Fallback searches">
+      <p className="px-3 text-caption text-muted-foreground">Last in every search: the first one beside other results, the first three when nothing else matches.</p>
+      {fallbacks.map((f, i) => (
+        <List.Row key={f.id} label={f.title} description={f.url}>
+          <span className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-compact" aria-label={`Move ${f.title} up`} disabled={i === 0} onClick={() => save(moveFallback(fallbacks, i, -1))}>
+              <ArrowUp />
+            </Button>
+            <Button variant="ghost" size="icon-compact" aria-label={`Move ${f.title} down`} disabled={i === fallbacks.length - 1} onClick={() => save(moveFallback(fallbacks, i, 1))}>
+              <ArrowDown />
+            </Button>
+            {!f.builtIn && (
+              <Button variant="ghost" size="icon-compact" aria-label={`Delete ${f.title}`} onClick={() => save(fallbacks.filter((x) => x.id !== f.id))}>
+                <X />
+              </Button>
+            )}
+            <Switch aria-label={`Use ${f.title}`} checked={f.enabled} onCheckedChange={(enabled) => save(fallbacks.map((x) => (x.id === f.id ? { ...x, enabled } : x)))} />
+          </span>
+        </List.Row>
+      ))}
+      <List.Row label="Add a quicklink" description={tried && problem ? problem : 'Any search page: put {query} where the search goes.'}>
+        <span className="flex items-center gap-2">
+          <Input aria-label="Quicklink name" value={name} placeholder="GitHub" className="w-28" onValueChange={setName} />
+          <Input
+            aria-label="Quicklink URL"
+            value={url}
+            placeholder="https://github.com/search?q={query}"
+            className="w-64"
+            invalid={tried && !!problem}
+            onValueChange={setUrl}
+            onKeyDown={(event) => event.key === 'Enter' && add()}
+          />
+          <Button variant="secondary" size="compact" onClick={add}>
+            Add
+          </Button>
+        </span>
+      </List.Row>
+    </List.Section>
   )
 }
