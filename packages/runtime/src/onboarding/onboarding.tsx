@@ -6,7 +6,8 @@ import appIcon from '../../../../assets/brand/icon.svg'
 import { call } from '../host/client'
 import { subscribeTopic } from '../host/topics'
 import { formatAccelerator } from '../launcher/shortcut'
-import { CARDS, type CardId, filesState } from './permissions'
+import { filesAsked, filesState, markFilesAsked } from '../settings/folder-access'
+import { CARDS, type CardId } from './permissions'
 
 const PRIVACY = 'x-apple.systempreferences:com.apple.preference.security?Privacy_'
 const PANES: Record<CardId, string> = {
@@ -85,14 +86,17 @@ function usePermissionStates(active: boolean) {
 
 function Permissions({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const [states, put] = usePermissionStates(true)
-  const [watchingFiles, setWatchingFiles] = useState(false)
+  const [watchingFiles, setWatchingFiles] = useState(filesAsked)
   // Subscribing starts the recent files scan, which is what asks for the folders: only after the card's click.
   useEffect(() => (watchingFiles ? subscribeTopic('recentFiles', ({ access }) => put('files', filesState(access))) : undefined), [watchingFiles])
 
   const fix = (id: string, state: PermissionState) => {
     const card = id as CardId
     if (state !== 'notAsked') return void call('runtime', 'system.openUrl', { url: PRIVACY + PANES[card] })
-    if (card === 'files') return setWatchingFiles(true)
+    if (card === 'files') {
+      markFilesAsked()
+      return setWatchingFiles(true)
+    }
     void call('runtime', 'permissions.request', { permission: card }).then((r) => put(card, r.state), () => {})
   }
 
@@ -137,6 +141,8 @@ function Launcher({ onBack, onNext }: { onBack: () => void; onNext: () => void }
       lead={
         launcher?.enabled === false
           ? 'The launcher is off. Turn it on in Settings › Launcher.'
+          : launcher?.active === false
+            ? 'Another app holds this shortcut, so the launcher can’t use it. Pick another in Settings › Launcher.'
           : 'Press the shortcut in any app: search drops out of the notch. Type an app name, a file, or a sum like 12*7.'
       }
       onBack={onBack}

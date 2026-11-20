@@ -15,6 +15,7 @@ import LibraryPage, { useLibrary } from './library'
 import { entryState, updateCount } from './library-state'
 import { setSettingsTarget, useSettingsTarget } from './target'
 import { releasePage } from '../onboarding/whats-new'
+import { filesAsked, filesState, markFilesAsked } from './folder-access'
 import { lastCheckedText } from './updates'
 import appIcon from '../../../../assets/brand/icon.svg'
 
@@ -190,13 +191,17 @@ function usePermissionStates(watching: boolean) {
       clearInterval(timer)
     }
   }, [watching])
-  // The folders have no check that doesn't prompt: the recent files watcher already knows.
-  useEffect(
-    () =>
-      subscribeTopic('recentFiles', ({ access }) => put('files', access === 'granted' ? 'allowed' : access === 'denied' ? 'off' : 'notAsked')),
-    [],
-  )
-  return states
+  // The folders are read only once their Allow… was clicked: reading them is what asks (see folder-access.ts).
+  const [watchFiles, setWatchFiles] = useState(filesAsked)
+  useEffect(() => {
+    if (!watchFiles) return put('files', 'notAsked')
+    return subscribeTopic('recentFiles', ({ access }) => put('files', filesState(access)))
+  }, [watchFiles])
+  const askFiles = () => {
+    markFilesAsked()
+    setWatchFiles(true)
+  }
+  return [states, askFiles] as const
 }
 
 /**
@@ -272,7 +277,7 @@ export default function Settings() {
   const loaded = usePlugins()
   const [preferences, setPreferences, preferencesError] = usePreferences()
   const target = useSettingsTarget()
-  const permissionStates = usePermissionStates(target.page === 'permissions')
+  const [permissionStates, askFiles] = usePermissionStates(target.page === 'permissions')
   const library = useLibrary()
   const optionHeld = useOptionHeld(target.page === 'about')
   const [updater, setUpdater, reloadUpdater] = useUpdaterPreferences()
@@ -421,7 +426,8 @@ export default function Settings() {
         onFixPermission={(id, state) => {
           const permission = PERMISSIONS.find((p) => p.id === id)
           if (!permission) return
-          if (state === 'notAsked' && permission.status) void call('runtime', 'permissions.request', { permission: permission.status })
+          if (state === 'notAsked' && id === 'files') askFiles()
+          else if (state === 'notAsked' && permission.status) void call('runtime', 'permissions.request', { permission: permission.status })
           else void call('runtime', 'system.openUrl', { url: permission.url })
         }}
         aboutHeader={aboutHeader}

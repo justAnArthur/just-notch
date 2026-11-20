@@ -1,5 +1,3 @@
-import type { PermissionState, Topics } from '@just-notch/bridge-schema'
-
 /** The Welcome tour's permission cards: what each powers, in the order the tour asks. */
 export const CARDS = [
   { id: 'calendar', label: 'Calendar', description: 'Your next meeting and a countdown to it.' },
@@ -10,8 +8,3 @@ export const CARDS = [
 ] as const
 
 export type CardId = (typeof CARDS)[number]['id']
-
-/** The folders have no check that doesn't prompt: the recent files watcher's answer, once the card asked. */
-export function filesState(access: Topics['recentFiles']['access']): PermissionState {
-  return access === 'granted' ? 'allowed' : 'off'
-}
