@@ -8,7 +8,7 @@ import { usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
 import Settings from '../settings/settings'
 import { useEdgeFade } from './edge-fade'
-import { type Shape, stripLayout } from './geometry'
+import { type Shape, STRIP_INSET, stripLayout, TAB_ICON } from './geometry'
 import { rememberEmpty, tabsOf } from './tab-order'
 import TabStrip from './tabs'
 
@@ -106,7 +106,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
   return (
     <div className="absolute inset-0 flex flex-col">
       <SizeProvider size="compact">
-        <div className="flex shrink-0 items-center px-3" style={{ height: geometry.notch.h }}>
+        <div className="flex shrink-0 items-center" style={{ height: geometry.notch.h, paddingInline: STRIP_INSET }}>
           {tabs.length > 0 ? (
             <TabStrip tabs={tabs} selected={index} layout={layout} onSelect={(i) => select(tabs[i]?.id)} />
           ) : (
@@ -121,7 +121,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
               className={settings ? 'text-foreground' : undefined}
               onClick={() => (settings ? select(tabs[0]?.id) : select(SETTINGS_TAB))}
             >
-              <SettingsIcon size={14} strokeWidth={settings ? 2 : 1.5} />
+              <SettingsIcon size={TAB_ICON.size} strokeWidth={settings ? TAB_ICON.lit : TAB_ICON.stroke} />
             </Button>
           </div>
         </div>

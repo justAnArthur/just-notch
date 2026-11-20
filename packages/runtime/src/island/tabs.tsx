@@ -1,8 +1,9 @@
 import type { IconProps } from '@just-notch/sdk'
-import { cn, FluidHoverHighlight, spring, useFluidHover, useRegisterFluidHoverItem } from '@justanarthur/modo-ui'
+import { cn, FluidHoverHighlight, useFluidHover, useRegisterFluidHoverItem } from '@justanarthur/modo-ui'
 import { type ComponentType, type CSSProperties, useEffect, useRef } from 'react'
 import { useEdgeFade } from './edge-fade'
-import type { StripLayout } from './geometry'
+import { type StripLayout, TAB_ICON } from './geometry'
+import { motionScale } from './motion'
 
 export interface Tab {
   id: string
@@ -40,7 +41,7 @@ function TabButton({ tab, index, selected, lit, register, onSelect }: TabButtonP
       )}
       onClick={() => onSelect(index)}
     >
-      <Icon size={14} strokeWidth={lit ? 2 : 1.5} className="transition-[stroke-width] duration-fast" />
+      <Icon size={TAB_ICON.size} strokeWidth={lit ? TAB_ICON.lit : TAB_ICON.stroke} className="transition-[stroke-width] duration-fast" />
     </button>
   )
 }
@@ -100,7 +101,7 @@ export default function TabStrip({ tabs, selected, layout, onSelect }: TabStripP
       onMouseLeave={hover.handlers.onMouseLeave}
     >
       <div className="flex h-full w-max min-w-full items-center">
-        {rect && <FluidHoverHighlight rect={rect} session={0} className="rounded-lg bg-active" transition={spring.moderate} />}
+        {rect && <FluidHoverHighlight rect={rect} session={0} className="rounded-lg bg-active" transition={motionScale.micro} />}
         <FluidHoverHighlight hover={hover} hidden={hover.activeIndex === selected} className="rounded-lg" />
         {tabs.slice(0, layout.before).map(button)}
         <div aria-hidden className="h-full shrink-0 grow" style={{ minWidth: layout.spacer }} />

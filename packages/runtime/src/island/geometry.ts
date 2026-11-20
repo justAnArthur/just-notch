@@ -1,5 +1,6 @@
 import type { Rect, ScreenGeometry } from '@just-notch/bridge-schema'
 import type { IslandState } from '@just-notch/sdk'
+import { RADIUS } from '@justanarthur/modo-ui-notch/lib/geometry'
 
 /** The island's outline: a body of `w` × `h` hanging from the top edge, `radius` below, concave `shoulder`s into the edge. */
 export interface Shape {
@@ -38,8 +39,10 @@ export const slotWidth = (g: ScreenGeometry) => g.notch.h + 8
 export const INSET = 20
 /** An icon tab's width (w-7.5): a compact control's height plus the icon's breathing room. */
 export const TAB_W = 30
-/** The tab row's inset (px-3): a tab's 14 px glyph sits centered in its 30 px button, so the first glyph lands on INSET like the content. */
-export const STRIP_INSET = INSET - (TAB_W - 14) / 2
+/** A tab's glyph, as the content's own glyphs: 16 px at stroke 1.75 (2 when lit). */
+export const TAB_ICON = { size: 16, stroke: 1.75, lit: 2 } as const
+/** The tab row's inset: a tab's glyph sits centered in its 30 px button, so the first glyph lands on INSET like the content. */
+export const STRIP_INSET = INSET - (TAB_W - TAB_ICON.size) / 2
 /** Kept free on each side of the notch. */
 const NOTCH_GAP = 8
 /** The settings button (size-7) and its gap, at the far right of the header. */
@@ -81,13 +84,13 @@ export function stripLayout(count: number, w: number, g: ScreenGeometry): StripL
 export function shapeFor(state: IslandState, g: ScreenGeometry, sheet: Sheet = { snap: 0 }): Shape {
   const { notch, panel } = g
   const slot = slotWidth(g)
-  if (state === 'idle') return { w: notch.w, h: notch.h, radius: 10, shoulder: 6 }
-  if (state === 'compact' || state === 'split') return { w: notch.w + 2 * slot, h: notch.h, radius: 13, shoulder: 8 }
-  if (state === 'flash') return { w: notch.w + 2 * (slot + 64), h: notch.h + 48, radius: 24, shoulder: 10 }
+  if (state === 'idle') return { w: notch.w, h: notch.h, radius: RADIUS.idle, shoulder: 6 }
+  if (state === 'compact' || state === 'split') return { w: notch.w + 2 * slot, h: notch.h, radius: RADIUS.compact, shoulder: 8 }
+  if (state === 'flash') return { w: notch.w + 2 * (slot + 64), h: notch.h + 48, radius: RADIUS.flash, shoulder: 10 }
   const room = panel.h - 24
   const fit = sheet.content === undefined ? EXPANDED.h : Math.max(FIT_MIN, Math.min(EXPANDED.h, Math.ceil(sheet.content + chromeHeight(g))))
   const h = sheet.snap === 1 ? Math.min(SHEET_H, room) : Math.min(fit, room)
-  return { w: Math.min(EXPANDED.w, panel.w - 28), h, radius: 32, shoulder: 14 }
+  return { w: Math.min(EXPANDED.w, panel.w - 28), h, radius: RADIUS.expanded, shoulder: 14 }
 }
 
 /** The detached bubble of `split`: a circle as tall as the compact island, its center `x` from the island's center. */
