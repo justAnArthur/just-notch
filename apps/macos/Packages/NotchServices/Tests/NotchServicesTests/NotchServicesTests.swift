@@ -382,6 +382,18 @@ struct NewServiceTests {
         #expect(ClipboardService.hex(NSColor(srgbRed: 1, green: 0.5, blue: 0, alpha: 1)) == "#ff8000")
     }
 
+    @Test func ignoredAppDefaults() {
+        let defaults = ClipboardService.defaultIgnoredApps
+        // A fresh install gets every default after the user's own.
+        #expect(ClipboardService.seed(["com.me.app"], seeded: []) == ["com.me.app"] + defaults)
+        // A default the user removed stays removed; nothing doubles up.
+        let removed = Array(defaults.dropFirst())
+        #expect(ClipboardService.seed(removed, seeded: defaults) == removed)
+        #expect(ClipboardService.seed(defaults, seeded: []) == defaults)
+        // A default added in a later version still arrives.
+        #expect(ClipboardService.seed([], seeded: Array(defaults.dropLast())) == [defaults.last!])
+    }
+
     @Test func busiestProcesses() {
         var old = ProcessTimes()
         old.at = Date(timeIntervalSince1970: 0)

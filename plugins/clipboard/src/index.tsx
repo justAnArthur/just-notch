@@ -65,6 +65,8 @@ function IgnoredApps() {
 
   const set = (next: string[]) => void call('clipboard.setIgnoredApps', { apps: next })
   const byId = new Map(apps.map((app) => [app.bundleId, app]))
+  // The defaults name every password manager; list only the ones on this Mac.
+  const shown = apps.length ? ignored.filter((id) => byId.has(id)) : []
   const items = apps.filter((app) => !ignored.includes(app.bundleId)).map((app) => ({ value: app.bundleId, label: <AppLabel app={app} />, textValue: app.name }))
   const add = (id: string) => {
     setQuery('')
@@ -72,15 +74,15 @@ function IgnoredApps() {
   }
 
   return (
-    <List.Section title="Never record from" aside={`${ignored.length} apps`}>
-      {ignored.map((id) => (
+    <List.Section title="Never record from" aside={`${shown.length} apps`}>
+      {shown.map((id) => (
         <List.Row key={id} label={<AppLabel app={byId.get(id) ?? { bundleId: id, name: id }} />}>
           <Button variant="ghost" size="icon" aria-label={`Remove ${byId.get(id)?.name ?? id}`} onClick={() => set(ignored.filter((a) => a !== id))}>
             <X />
           </Button>
         </List.Row>
       ))}
-      <List.Row label="Add an app" description="Concealed copies, such as passwords, are always skipped.">
+      <List.Row label="Add an app" description="Password managers are on the list from the start.">
         <Combobox items={items} value="" onValueChange={add} query={query} onQueryChange={setQuery}>
           <Combobox.Input aria-label="App" placeholder="Search apps…" className="w-56" />
           <Combobox.Content>
@@ -127,6 +129,7 @@ function Settings() {
         </List.Row>
       </List.Section>
       <IgnoredApps />
+      <p className="px-3 text-caption text-muted-foreground">History stays on this Mac. Copies marked as passwords are never saved.</p>
     </List>
   )
 }
