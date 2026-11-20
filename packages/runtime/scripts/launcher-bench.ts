@@ -62,7 +62,8 @@ const watch = () =>
       const inResults = records.some((r) => (r.target as HTMLElement).closest?.('[role=listbox]') || [...r.addedNodes, ...r.removedNodes].some((n) => n instanceof HTMLElement && (n.matches('[role=listbox], [role=group]') || n.querySelector('[role=listbox]'))))
       if (inResults) w.__bench.changes.push(performance.now())
       for (const r of records) {
-        for (const g of groups(r.removedNodes)) w.__bench.removed.push(g.getAttribute('aria-label')!)
+        // A section React only moved (sections reorder by their best row) is back in the page by now: not an unmount.
+        for (const g of groups(r.removedNodes)) if (!g.isConnected) w.__bench.removed.push(g.getAttribute('aria-label')!)
         for (const g of groups(r.addedNodes)) w.__bench.added.push(g.getAttribute('aria-label')!)
       }
     }).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true })
@@ -104,6 +105,55 @@ async function typeQuery(query: string, gap: number) {
 }
 
 const report: string[] = []
+
+/**
+ * The open, timed in the page from the shortcut: when the field is readable (its opacity, with every ancestor's,
+ * past 0.9, and the bar under 90 % of it) and, with keys typed at once, when results show and whether any scope button showed (the split).
+ */
+async function timeOpen(typed: string) {
+  const t = await page.evaluate(async (typed) => {
+    const w = window as unknown as { __notchMock: { launcher(): void } }
+    const opacity = (el: Element | null) => {
+      let o = 1
+      for (let e = el; e; e = e.parentElement) o *= Number(getComputedStyle(e).opacity)
+      return o
+    }
+    const start = performance.now()
+    w.__notchMock.launcher()
+    const times: { field?: number; results?: number; split: boolean } = { split: false }
+    if (typed) {
+      await new Promise((r) => setTimeout(r, 30))
+      const input = document.querySelector<HTMLInputElement>('input[aria-label="Search"]')!
+      // React's own value setter, so its onChange sees the change.
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, typed)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    while (performance.now() - start < 1200) {
+      await new Promise((r) => requestAnimationFrame(r))
+      const now = performance.now() - start
+      const field = document.querySelector('input[aria-label="Search"]')
+      // Readable: opaque, and the bar spread under (most of) it, since the field is clipped to the bar's black.
+      const label = field?.closest('label')
+      const bar = label?.parentElement?.querySelector('svg rect')
+      const spread = label && bar ? bar.getBoundingClientRect().width / label.getBoundingClientRect().width : 0
+      if (times.field === undefined && field && opacity(field) > 0.9 && spread > 0.9) times.field = Math.round(now)
+      const list = document.querySelector('[role=listbox]')
+      if (times.results === undefined && list && opacity(list) > 0.5) times.results = Math.round(now)
+      if (typed && [...document.querySelectorAll('button[aria-pressed]')].some((b) => opacity(b) > 0.2)) times.split = true
+    }
+    return times
+  }, typed)
+  await closeLauncher()
+  return t
+}
+const runs = [1, 2, 3]
+const fields: number[] = []
+for (const _ of runs) fields.push((await timeOpen('')).field ?? NaN)
+const typedRuns: { field?: number; results?: number; split: boolean }[] = []
+for (const _ of runs) typedRuns.push(await timeOpen('saf'))
+report.push(
+  `open: shortcut → field readable ${fields.join('/')} ms; typing "saf" at once: results ${typedRuns.map((r) => r.results).join('/')} ms, scope buttons split off: ${typedRuns.some((r) => r.split) ? 'yes' : 'no'}`,
+)
 
 // The empty bar, for its placeholder.
 await openLauncher()
