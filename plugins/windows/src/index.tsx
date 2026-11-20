@@ -129,9 +129,11 @@ export default definePlugin({
         front = app
         ignore()
       }),
-      startHotkeys(ctx, (id) => void press(ctx, id)),
+      startHotkeys(ctx, (id) => {
+        void press(ctx, id)
+        void noticeTiling(ctx).catch(() => {})
+      }),
     ]
-    void noticeTiling(ctx).catch(() => {})
     return () => {
       for (const stop of stops) stop()
       pause('ignored', false)
