@@ -218,11 +218,8 @@ function clipItem(clip: Clip, ctx: PluginContext): SearchItem {
   }
 }
 
-/** `shortcut` and `stay` arrive with plugin API 1.6; older launchers ignore them. */
-type Action = SearchAction & { shortcut?: string; stay?: boolean }
-
 /** ↩ paste, ⌘↩ copy, ⇧↩ paste as plain text (the first three, by order), ⌘. pin, ⌘⌫ delete. */
-function clipActions(clip: Clip, ctx: PluginContext): Action[] {
+function clipActions(clip: Clip, ctx: PluginContext): SearchAction[] {
   return [
     { title: 'Paste', run: () => void ctx.call('clipboard.paste', { id: clip.id }) },
     { title: 'Copy', run: () => void ctx.call('clipboard.copy', { id: clip.id }) },
@@ -306,6 +303,8 @@ export default definePlugin({
     icon: ClipboardList,
     keywords: ['clip', 'clipboard', 'paste'],
     root: { limit: 3 },
+    // ⌘1–⌘9 paste the first nine clips.
+    numberKeys: true,
     provide: (query, { ctx, root }) => search(query, ctx, root),
   },
 })
