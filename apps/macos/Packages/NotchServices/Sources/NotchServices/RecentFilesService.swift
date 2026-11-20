@@ -149,6 +149,9 @@ public final class RecentFilesService: NotchService {
             let configured = UserDefaults(suiteName: "com.apple.screencapture")?.string(forKey: "location")
             let screenshots = configured.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? home.appendingPathComponent("Desktop")
             return screenshots.standardizedFileURL
+        case .shelf:
+            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            return support.appendingPathComponent("JustNotch/Shelf", isDirectory: true)
         }
     }
 

@@ -1,6 +1,6 @@
 import { type RecentDownload, type RecentFile as KitFile, RecentFiles, Widget } from '@justanarthur/modo-ui-notch'
 import { Button, List } from '@justanarthur/modo-ui'
-import { type ActiveDownload, definePlugin, type Unsubscribe, type PluginContext, type RecentFile, type RecentFilesState, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
+import { type ActiveDownload, type WatchedSource, definePlugin, type Unsubscribe, type PluginContext, type RecentFile, type RecentFilesState, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { FolderDown, FolderLock } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -23,10 +23,14 @@ const ALL: Sources = { downloads: true, screenshots: true }
 const toDownload = (d: ActiveDownload | undefined): RecentDownload | null =>
   d?.total ? { id: d.id, name: d.name, received: d.received, total: d.total, rate: d.rate, from: d.from } : null
 
+/** A file from a watched folder; the kit's lists show only those, so shelf copies stay out until it has a tab. */
+type FolderFile = RecentFile & { source: WatchedSource }
+const fromFolder = (f: RecentFile): f is FolderFile => f.source !== 'shelf'
+
 const thumbnails = new Map<string, string | null>()
 
 /** QuickLook thumbnails for the files shown, fetched once each. */
-function useThumbnails(files: RecentFile[]) {
+function useThumbnails(files: FolderFile[]) {
   const { call } = usePlugin()
   const [, rerender] = useState(0)
   useEffect(() => {
@@ -43,14 +47,14 @@ function useThumbnails(files: RecentFile[]) {
       live = false
     }
   }, [call, files])
-  return (file: RecentFile): KitFile => ({ ...file, thumbnail: thumbnails.get(file.id) ?? undefined })
+  return (file: FolderFile): KitFile => ({ ...file, thumbnail: thumbnails.get(file.id) ?? undefined })
 }
 
 function useFiles() {
   const state = useTopic('recentFiles')
   const [sources] = useStorage(SOURCES, ALL)
   const [show] = useStorage(SHOW, 12)
-  const files = (state?.files ?? []).filter((f) => sources[f.source])
+  const files = (state?.files ?? []).filter(fromFolder).filter((f) => sources[f.source])
   const shown = (['downloads', 'screenshots'] as const).flatMap((s) => files.filter((f) => f.source === s).slice(0, show))
   return { state, files: shown, download: sources.downloads ? toDownload(state?.downloads[0]) : null }
 }
@@ -117,9 +121,9 @@ function Minimal() {
   return download ? <RecentFiles.Minimal download={download} /> : null
 }
 
-const LABEL: Record<RecentFile['source'], string> = { downloads: 'Downloads folder', screenshots: 'Screenshots folder' }
+const LABEL: Record<WatchedSource, string> = { downloads: 'Downloads folder', screenshots: 'Screenshots folder' }
 
-function FolderRow({ source }: { source: RecentFile['source'] }) {
+function FolderRow({ source }: { source: WatchedSource }) {
   const { call } = usePlugin()
   const folder = useTopic('recentFiles')?.folders[source]
   return (
@@ -215,7 +219,7 @@ function activate(ctx: PluginContext) {
     if (!download && shown) ctx.activity.hide()
     shown = !!download
 
-    const fresh = seen ? state.files.filter((f) => !seen?.has(f.id) && sources[f.source]) : []
+    const fresh = seen ? state.files.filter(fromFolder).filter((f) => !seen?.has(f.id) && sources[f.source]) : []
     seen = new Set(state.files.map((f) => f.id))
     const newest = fresh.sort((a, b) => b.addedAt - a.addedAt)[0]
     if (!newest || ctx.island.get() === 'expanded' || (await ctx.storage.get<boolean>(FLASH)) === false) return

@@ -47,6 +47,7 @@ const geometry: ScreenGeometry = {
   hasNotch: true,
   scale: 2,
   screenId: 'mock',
+  mode: 'full',
 }
 
 const TRACKS = [
@@ -153,6 +154,7 @@ const values: Topics = {
     ],
     downloads: [],
     folders: { downloads: { path: '/Users/me/Downloads', custom: false }, screenshots: { path: '/Users/me/Desktop', custom: false } },
+    shelf: { bytes: 0, limitBytes: 2 * 1024 ** 3, expiryHours: 24 },
   },
 }
 const DEFAULT_FOLDERS = values.recentFiles.folders
@@ -256,7 +258,16 @@ async function netFetch(request: NetRequest, plugin: string): Promise<NetRespons
   return result
 }
 const PREFERENCES_KEY = 'notch:mock:preferences'
-const DEFAULT_PREFERENCES: AppPreferences = { launchAtLogin: false, screens: 'notched', launcher: { enabled: true, shortcut: 'Alt+Space', active: true, spotlightConflict: false } }
+const DEFAULT_PREFERENCES: AppPreferences = {
+  launchAtLogin: false,
+  screens: 'notched',
+  launcher: { enabled: true, shortcut: 'Alt+Space', active: true, spotlightConflict: false },
+  displays: [
+    { id: 'mock', name: 'Built-in Retina Display', hasNotch: true, mode: 'full' },
+    { id: 'mock-external', name: 'Studio Display', hasNotch: false, mode: 'hidden' },
+  ],
+  hideWhen: { fullScreen: true, calls: true },
+}
 
 function preferences(): AppPreferences {
   const raw = localStorage.getItem(PREFERENCES_KEY)
@@ -619,7 +630,8 @@ const handlers: Handlers = {
   },
   'windows.tiling': () => ({ edgeDrag: true, topEdgeDrag: true, optionDrag: true, margins: false }),
   'recentFiles.clear': ({ source }) => {
-    publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source) })
+    const shelf = source === 'shelf' ? { ...values.recentFiles.shelf, bytes: 0 } : values.recentFiles.shelf
+    publish('recentFiles', { ...values.recentFiles, files: values.recentFiles.files.filter((f) => f.source !== source), shelf })
     return null
   },
   'recentFiles.chooseFolder': ({ source }) => {
@@ -629,6 +641,20 @@ const handlers: Handlers = {
   },
   'recentFiles.resetFolder': ({ source }) => {
     publish('recentFiles', { ...values.recentFiles, folders: { ...values.recentFiles.folders, [source]: DEFAULT_FOLDERS[source] } })
+    return null
+  },
+  'recentFiles.keep': ({ paths }) => {
+    const { shelf, files } = values.recentFiles
+    const kept = paths.map((path, i) => {
+      const name = path.split('/').pop()!
+      return { id: `/Users/me/Library/Application Support/JustNotch/Shelf/${Date.now()}-${i}/${name}`, name, size: 240_000 * (i + 1), addedAt: Date.now(), source: 'shelf' as const }
+    })
+    const bytes = shelf.bytes + kept.reduce((sum, f) => sum + f.size, 0)
+    publish('recentFiles', { ...values.recentFiles, files: [...kept, ...files], shelf: { ...shelf, bytes } })
+    return { kept: kept.map((f) => f.id), skipped: [] }
+  },
+  'recentFiles.setShelf': (changes) => {
+    publish('recentFiles', { ...values.recentFiles, shelf: { ...values.recentFiles.shelf, ...changes } })
     return null
   },
   'recentFiles.cancelDownload': ({ id }) => {
@@ -745,10 +771,17 @@ const handlers: Handlers = {
   'library.install': ({ id }) => libraryInstall(id),
   'library.uninstall': ({ id }) => libraryUninstall(id),
   'app.preferences': preferences,
-  'app.setPreferences': (changes) => {
+  'app.setPreferences': ({ displayModes, hideWhen, ...changes }) => {
     const current = preferences()
-    const next = { ...current, ...changes, launcher: { ...current.launcher, ...changes.launcher } }
+    const displays = current.displays.map((d) => ({ ...d, mode: displayModes?.[d.id] ?? d.mode }))
+    const next = { ...current, ...changes, launcher: { ...current.launcher, ...changes.launcher }, displays, hideWhen: { ...current.hideWhen, ...hideWhen } }
     localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next))
+    // This page is the `mock` display: a new mode reaches the island as geometry, as the host's rebuild does.
+    const mode = displayModes?.mock
+    if (mode && mode !== geometry.mode) {
+      geometry.mode = mode
+      emit({ type: 'geometry', payload: { ...geometry } })
+    }
     return next
   },
 }

@@ -76,7 +76,8 @@ struct ShapeTests {
         #expect(try keys(file) == ["id", "name", "size", "addedAt", "source", "from"])
         let folder = RecentFolder(path: "/a", custom: false)
         let state = RecentFilesState(access: .granted, files: [], downloads: [], folders: .init(downloads: folder, screenshots: folder))
-        #expect(try keys(state) == ["access", "files", "downloads", "folders"])
+        #expect(try keys(state) == ["access", "files", "downloads", "folders", "shelf"])
+        #expect(try keys(ShelfState(expiryHours: nil)) == ["bytes", "limitBytes", "expiryHours"])
         #expect(try keys(state.folders) == ["downloads", "screenshots"])
         #expect(try keys(folder) == ["path", "custom"])
     }

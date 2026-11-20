@@ -86,6 +86,24 @@ struct ScreenGeometry: Codable, Equatable {
     var hasNotch: Bool
     var scale: Double
     var screenId: String
+    var mode: DisplayMode = .full
+}
+
+/// bridge-schema `DisplayMode`: the island on a display.
+enum DisplayMode: String, Codable {
+    case hidden, pill, full
+}
+
+struct DisplayInfo: Codable, Equatable {
+    var id: String
+    var name: String
+    var hasNotch: Bool
+    var mode: DisplayMode
+}
+
+struct HideWhen: Codable, Equatable {
+    var fullScreen = true
+    var calls = true
 }
 
 struct HostInfo: Codable {
@@ -105,6 +123,8 @@ struct AppPreferences: Codable, Equatable {
     var launchAtLogin: Bool
     var screens: Screens
     var launcher: LauncherPreferences
+    var displays: [DisplayInfo] = []
+    var hideWhen = HideWhen()
 }
 
 struct LauncherPreferences: Codable, Equatable {
@@ -159,6 +179,8 @@ enum Schema {
         "recentFiles.chooseFolder": .filesRecent,
         "recentFiles.resetFolder": .filesRecent,
         "recentFiles.cancelDownload": .filesRecent,
+        "recentFiles.keep": .filesRecent,
+        "recentFiles.setShelf": .filesRecent,
         "files.thumbnail": .files,
         "files.airdrop": .files,
         "files.reveal": .files,
@@ -271,9 +293,16 @@ struct PreferencesParams: Decodable {
         var shortcut: String?
     }
 
+    struct HideWhenChange: Decodable {
+        var fullScreen: Bool?
+        var calls: Bool?
+    }
+
     var launchAtLogin: Bool?
     var screens: AppPreferences.Screens?
     var launcher: Launcher?
+    var displayModes: [String: DisplayMode]?
+    var hideWhen: HideWhenChange?
 }
 
 struct AcceleratorParams: Decodable {

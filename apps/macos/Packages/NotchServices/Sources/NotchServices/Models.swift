@@ -211,7 +211,7 @@ public enum SystemAction: String, Codable, Sendable {
 }
 
 public struct RecentFile: Codable, Equatable, Sendable {
-    public enum Source: String, Codable, Sendable { case downloads, screenshots }
+    public enum Source: String, Codable, Sendable { case downloads, screenshots, shelf }
     public var id: String
     public var name: String
     public var size: Double
@@ -245,6 +245,21 @@ public struct RecentFilesState: Codable, Equatable, Sendable {
     public var files: [RecentFile]
     public var downloads: [ActiveDownload]
     public var folders: Folders
+    public var shelf = ShelfState()
+}
+
+public struct ShelfState: Codable, Equatable, Sendable {
+    public var bytes: Double = 0
+    public var limitBytes: Double = 2 * 1024 * 1024 * 1024
+    public var expiryHours: Double? = 24
+
+    /// `expiryHours` encodes as `null` when off, as bridge-schema says, not left out.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(bytes, forKey: .bytes)
+        try c.encode(limitBytes, forKey: .limitBytes)
+        try c.encode(expiryHours, forKey: .expiryHours)
+    }
 }
 
 public struct DisplayState: Codable, Equatable, Sendable {

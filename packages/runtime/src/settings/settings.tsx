@@ -146,7 +146,17 @@ function usePreferences() {
   useEffect(reload, [])
   const change = (next: PreferenceChange) => {
     setError(undefined)
-    setPreferences((current) => current && { ...current, ...next, launcher: { ...current.launcher, ...next.launcher } })
+    const { displayModes, hideWhen, ...rest } = next
+    setPreferences(
+      (current) =>
+        current && {
+          ...current,
+          ...rest,
+          launcher: { ...current.launcher, ...rest.launcher },
+          displays: current.displays.map((d) => ({ ...d, mode: displayModes?.[d.id] ?? d.mode })),
+          hideWhen: { ...current.hideWhen, ...hideWhen },
+        },
+    )
     void call('runtime', 'app.setPreferences', next).then(setPreferences, (reason: unknown) => {
       setError(reason instanceof Error ? reason.message : String(reason))
       reload()

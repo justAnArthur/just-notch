@@ -121,6 +121,30 @@ export interface ScreenGeometry {
   scale: number
   /** Stable id of the screen this panel sits on. */
   screenId: string
+  /**
+   * What the island does here: `full` as on the notch; `pill` nothing at idle, only activities, flashes and hover;
+   * `hidden` no island (the panel stays only so the launcher can drop out of it, when every display is hidden).
+   */
+  mode: DisplayMode
+}
+
+/** The island on a display: `hidden`, `pill` (activities and hover only) or `full`. */
+export type DisplayMode = 'hidden' | 'pill' | 'full'
+
+/** A connected display, for Settings › General › Displays. */
+export interface DisplayInfo {
+  id: string
+  name: string
+  hasNotch: boolean
+  mode: DisplayMode
+}
+
+/** When the island steps aside on its own. */
+export interface HideWhen {
+  /** An app is full screen on its display. */
+  fullScreen: boolean
+  /** The microphone is in use (a call), on every display. */
+  calls: boolean
 }
 
 // ── Plugin API version ──
@@ -140,7 +164,7 @@ export interface ScreenGeometry {
  * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention, 1.6
  * search action shortcuts, `stay` and number keys.
  */
-export const API_VERSION = '1.6.0'
+export const API_VERSION = '1.7.0'
 
 interface Version {
   major: number
@@ -492,7 +516,8 @@ export interface RecentFile {
   name: string
   size: number // bytes
   addedAt: number
-  source: 'downloads' | 'screenshots'
+  /** `shelf`: a copy the user dropped on the notch to keep (`recentFiles.keep`). */
+  source: 'downloads' | 'screenshots' | 'shelf'
   /** Host the file was downloaded from. */
   from?: string
 }
@@ -522,8 +547,22 @@ export interface RecentFilesState {
   files: RecentFile[]
   /** Downloads still being written, in the downloads folder. */
   downloads: ActiveDownload[]
-  /** The folder each source watches. */
-  folders: Record<RecentFile['source'], RecentFolder>
+  /** The folder each watched source watches. */
+  folders: Record<WatchedSource, RecentFolder>
+  /** The shelf's use and bounds. It needs no folder access, so it's published even while `access` is `denied`. */
+  shelf: ShelfState
+}
+
+/** The sources read from a user folder. */
+export type WatchedSource = Exclude<RecentFile['source'], 'shelf'>
+
+export interface ShelfState {
+  /** Bytes the kept copies take. */
+  bytes: number
+  /** Past this the oldest go first; a bigger file isn't kept. */
+  limitBytes: number
+  /** Kept files go after this many hours; `null` keeps them until the limit or a Clear. */
+  expiryHours: number | null
 }
 
 export interface DisplayState {
@@ -818,12 +857,19 @@ export interface Methods {
   /** macOS's own tiling settings, read from com.apple.WindowManager and never written. */
   'windows.tiling': { params: Record<string, never>; result: TilingSettings }
 
-  /** Hides a source's current files from `recentFiles`; nothing is deleted. */
+  /** Hides a source's current files from `recentFiles`; nothing is deleted, except the shelf's own copies. */
   'recentFiles.clear': { params: { source: RecentFile['source'] }; result: null }
   /** Asks the user for a folder to watch for the source, then rescans; `null` when they cancel. */
-  'recentFiles.chooseFolder': { params: { source: RecentFile['source'] }; result: RecentFolder | null }
+  'recentFiles.chooseFolder': { params: { source: WatchedSource }; result: RecentFolder | null }
   /** Watches the system's folder for the source again. */
-  'recentFiles.resetFolder': { params: { source: RecentFile['source'] }; result: null }
+  'recentFiles.resetFolder': { params: { source: WatchedSource }; result: null }
+  /**
+   * Keeps copies of `paths` on the shelf (APFS clones, so nearly free on the same volume); the originals stay.
+   * A file bigger than the limit, missing, or already a shelf copy is skipped; past the limit the oldest go.
+   */
+  'recentFiles.keep': { params: { paths: string[] }; result: { kept: string[]; skipped: string[] } }
+  /** The shelf's bounds; defaults 24 hours and 2 GB. Trims at once. */
+  'recentFiles.setShelf': { params: { expiryHours?: number | null; limitBytes?: number }; result: null }
   /** Moves a download under way (its partial file) to the Trash. */
   'recentFiles.cancelDownload': { params: { id: string }; result: null }
 
@@ -911,7 +957,12 @@ export interface Methods {
   'library.uninstall': { params: { id: string }; result: null }
   'app.preferences': { params: Record<string, never>; result: AppPreferences }
   'app.setPreferences': {
-    params: Partial<Omit<AppPreferences, 'launcher'>> & { launcher?: Partial<Pick<LauncherPreferences, 'enabled' | 'shortcut'>> }
+    params: Partial<Omit<AppPreferences, 'launcher' | 'displays' | 'hideWhen'>> & {
+      launcher?: Partial<Pick<LauncherPreferences, 'enabled' | 'shortcut'>>
+      /** Merged into the modes chosen so far, by display id. */
+      displayModes?: Record<string, DisplayMode>
+      hideWhen?: Partial<HideWhen>
+    }
     result: AppPreferences
   }
 }
@@ -927,9 +978,15 @@ export type UpdateState =
 
 export interface AppPreferences {
   launchAtLogin: boolean
-  /** `notched`: only the notched (else built-in, else main) screen; `all`: every screen. */
+  /**
+   * Legacy, read for a display with no mode chosen: `notched` shows the island on the notched (else built-in, else
+   * main) display only, `all` on every display.
+   */
   screens: 'notched' | 'all'
   launcher: LauncherPreferences
+  /** Read only: every connected display with its mode. Set with `displayModes`. */
+  displays: DisplayInfo[]
+  hideWhen: HideWhen
 }
 
 export interface LauncherPreferences {
@@ -981,6 +1038,8 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'recentFiles.chooseFolder': 'files.recent',
   'recentFiles.resetFolder': 'files.recent',
   'recentFiles.cancelDownload': 'files.recent',
+  'recentFiles.keep': 'files.recent',
+  'recentFiles.setShelf': 'files.recent',
   'files.thumbnail': 'files',
   'files.airdrop': 'files',
   'files.reveal': 'files',
