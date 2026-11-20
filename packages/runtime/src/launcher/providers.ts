@@ -1,14 +1,16 @@
-import type { CurrencyRates, FileHit, SystemAction } from '@just-notch/bridge-schema'
+import type { AppInfo, CurrencyRates, FileHit, Method, Methods, SystemAction } from '@just-notch/bridge-schema'
 import type { IconProps, SearchItem } from '@just-notch/sdk'
-import { AppWindow, Folder, Globe, Layers, Moon, MonitorOff, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
+import { AppWindow, CircleAlert, Folder, Globe, Layers, Moon, MonitorOff, Sparkles, SunMoon, Trash2, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useState } from 'react'
 import { call } from '../host/client'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import { searchApps, useAppIndex, useFrecency } from './apps'
 import { inlineAnswer } from './engines'
-import { type Frecency, frecencyScore, rankScore } from './frecency'
-import { bestScore, FUZZY_MAX } from './match'
+import { type Frecency, frecencyScore, type Knowledge, queryBoost, rankScore } from './frecency'
+import { bestScore, FUZZY_MAX, matchScore, normalize } from './match'
+import { type Group, rankRoot } from './rank'
 import type { Row, Section } from './rows'
+import { type Source, useSources } from './sources'
 
 /** A round button beside the bar: a built-in scope or a plugin's. */
 export interface Scope {
@@ -30,6 +32,8 @@ const BUILT_IN: Scope[] = [
 export const MAX_SCOPES = 6
 const SCOPE_LIMIT = 50
 const FILES_DEBOUNCE_MS = 110
+/** Spotlight on a cold index can take a while; past this the Files section says so. */
+const FILES_TIMEOUT_MS = 2000
 
 /** Built-in scopes, then each running plugin's, in the host's plugin order. */
 export function useScopes(): Scope[] {
@@ -94,52 +98,16 @@ function fileRow(hit: FileHit): Row {
       ],
     },
     actions: [
-      { title: 'Open', run: () => void call('runtime', 'files.open', { path: hit.path }) },
-      { title: 'Show in Finder', run: () => void call('runtime', 'files.reveal', { path: hit.path }) },
-      { title: 'Copy Path', run: () => void call('runtime', 'clipboard.writeText', { text: hit.path }) },
+      { title: 'Open', run: () => run('files.open', { path: hit.path }) },
+      { title: 'Show in Finder', run: () => run('files.reveal', { path: hit.path }) },
+      { title: 'Copy Path', run: () => run('clipboard.writeText', { text: hit.path }) },
     ],
   }
 }
 
 function pluginRow(scope: Scope, item: SearchItem): Row {
   const icon = typeof item.icon === 'string' ? { src: item.icon } : item.icon ? { glyph: item.icon } : { glyph: scope.icon }
-  return { id: `${scope.id}:${item.id}`, title: item.title, subtitle: item.subtitle, icon, accessory: item.accessory, actions: item.actions, preview: item.preview }
-}
-
-/** An async source's latest answer, with the key (query, scope) it answers. */
-export interface Latest<T> {
-  key: string
-  value: T
-}
-
-/**
- * What an async source shows: its latest answer, even one for an older key while the fresh one loads, so its
- * section stays put between keystrokes instead of blinking out and back. A source turned off shows nothing.
- */
-export const shownAnswer = <T>(latest: Latest<T> | undefined, enabled: boolean): T | undefined => (enabled ? latest?.value : undefined)
-
-/** Results that arrive later (files, plugin scopes); the last ones stay until fresh ones replace them. */
-function useAsync<T>(key: string, enabled: boolean, load: (signal: AbortSignal) => Promise<T>, delay = 0): T | undefined {
-  const [state, setState] = useState<Latest<T>>()
-  useEffect(() => {
-    if (!enabled) {
-      // Turned back on later, it mustn't show answers from before.
-      setState(undefined)
-      return
-    }
-    const controller = new AbortController()
-    const timer = setTimeout(() => {
-      load(controller.signal).then(
-        (value) => !controller.signal.aborted && setState({ key, value }),
-        () => {},
-      )
-    }, delay)
-    return () => {
-      clearTimeout(timer)
-      controller.abort()
-    }
-  }, [key, enabled])
-  return shownAnswer(state, enabled)
+  return { id: `${scope.id}:${item.id}`, title: item.title, subtitle: item.subtitle, icon, accessory: item.accessory, actions: item.actions, preview: item.preview, plugin: scope.plugin?.installed.manifest.id }
 }
 
 /** A system action or a Shortcut that matches the query, best first. */
@@ -148,6 +116,8 @@ export interface ActionMatch {
   title: string
   action?: SystemAction
   shortcut?: string
+  /** How well it matches, before frecency. */
+  match: number
   score: number
 }
 
@@ -158,8 +128,8 @@ export interface ActionMatch {
 export function matchActions(query: string, root: boolean, shortcuts: string[], frecency: Frecency): ActionMatch[] {
   const least = root ? FUZZY_MAX + 1 : 1
   const matches: ActionMatch[] = []
-  const add = (match: Omit<ActionMatch, 'score'>, score: number) => {
-    if (score >= least) matches.push({ ...match, score: rankScore(score, frecencyScore(frecency, match.id)) })
+  const add = (found: Omit<ActionMatch, 'match' | 'score'>, match: number) => {
+    if (match >= least) matches.push({ ...found, match, score: rankScore(match, frecencyScore(frecency, found.id)) })
   }
   for (const a of SYSTEM_ACTIONS) add({ id: `action:${a.action}`, title: a.title, action: a.action }, query ? bestScore(query, a.title, a.keywords) : least)
   for (const name of shortcuts) add({ id: `shortcut:${name}`, title: name, shortcut: name }, query ? bestScore(query, name) : least)
@@ -170,19 +140,42 @@ export interface SearchView {
   sections: Section[]
   /** One line instead of results: nothing found, or nothing typed in a scope that needs a query. */
   note?: string
+  /** A provider is still answering the current query. */
+  loading: boolean
+  /** Remembers that the row was picked for what's typed now. */
+  record(id: string): void
+}
+
+/** How long a slow provider gets before its section says so, and how long a network one waits for typing to pause. */
+const TIMEOUT_MS = 800
+const NET_DEBOUNCE_MS = 150
+/** What a provider's row scores when the provider matched it on something the name doesn't show (a clip's text). */
+const PROVIDER_MATCH = 400
+
+/** A failed or slow provider's one row, in its own section: muted, with Retry. */
+function errorRow(id: string, title: string, error: 'failed' | 'timeout', net: boolean, retry: () => void): Row {
+  return {
+    id: `error:${id}`,
+    title: error === 'timeout' ? `${title} took too long` : net ? `Couldn't reach ${title}` : `${title} didn't answer`,
+    icon: { glyph: CircleAlert },
+    failed: true,
+    actions: [{ title: 'Retry', run: retry, keepOpen: true }],
+  }
 }
 
 /**
  * Everything the launcher shows for `query` in `scope` (root when undefined): the inline answer, apps, plugin
- * scopes, actions, files and a web search, each from its own provider.
+ * scopes, actions, files and a web search, each from its own provider. The root ranks them as one list (rank.ts).
  */
-export function useSearch(query: string, scope: Scope | undefined, scopes: Scope[], open: boolean): SearchView & { record(id: string): void } {
+export function useSearch(query: string, scope: Scope | undefined, scopes: Scope[], open: boolean): SearchView {
   const apps = useAppIndex(open)
-  const [frecency, record] = useFrecency()
+  const { frecency, knowledge, launched } = useFrecency()
   const [rates, setRates] = useState<CurrencyRates | null>(null)
   const [shortcuts, setShortcuts] = useState<string[]>([])
   const q = query.trim()
+  const known = normalize(q)
   const root = scope === undefined
+  const record = (id: string) => launched(id, known)
 
   useEffect(() => {
     if (!open) return
@@ -190,102 +183,120 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     void call('runtime', 'actions.shortcuts', {}).then(setShortcuts, () => {})
   }, [open])
 
+  // Files and plugin scopes answer later. The root asks the plugins that show there, a scope only itself.
   const wantFiles = open && (scope?.id === 'files' ? q.length >= 1 : root && q.length >= 2)
-  const files = useAsync(`files ${q} ${scope?.id}`, wantFiles, () => call('runtime', 'files.search', { query: q, limit: root ? 5 : SCOPE_LIMIT }), FILES_DEBOUNCE_MS)
+  const asked = open ? scopes.filter((s) => s.plugin && (scope ? s.id === scope.id : s.rootLimit !== false && q !== '')) : []
+  const net = (s: Scope) => s.plugin!.installed.manifest.permissions.includes('net')
+  const sources: Source<Row[]>[] = [
+    ...(wantFiles
+      ? [{ id: 'files', key: `${q} ${scope?.id}`, debounce: FILES_DEBOUNCE_MS, timeout: FILES_TIMEOUT_MS, load: async () => (await call('runtime', 'files.search', { query: q, limit: root ? 5 : SCOPE_LIMIT })).map(fileRow) }]
+      : []),
+    ...asked.map((s) => {
+      const search = s.plugin!.definition.search!
+      return {
+        id: s.id,
+        key: `${q} ${root}`,
+        debounce: search.debounce ?? (net(s) ? NET_DEBOUNCE_MS : 0),
+        timeout: search.timeout ?? TIMEOUT_MS,
+        load: async (signal: AbortSignal) => (await search.provide(q, { ctx: s.plugin!.ctx, signal, root })).map((item) => pluginRow(s, item)),
+      }
+    }),
+  ]
+  const { views, retry } = useSources(sources)
+  const loading = sources.some((s) => views[s.id].pending)
+  /** A source's rows, or its error row once it failed. */
+  const rowsOf = (id: string, title: string, isNet = false): { rows?: Row[]; failed?: boolean } => {
+    const view = views[id]
+    if (!view) return {}
+    if (view.error) return { rows: [errorRow(id, title, view.error, isNet, retry)], failed: true }
+    return { rows: view.value }
+  }
 
-  // Plugin scopes answer on every keystroke; the root asks only those that show there, a scope only itself.
-  const asked = scopes.filter((s) => s.plugin && (scope ? s.id === scope.id : s.rootLimit !== false && q !== ''))
-  const pluginKey = `${asked.map((s) => s.id).join(',')} ${q}`
-  const pluginRows = useAsync(pluginKey, open && asked.length > 0, async (signal) => {
-    const answers = await Promise.all(
-      asked.map(async (s) => {
-        try {
-          const items = await s.plugin!.definition.search!.provide(q, { ctx: s.plugin!.ctx, signal, root })
-          return [s.id, items.map((item) => pluginRow(s, item))] as const
-        } catch {
-          return [s.id, []] as const
-        }
-      }),
-    )
-    return Object.fromEntries(answers) as Record<string, Row[]>
+  const appResults = (limit: number) => (q ? searchApps(q, apps, frecency, limit) : root ? [] : allApps(apps))
+  const appRow = ({ id, app }: { id: string; app: AppInfo & { path: string } }): Row => ({
+    id,
+    title: app.name,
+    icon: { path: app.path },
+    accessory: 'Application',
+    actions: [
+      { title: 'Open', run: () => run('apps.launch', { path: app.path }) },
+      { title: 'Show in Finder', run: () => run('files.reveal', { path: app.path }) },
+      { title: 'Copy Path', run: () => run('clipboard.writeText', { text: app.path }) },
+    ],
   })
 
-  const appRows = (limit: number): Row[] =>
-    (q || !root ? (q ? searchApps(q, apps, frecency, limit) : allApps(apps)) : []).map(({ id, app }) => ({
-      id,
-      title: app.name,
-      icon: { path: app.path },
-      accessory: 'Application',
-      actions: [
-        { title: 'Open', run: () => void call('runtime', 'apps.launch', { path: app.path }) },
-        { title: 'Show in Finder', run: () => void call('runtime', 'files.reveal', { path: app.path }) },
-        { title: 'Copy Path', run: () => void call('runtime', 'clipboard.writeText', { text: app.path }) },
-      ],
-    }))
-
-  const actionRows = (limit: number): Row[] =>
-    matchActions(q, root, shortcuts, frecency)
-      .slice(0, limit)
-      .map(({ id, title, action, shortcut }) => ({
-        id,
-        title,
-        icon: { glyph: action ? SYSTEM_ACTIONS.find((a) => a.action === action)!.icon : Workflow },
-        accessory: action ? 'Action' : 'Shortcut',
-        actions: [
-          {
-            title: 'Run',
-            run: () => void (action ? call('runtime', 'actions.system', { action }) : call('runtime', 'actions.runShortcut', { name: shortcut! })),
-          },
-        ],
-      }))
+  const actionResults = (limit: number) => matchActions(q, root, shortcuts, {}).slice(0, limit)
+  const actionRow = ({ id, title, action, shortcut }: ActionMatch): Row => ({
+    id,
+    title,
+    icon: { glyph: action ? SYSTEM_ACTIONS.find((a) => a.action === action)!.icon : Workflow },
+    accessory: action ? 'Action' : 'Shortcut',
+    actions: [{ title: 'Run', run: () => (action ? run('actions.system', { action }) : run('actions.runShortcut', { name: shortcut! })) }],
+  })
 
   const webRow = (): Row => ({
     id: 'web',
     title: `Search Google for “${q}”`,
     icon: { glyph: Globe },
-    actions: [{ title: 'Search', run: () => void call('runtime', 'system.openUrl', { url: `https://www.google.com/search?q=${encodeURIComponent(q)}` }) }],
+    actions: [{ title: 'Search', run: () => run('system.openUrl', { url: `https://www.google.com/search?q=${encodeURIComponent(q)}` }) }],
   })
 
-  // Inside a scope: only its rows.
+  // Inside a scope: only its rows, in the provider's order, lifted by what was picked for this query before.
   if (scope) {
     let rows: Row[] | undefined
-    if (scope.id === 'apps') rows = appRows(SCOPE_LIMIT)
-    else if (scope.id === 'actions') rows = actionRows(SCOPE_LIMIT)
-    else if (scope.id === 'files') {
-      if (!q) return { sections: [], note: 'Type to search your files.', record }
-      rows = files?.map(fileRow)
-    } else rows = pluginRows?.[scope.id]
-    if (!rows) return { sections: [], record }
-    if (!rows.length) return { sections: [], note: q ? `Nothing in ${scope.title} matches “${q}”.` : `${scope.title} is empty.`, record }
-    return { sections: [{ title: scope.title, rows }], record }
+    let failed = false
+    if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map(appRow)
+    else if (scope.id === 'actions') rows = matchActions(q, false, shortcuts, frecency).slice(0, SCOPE_LIMIT).map(actionRow)
+    else if (scope.id === 'files' && !q) return { sections: [], note: 'Type to search your files.', loading, record }
+    else ({ rows, failed = false } = rowsOf(scope.id === 'files' ? 'files' : scope.id, scope.title, scope.plugin ? net(scope) : false))
+    if (!rows) return { sections: [], loading, record }
+    if (!rows.length) return { sections: [], note: q ? `Nothing in ${scope.title} matches “${q}”.` : `${scope.title} is empty.`, loading, record }
+    if (!failed && known) rows = liftKnown(rows, known, knowledge)
+    return { sections: [{ title: scope.title, rows }], loading, record }
   }
 
-  if (!q) return { sections: [], record }
-  const sections: Section[] = []
+  if (!q) return { sections: [], loading, record }
   const answer = inlineAnswer(q, { rates })
-  if (answer)
-    sections.push({
-      title: answerTitle[answer.kind],
-      rows: [{ id: `answer:${answer.kind}`, title: answer.result, answer, actions: [{ title: 'Copy', run: () => void call('runtime', 'clipboard.writeText', { text: answer.copy }) }] }],
-    })
-  const [top, ...restApps] = appRows(BUILT_IN[0].rootLimit as number)
-  if (top) sections.push({ title: answer ? 'Applications' : 'Top Hit', rows: answer ? [top, ...restApps] : [top] })
-  if (top && !answer && restApps.length) sections.push({ title: 'Applications', rows: restApps })
+  const groups: Group[] = [
+    { title: 'Applications', rows: appResults(BUILT_IN[0].rootLimit as number).map((r) => ({ row: appRow(r), match: r.match })) },
+    { title: 'Actions', rows: actionResults(BUILT_IN[2].rootLimit as number).map((a) => ({ row: actionRow(a), match: a.match })) },
+  ]
+  const files = rowsOf('files', 'Files')
+  if (files.rows) groups.push({ title: 'Files', failed: files.failed, rows: files.rows.map((row) => ({ row, match: files.failed ? 0 : matchScore(q, row.title) || PROVIDER_MATCH })) })
   for (const s of asked) {
-    const rows = pluginRows?.[s.id]?.slice(0, s.rootLimit || 0)
-    if (rows?.length) sections.push({ title: s.title, rows })
+    const found = rowsOf(s.id, s.title, net(s))
+    const rows = found.failed ? found.rows : found.rows?.slice(0, s.rootLimit || 0)
+    if (rows?.length) groups.push({ title: s.title, failed: found.failed, rows: rows.map((row) => ({ row, match: found.failed ? 0 : bestScore(q, row.title) || PROVIDER_MATCH })) })
   }
-  const acts = actionRows(BUILT_IN[2].rootLimit as number)
-  if (acts.length) sections.push({ title: 'Actions', rows: acts })
-  if (files?.length) sections.push({ title: 'Files', rows: files.map(fileRow) })
-  sections.push({ title: 'Web', rows: [webRow()] })
-  return { sections, record }
+  const sections = rankRoot({
+    query: known,
+    groups,
+    frecency,
+    knowledge,
+    web: webRow(),
+    answer: answer ? {
+      title: answerTitle[answer.kind],
+      rows: [{ id: `answer:${answer.kind}`, title: answer.result, answer, actions: [{ title: 'Copy', run: () => run('clipboard.writeText', { text: answer.copy }) }] }],
+    } : undefined,
+  })
+  return { sections, loading, record }
+}
+
+/** Calls the host for a row's action, so a failure reaches the launcher (which shows it) instead of vanishing. */
+async function run<M extends Method>(method: M, params: Methods[M]['params']): Promise<void> {
+  await call('runtime', method, params)
+}
+
+/** Inside a scope: rows picked for this query before move up, the rest keep the provider's order. */
+function liftKnown(rows: Row[], query: string, knowledge: Knowledge): Row[] {
+  const boost = new Map(rows.map((row) => [row, queryBoost(knowledge, query, row.id)]))
+  return [...rows].sort((a, b) => boost.get(b)! - boost.get(a)!)
 }
 
 const answerTitle = { math: 'Calculator', unit: 'Conversion', currency: 'Currency', time: 'Time', date: 'Date', base: 'Calculator' } as const
 
 function allApps(apps: ReturnType<typeof useAppIndex>) {
-  return apps.filter((a) => a.path).map((app) => ({ id: `app:${app.bundleId}`, app: { ...app, path: app.path as string }, score: 0 }))
+  return apps.filter((a) => a.path).map((app) => ({ id: `app:${app.bundleId}`, app: { ...app, path: app.path as string }, match: 0, score: 0 }))
 }
 
 /** A keyword and a space at the start of the query enter that scope: `clip `, `file `. */

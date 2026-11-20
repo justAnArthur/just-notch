@@ -6,6 +6,8 @@ import type { InlineAnswer } from './engines'
 export interface RowAction {
   title: string
   run(): void | Promise<void>
+  /** Runs with the launcher still open (Retry), instead of hiding it first. */
+  keepOpen?: boolean
 }
 
 /** What draws a row's icon: a file's or app's own icon (by path), an image, or a glyph. */
@@ -33,6 +35,10 @@ export interface Row {
   preview?: RowPreview
   /** The inline answer card (maths, conversions) instead of a plain row. */
   answer?: InlineAnswer
+  /** The plugin that made it, which shows the failure if one of its actions throws. */
+  plugin?: string
+  /** A provider's error row ("Couldn't reach GitHub"): muted, with Retry. */
+  failed?: boolean
 }
 
 export interface Section {

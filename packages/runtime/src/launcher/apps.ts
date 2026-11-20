@@ -2,16 +2,19 @@ import type { AppInfo } from '@just-notch/bridge-schema'
 import { useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call } from '../host/client'
-import { type Frecency, frecencyScore, rankScore, record } from './frecency'
+import { type Frecency, frecencyScore, type Knowledge, learn, rankScore, record } from './frecency'
 import { bestScore } from './match'
 
 /** Icons at 28 pt on a Retina screen. */
 const ICON_SIZE = 56
 const FRECENCY_KEY = 'launcher.frecency'
+const KNOWLEDGE_KEY = 'launcher.knowledge'
 
 export interface AppResult {
   id: string
   app: AppInfo & { path: string }
+  /** How well the name matches, before frecency. */
+  match: number
   score: number
 }
 
@@ -30,8 +33,9 @@ export function searchApps(query: string, apps: AppInfo[], frecency: Frecency, l
   for (const app of apps) {
     if (!app.path) continue
     const id = `app:${app.bundleId}`
-    const score = rankScore(bestScore(query, app.name, app.keywords), frecencyScore(frecency, id))
-    if (score > 0) results.push({ id, app: { ...app, path: app.path }, score })
+    const match = bestScore(query, app.name, app.keywords)
+    const score = rankScore(match, frecencyScore(frecency, id))
+    if (score > 0) results.push({ id, app: { ...app, path: app.path }, match, score })
   }
   return results.sort((a, b) => b.score - a.score || a.app.name.localeCompare(b.app.name)).slice(0, limit)
 }
@@ -66,19 +70,29 @@ export function useIcons(paths: string[]): Map<string, string> {
   return icons
 }
 
-/** Launch history in the runtime's storage, shared by every screen's panel. */
-export function useFrecency(): [Frecency, (id: string) => void] {
-  const [frecency, setFrecency] = useState<Frecency>({})
+/** A value in the runtime's storage, shared by every screen's panel and kept in step with the others. */
+function useStored<T extends object>(key: string): [T, (next: T) => void] {
+  const [value, setValue] = useState<T>({} as T)
   useEffect(() => {
-    void call('runtime', 'storage.get', { key: FRECENCY_KEY }).then((value) => value && setFrecency(value as Frecency), () => {})
-    return on('storage.changed', ({ plugin, key, value }) => {
-      if (plugin === 'runtime' && key === FRECENCY_KEY && value) setFrecency(value as Frecency)
+    void call('runtime', 'storage.get', { key }).then((stored) => stored && setValue(stored as T), () => {})
+    return on('storage.changed', ({ plugin, key: changed, value: stored }) => {
+      if (plugin === 'runtime' && changed === key && stored) setValue(stored as T)
     })
-  }, [])
-  const launched = (id: string) => {
-    const next = record(frecency, id)
-    setFrecency(next)
-    void call('runtime', 'storage.set', { key: FRECENCY_KEY, value: next }).catch(() => {})
+  }, [key])
+  const save = (next: T) => {
+    setValue(next)
+    void call('runtime', 'storage.set', { key, value: next }).catch(() => {})
   }
-  return [frecency, launched]
+  return [value, save]
+}
+
+/** Launch history, and what was picked for what was typed. `launched` records both. */
+export function useFrecency(): { frecency: Frecency; knowledge: Knowledge; launched(id: string, query: string): void } {
+  const [frecency, setFrecency] = useStored<Frecency>(FRECENCY_KEY)
+  const [knowledge, setKnowledge] = useStored<Knowledge>(KNOWLEDGE_KEY)
+  const launched = (id: string, query: string) => {
+    setFrecency(record(frecency, id))
+    if (query) setKnowledge(learn(knowledge, query, id))
+  }
+  return { frecency, knowledge, launched }
 }

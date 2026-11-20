@@ -51,7 +51,7 @@ export function Results({ sections, selected, onSelect, onRun, compact }: Result
                 role="option"
                 aria-selected={active}
                 data-selected={active || undefined}
-                className="flex cursor-default items-center gap-3 px-3 aria-selected:bg-surface-3"
+                className={`flex cursor-default items-center gap-3 px-3 aria-selected:bg-surface-3 ${row.failed ? 'text-muted-foreground' : ''}`}
                 style={{ height: row.answer ? ANSWER_H : ROW_H, borderRadius: ROW_RADIUS }}
                 onPointerMove={() => !active && onSelect(i)}
                 onClick={() => onRun(i)}
