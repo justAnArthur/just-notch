@@ -568,7 +568,7 @@ const handlers: Handlers = {
   },
   'clipboard.delete': ({ id }) => setClips(values.clipboard.clips.filter((c) => c.id !== id)),
   'clipboard.pin': ({ id, pinned }) => setClips(values.clipboard.clips.map((c) => (c.id === id ? { ...c, pinned } : c))),
-  'clipboard.clear': () => setClips(values.clipboard.clips.filter((c) => c.pinned)),
+  'clipboard.clear': ({ since }) => setClips(values.clipboard.clips.filter((c) => c.pinned || (since !== undefined && c.copiedAt < since))),
   'clipboard.setRetention': (retention) => {
     publish('clipboard', { ...values.clipboard, retention })
     return null

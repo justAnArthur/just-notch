@@ -753,7 +753,8 @@ export interface Methods {
   'clipboard.delete': { params: { id: string }; result: null }
   'clipboard.pin': { params: { id: string; pinned: boolean }; result: null }
   /** Drops every clip but the pinned ones. */
-  'clipboard.clear': { params: Record<string, never>; result: null }
+  /** Deletes unpinned clips: those copied at or after `since` (epoch ms), or every one when it's omitted. */
+  'clipboard.clear': { params: { since?: number }; result: null }
   'clipboard.setPaused': { params: { paused: boolean }; result: null }
   /** Changes how much history is kept; older or extra unpinned clips go at once. */
   'clipboard.setRetention': { params: ClipboardRetention; result: null }
