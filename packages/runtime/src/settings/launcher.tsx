@@ -6,7 +6,9 @@ import { useEffect, useState } from 'react'
 import { call } from '../host/client'
 import { useStored } from '../launcher/apps'
 import { PROBLEMS_KEY } from '../launcher/hotkeys'
-import { conflicts, type Fallback, moveFallback, quicklinkProblem } from '../launcher/prefs'
+import { conflicts, type Fallback, moveItem, orderedSections, quicklinkProblem } from '../launcher/prefs'
+import { rootSources, useScopes } from '../launcher/providers'
+import { tryLauncher } from '../launcher/state'
 import { acceleratorOf, formatAccelerator } from '../launcher/shortcut'
 import { type LauncherStore, useLauncherStore } from '../launcher/store'
 
@@ -69,6 +71,11 @@ export default function LauncherPage({ preferences, error, onChange }: LauncherP
         <List.Row label="Hotkey" description="Click, then press the keys. It needs ⌘, ⌥, ⌃ or ⇧, unless it's a function key.">
           <ShortcutRecorder value={launcher.shortcut} onChange={(next) => onChange({ launcher: { shortcut: next } })} />
         </List.Row>
+        <List.Row label="Try it" description={`Or press ${shortcut} anywhere.`}>
+          <Button variant="secondary" size="compact" onClick={() => tryLauncher()}>
+            Open Launcher
+          </Button>
+        </List.Row>
         {error && <List.Row label="That hotkey didn't work" description={error} />}
         {launcher.enabled && !launcher.active && !error && (
           <List.Row label={`${shortcut} isn't available`} description="Another app uses it. Pick another hotkey." />
@@ -84,6 +91,8 @@ export default function LauncherPage({ preferences, error, onChange }: LauncherP
           </List.Row>
         )}
       </List.Section>
+      <RootSources store={store} />
+      <Excludes store={store} />
       <AliasesAndHotkeys store={store} launcherHotkey={launcher.shortcut} />
       <Fallbacks store={store} />
       <List.Section title="Ranking">
@@ -94,6 +103,64 @@ export default function LauncherPage({ preferences, error, onChange }: LauncherP
         </List.Row>
       </List.Section>
     </List>
+  )
+}
+
+/** What the root search shows: each source on or off, in an order that breaks ties between equally good results. */
+function RootSources({ store }: { store: LauncherStore }) {
+  const sources = rootSources(useScopes())
+  const sections = orderedSections(store.prefs.sections, sources.map((s) => s.id))
+  const title = (id: string) => sources.find((s) => s.id === id)?.title ?? id
+  const save = (next: typeof sections) => store.update((prefs) => ({ ...prefs, sections: next }))
+  return (
+    <List.Section title="Root search">
+      <p className="px-3 text-caption text-muted-foreground">The best result from any of them comes first; between two as good, the higher source wins. A source turned off still answers inside its own scope.</p>
+      {sections.map((section, i) => (
+        <List.Row key={section.id} label={title(section.id)}>
+          <span className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-compact" aria-label={`Move ${title(section.id)} up`} disabled={i === 0} onClick={() => save(moveItem(sections, i, -1))}>
+              <ArrowUp />
+            </Button>
+            <Button variant="ghost" size="icon-compact" aria-label={`Move ${title(section.id)} down`} disabled={i === sections.length - 1} onClick={() => save(moveItem(sections, i, 1))}>
+              <ArrowDown />
+            </Button>
+            <Switch aria-label={`Show ${title(section.id)}`} checked={section.enabled} onCheckedChange={(enabled) => save(sections.map((x) => (x.id === section.id ? { ...x, enabled } : x)))} />
+          </span>
+        </List.Row>
+      ))}
+    </List.Section>
+  )
+}
+
+/** Folders whose files never show in the launcher. */
+function Excludes({ store }: { store: LauncherStore }) {
+  const [folder, setFolder] = useState('')
+  const excludes = store.prefs.excludes
+  const save = (next: string[]) => store.update((prefs) => ({ ...prefs, excludes: next }))
+  const add = () => {
+    const path = folder.trim().replace(/\/+$/, '')
+    if (!path || excludes.includes(path)) return
+    save([...excludes, path])
+    setFolder('')
+  }
+  return (
+    <List.Section title="Files">
+      {excludes.map((path) => (
+        <List.Row key={path} label={path}>
+          <Button variant="ghost" size="icon-compact" aria-label={`Show files in ${path} again`} onClick={() => save(excludes.filter((p) => p !== path))}>
+            <X />
+          </Button>
+        </List.Row>
+      ))}
+      <List.Row label="Hide a folder" description="Its files and everything inside never show: ~/Library, a build folder.">
+        <span className="flex items-center gap-2">
+          <Input aria-label="Folder to hide" value={folder} placeholder="~/Library" className="w-56" onValueChange={setFolder} onKeyDown={(event) => event.key === 'Enter' && add()} />
+          <Button variant="secondary" size="compact" onClick={add}>
+            Hide
+          </Button>
+        </span>
+      </List.Row>
+    </List.Section>
   )
 }
 
@@ -152,10 +219,10 @@ function Fallbacks({ store }: { store: LauncherStore }) {
       {fallbacks.map((f, i) => (
         <List.Row key={f.id} label={f.title} description={f.url}>
           <span className="flex items-center gap-1">
-            <Button variant="ghost" size="icon-compact" aria-label={`Move ${f.title} up`} disabled={i === 0} onClick={() => save(moveFallback(fallbacks, i, -1))}>
+            <Button variant="ghost" size="icon-compact" aria-label={`Move ${f.title} up`} disabled={i === 0} onClick={() => save(moveItem(fallbacks, i, -1))}>
               <ArrowUp />
             </Button>
-            <Button variant="ghost" size="icon-compact" aria-label={`Move ${f.title} down`} disabled={i === fallbacks.length - 1} onClick={() => save(moveFallback(fallbacks, i, 1))}>
+            <Button variant="ghost" size="icon-compact" aria-label={`Move ${f.title} down`} disabled={i === fallbacks.length - 1} onClick={() => save(moveItem(fallbacks, i, 1))}>
               <ArrowDown />
             </Button>
             {!f.builtIn && (
