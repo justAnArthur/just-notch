@@ -6,7 +6,8 @@ import Foundation
 struct Shelf: Sendable {
     let root: URL
 
-    static let defaultLimit: Double = 2 * 1024 * 1024 * 1024
+    /// 2 GB, decimal, as Finder and the kit count.
+    static let defaultLimit: Double = 2_000_000_000
     static let defaultExpiryHours: Double? = 24
 
     static var standard: Shelf {
