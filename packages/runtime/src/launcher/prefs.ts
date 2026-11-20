@@ -33,11 +33,21 @@ export interface Fallback {
   builtIn?: boolean
 }
 
+/** A source of root results (Applications, Actions, Files, a plugin's scope), on or off. */
+export interface RootSection {
+  id: string
+  enabled: boolean
+}
+
 export interface LauncherPrefs {
   items: Record<string, ItemPrefs>
   /** Favourite results, in the order the empty root shows them. */
   favourites: string[]
   fallbacks: Fallback[]
+  /** The root's sources in the user's order (which breaks ties between equally good rows); missing ones are on. */
+  sections: RootSection[]
+  /** Folders whose files never show (`~/Library`, a build folder). */
+  excludes: string[]
 }
 
 export const DEFAULT_FALLBACKS: Fallback[] = [
@@ -53,6 +63,8 @@ export function withDefaults(stored: Partial<LauncherPrefs> | undefined): Launch
     items: stored?.items ?? {},
     favourites: stored?.favourites ?? [],
     fallbacks: [...fallbacks, ...DEFAULT_FALLBACKS.filter((d) => !fallbacks.some((f) => f.id === d.id))],
+    sections: stored?.sections ?? [],
+    excludes: stored?.excludes ?? [],
   }
 }
 
@@ -71,11 +83,11 @@ export function quicklinkProblem(url: string): string | undefined {
  */
 export const shownFallbacks = (fallbacks: Fallback[], others: boolean) => fallbacks.filter((f) => f.enabled).slice(0, others ? 1 : 3)
 
-/** Moves the fallback at `from` one place up (-1) or down (1). */
-export function moveFallback(fallbacks: Fallback[], from: number, step: -1 | 1): Fallback[] {
+/** Moves the item at `from` one place up (-1) or down (1): a fallback, a root source. */
+export function moveItem<T>(list: T[], from: number, step: -1 | 1): T[] {
   const to = from + step
-  if (to < 0 || to >= fallbacks.length) return fallbacks
-  const next = [...fallbacks]
+  if (to < 0 || to >= list.length) return list
+  const next = [...list]
   ;[next[from], next[to]] = [next[to], next[from]]
   return next
 }
@@ -165,3 +177,23 @@ export function snapshotOf(row: Row): ItemSnapshot | undefined {
 }
 
 const FILE_KINDS: Record<string, FileHit['kind']> = { Folder: 'folder', Application: 'application', Image: 'image', PDF: 'pdf', Document: 'document', File: 'other' }
+
+/** The root's sources in the user's order: the stored ones first, then any new ones (a plugin installed since), on. */
+export function orderedSections(stored: RootSection[], ids: string[]): RootSection[] {
+  const known = stored.filter((s) => ids.includes(s.id))
+  return [...known, ...ids.filter((id) => !known.some((s) => s.id === id)).map((id) => ({ id, enabled: true }))]
+}
+
+/** Whether a source shows in the root. */
+export const sectionOn = (stored: RootSection[], id: string) => stored.find((s) => s.id === id)?.enabled ?? true
+
+/** Whether a file's path is inside an excluded folder. `~/x` matches the home folder's x (whoever's it is). */
+export function excluded(path: string, excludes: string[]): boolean {
+  const home = path.replace(/^\/Users\/[^/]+/, '~')
+  return excludes.some((folder) => {
+    const base = folder.trim().replace(/\/+$/, '')
+    if (!base) return false
+    const p = base.startsWith('~') ? home : path
+    return p === base || p.startsWith(`${base}/`)
+  })
+}

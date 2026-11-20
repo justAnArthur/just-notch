@@ -3,13 +3,22 @@ import { useIcons } from './apps'
 import type { Row, RowIcon, Section } from './rows'
 
 export const ROW_H = 40
-/** The inline answer card: the result large, the expression and its source under it. */
-export const ANSWER_H = 68
-export const HEADER_H = 26
+/** The inline answer card: the expression on the left, the result large on the right. */
+export const ANSWER_H = 72
+export const HEADER_H = 24
 export const SHEET_PAD = 6
-/** The sheet's corner radius; a row's is that less the padding, so the two curves stay concentric. */
-export const SHEET_RADIUS = 26
-const ROW_RADIUS = SHEET_RADIUS - SHEET_PAD
+/** The sheet's corners: a macOS sheet's, not a pill's. */
+export const SHEET_RADIUS = 14
+/** A row's corners, the same at every height: an 8 pt rounded rectangle when selected. */
+export const ROW_RADIUS = 8
+
+/** One key style for every hint: `Open ↩`, `Actions ⌘K`, `⌘3`, the scope's `⌘2`. */
+export function Kbd({ children }: { children: string }) {
+  return <kbd className="rounded-md bg-white/10 px-1.5 py-0.5 font-sans text-[11px] leading-none text-muted-foreground">{children}</kbd>
+}
+
+/** `Application` under Applications, `Window Management` under Window Management: said once, by the header. */
+const repeats = (text: string | undefined, section: string) => !!text && (section.startsWith(text) || text === section)
 
 /** The sheet's height for these sections, before it scrolls. */
 export const sectionsHeight = (sections: Section[]) =>
@@ -43,7 +52,7 @@ export function Results({ sections, selected, onSelect, onRun, compact, numbered
     <div ref={list} role="listbox" aria-label="Results" className="h-full overflow-y-auto" style={{ padding: SHEET_PAD }}>
       {sections.map((section) => (
         <div key={section.title} role="group" aria-label={section.title}>
-          <p className="flex items-end px-3 pb-1 text-caption text-muted-foreground" style={{ height: HEADER_H }}>
+          <p className="flex items-end px-3 pb-1 text-[11px] font-semibold text-muted-foreground" style={{ height: HEADER_H }}>
             {section.title}
           </p>
           {section.rows.map((row) => {
@@ -63,18 +72,32 @@ export function Results({ sections, selected, onSelect, onRun, compact, numbered
                 {row.answer ? (
                   <Answer row={row} />
                 ) : (
-                  <Plain row={confirming?.id === row.id ? { ...row, title: confirming.text, subtitle: undefined } : row} icon={row.icon} icons={icons} compact={compact} warn={confirming?.id === row.id} />
+                  <Plain
+                    row={confirming?.id === row.id ? { ...row, title: confirming.text, subtitle: undefined } : { ...row, subtitle: repeats(row.subtitle, section.title) ? undefined : row.subtitle }}
+                    icon={row.icon}
+                    icons={icons}
+                    compact={compact}
+                    warn={confirming?.id === row.id}
+                  />
                 )}
-                <span className="shrink-0 text-caption text-muted-foreground">
+                <span className="flex shrink-0 items-center gap-2 text-caption text-muted-foreground">
                   {active ? (
                     <>
-                      {row.actions[0]?.title} ↩
-                      {row.actions.length > 1 && <span className="ml-2 rounded-md bg-surface-4 px-1.5 py-0.5">⌘K</span>}
+                      {row.actions[0] && (
+                        <>
+                          {row.actions[0].title} <Kbd>↩</Kbd>
+                        </>
+                      )}
+                      {!row.failed && (
+                        <>
+                          <span className="ml-1">Actions</span> <Kbd>⌘K</Kbd>
+                        </>
+                      )}
                     </>
                   ) : (
                     <>
-                      {row.accessory}
-                      {numbered && i < 9 && <span className="ml-2 rounded-md bg-surface-3 px-1.5 py-0.5">⌘{i + 1}</span>}
+                      {!row.answer && !repeats(row.accessory, section.title) && row.accessory}
+                      {numbered && i < 9 && <Kbd>{`⌘${i + 1}`}</Kbd>}
                     </>
                   )}
                 </span>
@@ -99,25 +122,35 @@ function Plain({ row, icon, icons, compact, warn }: { row: Row; icon?: RowIcon; 
   )
 }
 
+/** The inline answer in two columns, as a calculator tape reads: what was asked, then the answer, large. */
 function Answer({ row }: { row: Row }) {
   const answer = row.answer!
   return (
-    <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate text-[24px] leading-tight">{answer.result}</span>
-      <span className="truncate text-caption text-muted-foreground">
-        {answer.expression}
-        {answer.detail && ` · ${answer.detail}`}
+    <span className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-[17px] text-muted-foreground">{answer.expression}</span>
+        {answer.detail && <span className="truncate text-caption text-muted-foreground/70">{answer.detail}</span>}
       </span>
+      <span className="text-muted-foreground">→</span>
+      <span className="truncate text-right text-[28px] font-semibold leading-tight tabular-nums">{answer.result}</span>
     </span>
   )
 }
 
+/**
+ * A row's icon, all on one grammar: an app's or file's own icon or an image as it is, and every glyph (actions,
+ * Shortcuts, the web, plugin rows) on a 28 pt rounded tile, so built-in and plugin rows look alike.
+ */
 export function Icon({ icon, icons, large }: { icon?: RowIcon; icons: Map<string, string>; large?: boolean }) {
   const box = large ? 'size-20' : 'size-7'
   const src = icon && ('src' in icon ? icon.src : 'path' in icon ? icons.get(icon.path) : undefined)
   if (src) return <img src={src} alt="" className={`${box} shrink-0 rounded-md object-contain`} draggable={false} />
   const Glyph = icon && 'glyph' in icon ? icon.glyph : undefined
-  return <span className={`flex ${box} shrink-0 items-center justify-center text-muted-foreground`}>{Glyph && <Glyph className={large ? 'size-12' : 'size-5'} />}</span>
+  return (
+    <span className={`flex ${box} shrink-0 items-center justify-center bg-surface-3 text-foreground/80 ${large ? 'rounded-2xl' : 'rounded-lg'}`}>
+      {Glyph && <Glyph className={large ? 'size-10' : 'size-4'} />}
+    </span>
+  )
 }
 
 /** One line in place of results: nothing found, or a scope waiting for a query. */

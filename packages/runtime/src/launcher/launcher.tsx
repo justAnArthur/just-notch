@@ -17,10 +17,12 @@ import { cleanAlias, type ItemPrefs } from './prefs'
 import { useLauncherStore } from './store'
 import { hasPreviews, Preview, PREVIEW_MIN_H } from './preview'
 import { MAX_SCOPES, rowFromSnapshot, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
-import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
+import { Kbd, Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
 import type { Row } from './rows'
-import { animatesHeight, moveSelection, type Selection, selectedIndex } from './selection'
-import { setLauncherOpen } from './state'
+import { moveOf, moveTo, recall } from './navigation'
+import { animatesHeight, type Selection, selectedIndex } from './selection'
+import { setSettingsTarget } from '../settings/target'
+import { onTryLauncher, setLauncherOpen } from './state'
 import { showFailure } from './failure'
 import { acceleratorOf, actionForKey, numberKey } from './shortcut'
 import { useHeld } from './sources'
@@ -168,6 +170,10 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const [selection, setSelection] = useState<Selection>()
   /** The selected row's actions (⌘K), with what was typed into it and its own selection. */
   const [panel, setPanel] = useState<{ filter: string; selected: number; mode: PanelMode }>()
+  /** Which earlier query ↑ brought back (0 = the newest), until something else is typed. */
+  const [recalled, setRecalled] = useState<number>()
+  /** The scope button under the pointer, for its tip. */
+  const [hovered, setHovered] = useState<number>()
   /** A row whose action asks for a second ↩ (Empty Trash), waiting for it. */
   const [confirming, setConfirming] = useState<string>()
   /** The preview pane in the root search, toggled with ⌘Y; scopes with previews always show it. */
@@ -356,6 +362,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     [geometry],
   )
 
+  // Settings' Try it: open where the hotkey last opened it.
+  useEffect(() => onTryLauncher(() => void openSequence(layoutOf(geometry, layoutRef.current.top, scopesRef.current.length))), [geometry])
+
   // The island opening (hovered, clicked, Settings…) takes over: the launcher steps aside.
   const islandOpen = present(useActivityState()).island === 'expanded'
   useEffect(() => {
@@ -396,7 +405,8 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const own = current ? launcherActions(current, store.prefs) : []
   const listed = panel && current ? filterActions(current.actions, panel.filter, own) : []
   const panelOpen = panel !== undefined && current !== undefined && view.note === undefined
-  const showPane = view.note === undefined && flat.length > 0 && (active ? hasPreviews(flat) : quickLook)
+  // ⌘Y's pane shows only for a row with something to show beyond its own line.
+  const showPane = view.note === undefined && flat.length > 0 && (active ? hasPreviews(flat) : quickLook && current?.preview !== undefined)
   const rowsH = Math.min(sectionsHeight(view.sections), RESULTS_MAX)
   const listH = view.note ? NOTE_H : showPane ? Math.max(rowsH, PREVIEW_MIN_H) : rowsH
   // The sheet grows to hold the panel when it has fewer rows than the panel has actions.
@@ -407,6 +417,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
 
   // A new query or scope starts at the top.
   useEffect(() => setSelection(undefined), [query, scope])
+  useEffect(() => {
+    if (recalled !== undefined && query !== store.history[recalled]) setRecalled(undefined)
+  }, [query])
   // The panel belongs to one row: another row, query or scope closes it.
   useEffect(() => setPanel(undefined), [query, scope, current?.id])
   useEffect(() => setConfirming(undefined), [query, scope, current?.id])
@@ -507,6 +520,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         else if (nth < scopes.length) setScope(scope === nth ? undefined : nth)
         return
       }
+      // ⌘C copies what's selected in the field, as anywhere; with nothing selected it's the row's (an answer's Copy).
+      const field = input.current
+      if (event.metaKey && event.key.toLowerCase() === 'c' && field && field.selectionStart !== field.selectionEnd) return
       // The selected row's own shortcuts (⌘. pin, ⌘⌫ delete), ahead of the field's editing keys.
       const shortcut = current ? actionForKey(current.actions, event) : -1
       if (shortcut >= 0) {
@@ -520,9 +536,28 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         runCommand(own[command].command)
         return
       }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      // ↑ in an empty field, before any move, recalls what was typed before; ↓ goes forward again.
+      const plainArrow = (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+      if (plainArrow && selection === undefined && (query === '' ? event.key === 'ArrowUp' : recalled !== undefined)) {
+        const next = recall(store.history, recalled, event.key === 'ArrowUp' ? 1 : -1)
+        if (next !== undefined || recalled !== undefined) {
+          event.preventDefault()
+          setRecalled(next)
+          setQuery(next === undefined ? '' : store.history[next])
+          return
+        }
+      }
+      const move = moveOf(event)
+      if (move) {
         event.preventDefault()
-        setSelection(moveSelection(flat, selection, event.key === 'ArrowDown' ? 1 : -1))
+        setSelection(moveTo(flat, view.sections.map((s) => s.rows.length), selection, move))
+        return
+      }
+      if (event.metaKey && event.key === ',') {
+        event.preventDefault()
+        setSettingsTarget({ page: 'launcher' })
+        void closeSequence()
+        void call('runtime', 'window.openSettings', {})
         return
       }
       if (event.key === 'Enter') {
@@ -542,7 +577,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, query, scope, selection, flat, scopes, panel, panelOpen, listed, store.prefs, confirming])
+  }, [phase, query, scope, selection, flat, scopes, panel, panelOpen, listed, store.prefs, store.history, confirming, recalled])
 
   /** Sets (or clears, with undefined) an alias or hotkey on the selected row. */
   const setItem = (row: Row, change: ItemPrefs) =>
@@ -677,8 +712,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         />
         {active && (
           <span className="flex shrink-0 items-center gap-1 text-caption text-muted-foreground">
-            <kbd className="rounded-md bg-surface-3 px-1.5 py-0.5">⌘</kbd>
-            <kbd className="rounded-md bg-surface-3 px-1.5 py-0.5">{(scope ?? 0) + 1}</kbd>
+            <Kbd>{`⌘${(scope ?? 0) + 1}`}</Kbd>
           </span>
         )}
       </motion.label>
@@ -699,10 +733,10 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         <motion.button
           key={s.id}
           type="button"
-          title={`${s.title} ⌘${i + 1}`}
+          aria-label={`${s.title} ⌘${i + 1}`}
           aria-pressed={scope === i}
           tabIndex={-1}
-          className="absolute flex items-center justify-center rounded-full text-muted-foreground ring-1 ring-white/10 ring-inset hover:text-foreground aria-pressed:bg-surface-3 aria-pressed:text-foreground"
+          className="absolute flex items-center justify-center rounded-full text-muted-foreground ring-1 ring-white/10 ring-inset hover:text-foreground aria-pressed:bg-white/12 aria-pressed:text-white aria-pressed:ring-white/25"
           style={{
             left: layout.buttonCx(i) - BUTTON / 2,
             top: layout.top,
@@ -717,10 +751,13 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             setScope(scope === i ? undefined : i)
             input.current?.focus()
           }}
+          onPointerEnter={() => setHovered(i)}
+          onPointerLeave={() => setHovered((h) => (h === i ? undefined : h))}
         >
           <s.icon className="size-5" />
         </motion.button>
       ))}
+
 
       <AnimatePresence>
         {showResults && (
@@ -762,6 +799,23 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
                 onRun={runListed}
               />
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* What a scope button is, in the notch's own style rather than the system tooltip; over the results when they show. */}
+      <AnimatePresence>
+        {hovered !== undefined && scopes[hovered] && content && buttonsShown && (
+          <motion.div
+            key="scope-tip"
+            className="pointer-events-none absolute flex items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--island)] px-2.5 py-1.5 text-caption text-foreground ring-1 ring-white/10 ring-inset"
+            style={{ left: layout.buttonCx(hovered), top: layout.top + PILL_H + 8, x: '-50%' }}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={QUICK}
+          >
+            {scopes[hovered].title} <Kbd>{`⌘${hovered + 1}`}</Kbd>
           </motion.div>
         )}
       </AnimatePresence>

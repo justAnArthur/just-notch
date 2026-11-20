@@ -6,12 +6,13 @@ import { call } from '../host/client'
 import { subscribeTopic } from '../host/topics'
 import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import { searchApps, useAppIndex } from './apps'
-import { inlineAnswer } from './engines'
+import { type InlineAnswer, inlineAnswer } from './engines'
 import { type Frecency, frecencyScore, type Knowledge, queryBoost, rankScore } from './frecency'
 import { bestScore, FUZZY_MAX, matchScore, normalize } from './match'
-import { aliasedIds, fallbackUrl, type ItemSnapshot, recentIds, shownFallbacks } from './prefs'
+import { aliasedIds, excluded, fallbackUrl, type ItemSnapshot, orderedSections, recentIds, sectionOn, shownFallbacks } from './prefs'
 import { type Group, rankRoot, type Scored } from './rank'
 import type { Row, Section } from './rows'
+import { formatAccelerator } from './shortcut'
 import { type Source, useSources } from './sources'
 import type { LauncherStore } from './store'
 
@@ -43,6 +44,10 @@ const RECENT_LIMIT = 8
 const ALIAS_MATCH = 5000
 /** Spotlight on a cold index can take a while; past this the Files section says so. */
 const FILES_TIMEOUT_MS = 2000
+
+/** The root's sources, for Settings: Applications, Actions, Files, then each plugin scope that shows there. */
+export const rootSources = (scopes: Scope[]) =>
+  [BUILT_IN[0], BUILT_IN[2], BUILT_IN[1], ...scopes.filter((s) => s.plugin && s.rootLimit !== false)].map((s) => ({ id: s.id, title: s.title }))
 
 /** Built-in scopes, then each running plugin's, in the host's plugin order. */
 export function useScopes(): Scope[] {
@@ -95,6 +100,16 @@ export function formatBytes(bytes: number): string {
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
 }
 
+/** How long ago, as a row's accessory: `now`, `5 min`, `3 h`, `2 d`, then the date. */
+export function ago(iso: string, now = Date.now()): string {
+  const minutes = Math.round((now - new Date(iso).getTime()) / 60_000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes} min`
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} h`
+  if (minutes < 30 * 24 * 60) return `${Math.round(minutes / (24 * 60))} d`
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
 const formatDate = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 /** Show in Finder and Copy Path, for anything with a path. */
@@ -109,7 +124,7 @@ function fileRow(hit: FileHit): Row {
     title: hit.name,
     subtitle: folderOf(hit.path),
     icon: { path: hit.path },
-    accessory: fileKind[hit.kind],
+    accessory: hit.modified ? ago(hit.modified) : fileKind[hit.kind],
     preview: {
       thumbnail: hit.path,
       details: [
@@ -261,7 +276,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
   const q = query.trim()
   const known = normalize(q)
   const root = scope === undefined
-  const record = (row: Row) => store.launched(row, known)
+  const record = (row: Row) => store.launched(row, known, q)
 
   useEffect(() => {
     if (!open) return
@@ -271,12 +286,22 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
   }, [open])
 
   // Files and plugin scopes answer later. The root asks the plugins that show there, a scope only itself.
-  const wantFiles = open && (scope?.id === 'files' ? q.length >= 1 : root && q.length >= 2)
-  const asked = open ? scopes.filter((s) => s.plugin && (scope ? s.id === scope.id : s.rootLimit !== false && q !== '')) : []
+  // A source turned off in Settings isn't asked in the root; inside its own scope it still answers.
+  const on = (id: string) => sectionOn(prefs.sections, id)
+  const wantFiles = open && (scope?.id === 'files' ? q.length >= 1 : root && q.length >= 2 && on('files'))
+  const asked = open ? scopes.filter((s) => s.plugin && (scope ? s.id === scope.id : s.rootLimit !== false && q !== '' && on(s.id))) : []
+  // Excluded folders are filtered here, so ask for more to still fill the section.
+  const fileLimit = (root ? 5 : SCOPE_LIMIT) * (prefs.excludes.length ? 3 : 1)
   const net = (s: Scope) => s.plugin!.installed.manifest.permissions.includes('net')
   const sources: Source<Row[]>[] = [
     ...(wantFiles
-      ? [{ id: 'files', key: `${q} ${scope?.id}`, debounce: FILES_DEBOUNCE_MS, timeout: FILES_TIMEOUT_MS, load: async () => (await call('runtime', 'files.search', { query: q, limit: root ? 5 : SCOPE_LIMIT })).map(fileRow) }]
+      ? [{ id: 'files', key: `${q} ${scope?.id}`, debounce: FILES_DEBOUNCE_MS, timeout: FILES_TIMEOUT_MS, load: async () =>
+            (await call('runtime', 'files.search', { query: q, limit: fileLimit }))
+              .filter((hit) => !excluded(hit.path, prefs.excludes))
+              .slice(0, root ? 5 : SCOPE_LIMIT)
+              .map(fileRow),
+          },
+        ]
       : []),
     ...asked.map((s) => {
       const search = s.plugin!.definition.search!
@@ -309,13 +334,27 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
       icon: { glyph: f.builtIn ? Globe : Search },
       actions: [{ title: 'Search', icon: ArrowUpRight, run: () => run('system.openUrl', { url: fallbackUrl(f, q) }) }],
     }))
-  const kept = (ids: string[]) => ids.flatMap((id) => (snapshots[id] ? (rowFromSnapshot(snapshots[id], scopes) ?? []) : []))
+  const kept = (ids: string[]) => ids.flatMap((id) => (snapshots[id] ? (rowFromSnapshot(snapshots[id], scopes) ?? []) : [])).map(described)
+  /** An app's preview: where it is, when it was last opened from here, and its alias and hotkey. */
+  const described = (row: Row): Row => {
+    if (!row.id.startsWith('app:') || !row.icon || !('path' in row.icon)) return row
+    const last = frecency[row.id]?.[0]
+    const item = prefs.items[row.id]
+    const details = [
+      { label: 'Kind', value: 'Application' },
+      { label: 'Where', value: folderOf(row.icon.path) },
+      ...(last ? [{ label: 'Last opened', value: ago(new Date(last).toISOString()) === 'now' ? 'Just now' : `${ago(new Date(last).toISOString())} ago` }] : []),
+      ...(item?.alias ? [{ label: 'Alias', value: item.alias }] : []),
+      ...(item?.hotkey ? [{ label: 'Hotkey', value: formatAccelerator(item.hotkey) }] : []),
+    ]
+    return { ...row, preview: { details } }
+  }
 
   // Inside a scope: only its rows, in the provider's order, lifted by what was picked for this query before.
   if (scope) {
     let rows: Row[] | undefined
     let failed = false
-    if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map((r) => appRow(r.id, r.app.name, r.app.path))
+    if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map((r) => described(appRow(r.id, r.app.name, r.app.path)))
     else if (scope.id === 'actions') rows = matchActions(q, false, shortcuts, frecency, frontApp).slice(0, SCOPE_LIMIT).map(actionRow)
     else if (scope.id === 'files' && !q) return { sections: [], note: 'Type to search your files.', ...state }
     else ({ rows, failed = false } = rowsOf(scope.id === 'files' ? 'files' : scope.id, scope.title, scope.plugin ? net(scope) : false))
@@ -334,20 +373,24 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
       ...state,
     }
   }
-  const answer = inlineAnswer(q, { rates })
-  const groups: Group[] = [
-    // A result whose alias is what's typed outranks everything.
-    { title: 'Alias', rows: kept(aliasedIds(prefs, q)).map((row): Scored => ({ row, match: ALIAS_MATCH })) },
-    { title: 'Applications', rows: appResults(BUILT_IN[0].rootLimit as number).map((r) => ({ row: appRow(r.id, r.app.name, r.app.path), match: r.match })) },
-    { title: 'Actions', rows: actionResults(BUILT_IN[2].rootLimit as number).map((a) => ({ row: actionRow(a), match: a.match })) },
-  ]
+  const answer = inlineAnswer(q, { rates, ans: store.ans })
+  const bySource: (Group & { id: string })[] = []
+  if (on('apps')) bySource.push({ id: 'apps', title: 'Applications', rows: appResults(BUILT_IN[0].rootLimit as number).map((r) => ({ row: described(appRow(r.id, r.app.name, r.app.path)), match: r.match })) })
+  if (on('actions')) bySource.push({ id: 'actions', title: 'Actions', rows: actionResults(BUILT_IN[2].rootLimit as number).map((a) => ({ row: actionRow(a), match: a.match })) })
   const files = rowsOf('files', 'Files')
-  if (files.rows) groups.push({ title: 'Files', failed: files.failed, rows: files.rows.map((row) => ({ row, match: files.failed ? 0 : matchScore(q, row.title) || PROVIDER_MATCH })) })
+  if (files.rows) bySource.push({ id: 'files', title: 'Files', failed: files.failed, rows: files.rows.map((row) => ({ row, match: files.failed ? 0 : matchScore(q, row.title) || PROVIDER_MATCH })) })
   for (const s of asked) {
     const found = rowsOf(s.id, s.title, net(s))
     const rows = found.failed ? found.rows : found.rows?.slice(0, s.rootLimit || 0)
-    if (rows?.length) groups.push({ title: s.title, failed: found.failed, rows: rows.map((row) => ({ row, match: found.failed ? 0 : bestScore(q, row.title) || PROVIDER_MATCH })) })
+    if (rows?.length) bySource.push({ id: s.id, title: s.title, failed: found.failed, rows: rows.map((row) => ({ row, match: found.failed ? 0 : bestScore(q, row.title) || PROVIDER_MATCH })) })
   }
+  // In the user's order, which breaks ties between equally good rows (the ranking's sort keeps it).
+  const order = orderedSections(prefs.sections, bySource.map((g) => g.id)).map((x) => x.id)
+  const groups: Group[] = [
+    // A result whose alias is what's typed outranks everything.
+    { title: 'Alias', rows: kept(aliasedIds(prefs, q)).map((row): Scored => ({ row, match: ALIAS_MATCH })) },
+    ...bySource.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)),
+  ]
   const sections = rankRoot({
     query: known,
     groups,
@@ -356,10 +399,28 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     web: fallbackRows(groups.some((g) => g.rows.length) || answer !== null),
     answer: answer ? {
       title: answerTitle[answer.kind],
-      rows: [{ id: `answer:${answer.kind}`, title: answer.result, answer, actions: [{ title: 'Copy', run: () => run('clipboard.writeText', { text: answer.copy }) }] }],
+      rows: [{ id: `answer:${answer.kind}`, title: answer.result, answer, actions: answerActions(answer, store.setAns) }],
     } : undefined,
   })
   return { sections, ...state }
+}
+
+/**
+ * An answer's actions: ↩ and ⌘C copy the result, ⌥↩ copies the expression. Copying (or pasting) a number makes it
+ * `ans` for the next sum.
+ */
+function answerActions(answer: InlineAnswer, setAns: (value: number) => void): Row['actions'] {
+  const keep = () => {
+    const value = Number(answer.copy)
+    if (answer.copy.trim() !== '' && Number.isFinite(value)) setAns(value)
+  }
+  return [
+    { title: 'Copy', icon: Copy, shortcut: 'Command+C', run: async () => {
+      keep()
+      await run('clipboard.writeText', { text: answer.copy })
+    } },
+    { title: 'Copy Expression', icon: Copy, shortcut: 'Alt+Enter', run: () => run('clipboard.writeText', { text: answer.expression }) },
+  ]
 }
 
 /** Calls the host for a row's action, so a failure reaches the launcher (which shows it) instead of vanishing. */

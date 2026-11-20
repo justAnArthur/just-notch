@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { record } from './frecency'
 import { mayHold } from './hotkeys'
-import { aliasedIds, conflicts, DEFAULT_FALLBACKS, fallbackUrl, forget, heldHotkeys, moveFallback, quicklinkProblem, recentIds, shownFallbacks, snapshotOf, withDefaults } from './prefs'
+import { aliasedIds, conflicts, DEFAULT_FALLBACKS, excluded, fallbackUrl, forget, heldHotkeys, moveItem, orderedSections, quicklinkProblem, recentIds, sectionOn, shownFallbacks, snapshotOf, withDefaults } from './prefs'
 
 const now = Date.UTC(2026, 10, 20)
 
@@ -28,8 +28,8 @@ describe('fallbacks', () => {
 
   it('moves one place, never out of the list', () => {
     const list = withDefaults({}).fallbacks
-    expect(moveFallback(list, 1, -1).map((f) => f.id)).toEqual(['duckduckgo', 'google', 'kagi'])
-    expect(moveFallback(list, 0, -1)).toBe(list)
+    expect(moveItem(list, 1, -1).map((f) => f.id)).toEqual(['duckduckgo', 'google', 'kagi'])
+    expect(moveItem(list, 0, -1)).toBe(list)
   })
 })
 
@@ -89,5 +89,25 @@ describe('recent and ranking', () => {
   it('keeps what a result needs to be shown again, and nothing for the web search', () => {
     expect(snapshotOf({ id: 'app:x', title: 'X', icon: { path: '/Applications/X.app' }, actions: [] })).toEqual({ id: 'app:x', title: 'X', path: '/Applications/X.app' })
     expect(snapshotOf({ id: 'fallback:google', title: 'Search', actions: [] })).toBeUndefined()
+  })
+})
+
+describe('root sources and excluded folders', () => {
+  it('keeps the user’s order and turns on sources it hasn’t seen', () => {
+    const stored = [{ id: 'files', enabled: true }, { id: 'apps', enabled: false }, { id: 'gone', enabled: true }]
+    expect(orderedSections(stored, ['apps', 'actions', 'files'])).toEqual([
+      { id: 'files', enabled: true },
+      { id: 'apps', enabled: false },
+      { id: 'actions', enabled: true },
+    ])
+    expect(sectionOn(stored, 'apps')).toBe(false)
+    expect(sectionOn(stored, 'plugin:clipboard')).toBe(true)
+  })
+
+  it('hides files inside an excluded folder, ~ being anyone’s home', () => {
+    expect(excluded('/Users/me/Library/Caches/x.txt', ['~/Library'])).toBe(true)
+    expect(excluded('/Users/me/LibraryNotes.txt', ['~/Library'])).toBe(false)
+    expect(excluded('/Volumes/Work/build/a.o', ['/Volumes/Work/build/'])).toBe(true)
+    expect(excluded('/Users/me/Documents/a.txt', ['', '~/Library'])).toBe(false)
   })
 })

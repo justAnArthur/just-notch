@@ -45,13 +45,20 @@ export function Preview({ row }: { row: Row | undefined }) {
         {image ? (
           <img src={image} alt="" className="max-h-full max-w-full rounded-lg object-contain" draggable={false} />
         ) : preview?.text ? (
-          <p className={`h-full w-full overflow-hidden text-ellipsis whitespace-pre-wrap break-words text-caption ${preview.mono ? 'font-mono' : ''}`}>{preview.text}</p>
+          // Body size, top-aligned, fading out where it's cut rather than ending mid-line.
+          <p
+            className={`h-full w-full self-start overflow-hidden whitespace-pre-wrap break-words ${preview.mono ? 'font-mono text-[13px]' : 'text-body'}`}
+            style={{ maskImage: 'linear-gradient(to bottom, black 75%, transparent)' }}
+          >
+            {preview.text}
+          </p>
         ) : (
           <Icon icon={row.icon} icons={icons} large />
         )}
       </div>
       <div className="shrink-0">
-        <p className="truncate font-medium">{row.title}</p>
+        {/* The text says it all already: its first line is the title. */}
+        {!preview?.text && <p className="truncate font-medium">{row.title}</p>}
         {preview?.details?.length ? (
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
             {preview.details.map((d) => (

@@ -3,16 +3,17 @@ import { AtSign, History, Keyboard, Star, StarOff } from 'lucide-react'
 import { type ComponentType, useEffect, useRef } from 'react'
 import { bestScore } from './match'
 import { keepable, type LauncherPrefs } from './prefs'
-import { SHEET_PAD, SHEET_RADIUS } from './results'
+import { SHEET_PAD } from './results'
 import type { Row, RowAction } from './rows'
 import { formatAccelerator } from './shortcut'
 
 /** The keys that run a row's first actions without the panel; the panel shows them beside those actions. */
 export const ACTION_KEYS = ['↩', '⌘↩', '⇧↩']
 
-/** The key the panel shows beside an action: ↩, ⌘↩, ⇧↩ for the first three, else its own shortcut. */
+/** The key the panel shows beside an action: ↩, ⌘↩, ⇧↩ for the first three (or its own ↩ variant), else its own shortcut. */
 export const actionKey = (action: { shortcut?: string }, index: number): string | undefined =>
-  ACTION_KEYS[index] ?? (action.shortcut ? formatAccelerator(action.shortcut) : undefined)
+  // An own ↩ variant (⌥↩ Copy Expression) shows instead of the place's; any other own key shows after ↩, ⌘↩, ⇧↩.
+  (action.shortcut?.endsWith('+Enter') ? formatAccelerator(action.shortcut) : ACTION_KEYS[index]) ?? (action.shortcut ? formatAccelerator(action.shortcut) : undefined)
 
 export const PANEL_W = 300
 const PANEL_ROW_H = 34
@@ -20,7 +21,7 @@ const PANEL_HEADER_H = 32
 const PANEL_DIVIDER_H = 9
 const PANEL_SEARCH_H = 36
 const PANEL_PAD = 6
-const PANEL_RADIUS = SHEET_RADIUS - SHEET_PAD
+const PANEL_RADIUS = 12
 const PANEL_ROW_RADIUS = PANEL_RADIUS - PANEL_PAD
 
 /** What the launcher itself does to any result it can keep: under a divider at the panel's end. */
