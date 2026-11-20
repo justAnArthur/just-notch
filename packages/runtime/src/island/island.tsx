@@ -17,15 +17,16 @@ import { openingTab, tabsOf } from './tab-order'
 import {
   bubbleTransition,
   contentEnter,
+  contentFade,
+  contentGone,
   contentHidden,
   contentLeave,
   contentShown,
+  hoverDelay,
   shapeTransition,
   useReduceMotion,
 } from './motion'
 
-const HOVER_INTENT_MS = 120
-const HOVER_LEAVE_MS = 400
 // The goo filter (modo-ui's, from its morph layer): blur, then threshold the alpha back into solid shapes.
 const GOO_MATRIX = '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10'
 const GOO_BLUR = 6
@@ -98,7 +99,7 @@ function useHover(island: IslandState) {
       if (hovering) expand()
       else dispatch({ type: 'collapse' })
     }
-    const timer = setTimeout(act, hovering ? HOVER_INTENT_MS : HOVER_LEAVE_MS)
+    const timer = setTimeout(act, hovering ? hoverDelay.intent : hoverDelay.leave)
     return () => clearTimeout(timer)
   }, [hovering])
 
@@ -189,17 +190,16 @@ interface LayerProps {
   children: ReactNode
 }
 
-/** One presentation's content, swapped with Apple's blur and scale. */
+/** One presentation's content: it sharpens and grows in with the shape, and blurs out in place (a crossfade under reduced motion). */
 function Layer({ box, origin, reduced, children }: LayerProps) {
-  const hidden = reduced ? { opacity: 0 } : contentHidden
   return (
     <motion.div
       className="pointer-events-auto absolute"
       style={{ ...box, transformOrigin: origin }}
-      initial={hidden}
+      initial={reduced ? { opacity: 0 } : contentHidden}
       animate={reduced ? { opacity: 1 } : contentShown}
-      exit={{ ...hidden, transition: contentLeave }}
-      transition={contentEnter}
+      exit={reduced ? { opacity: 0, transition: contentFade } : { ...contentGone, transition: contentLeave }}
+      transition={reduced ? contentFade : contentEnter}
     >
       {children}
     </motion.div>
@@ -385,8 +385,8 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
                 className="flex size-full items-center justify-center"
                 initial={reduced ? { opacity: 0 } : contentHidden}
                 animate={reduced ? { opacity: 1 } : contentShown}
-                exit={{ opacity: 0, transition: contentLeave }}
-                transition={contentEnter}
+                exit={{ opacity: 0, transition: reduced ? contentFade : contentLeave }}
+                transition={reduced ? contentFade : contentEnter}
               >
                 <PluginView plugin={secondary.plugin} view={secondary.spec.minimal} />
               </motion.div>
