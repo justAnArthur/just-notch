@@ -14,6 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private lazy var plugins = PluginStore(origin: origin)
     private lazy var bridge = Bridge(plugins: plugins, events: events)
     private(set) lazy var updater = Updater()
+    private lazy var onboarding = Onboarding(
+        makeWebView: { [unowned self] frame in WebViews.make(WKWebView.self, frame: frame, bridge: bridge, scheme: scheme, lifecycle: lifecycle) },
+        load: { [unowned self] webView in WebViews.load(webView, page: "onboarding.html", devServer: devServer) }
+    )
     private(set) lazy var launcher = Launcher(events: events) { [unowned self] in Array(panels.values) }
 
     private var panels: [String: PanelController] = [:]
@@ -38,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Read before Sparkle starts (and sets it): an app that launched before isn't a fresh profile.
+        let launchedBefore = UserDefaults.standard.bool(forKey: "SUHasLaunchedBefore")
         bridge.app = self
         bridge.startServices()
         lifecycle.onTerminate = { [weak self] webView in self?.bridge.release(webView) }
@@ -62,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.rebuildPanels() }
+        }
+        onboarding.onClose = { [weak self] webView in self?.bridge.release(webView) }
+        if Onboarding.isFirstRun(launchedBefore: launchedBefore) {
+            // After the island's page is up, so it can open above the window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.showOnboarding() }
         }
         log.info("launched, dev server: \(self.devServer?.absoluteString ?? "none", privacy: .public)")
     }
@@ -225,6 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         warningItems = [warningSeparator, warning]
         menu.addItem(.separator())
         menu.addItem(withTitle: "About Just Notch", action: #selector(showAbout), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Welcome Tour…", action: #selector(showOnboarding), keyEquivalent: "").target = self
         reloadItem = menu.addItem(withTitle: "Reload UI", action: #selector(reloadUIAction), keyEquivalent: "r")
         reloadItem?.target = self
         menu.addItem(withTitle: "Quit Just Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -248,6 +260,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             launcherItem.keyEquivalent = key
             launcherItem.keyEquivalentModifierMask = modifiers
         }
+    }
+
+    // MARK: onboarding
+
+    /// The Welcome window: on a fresh profile, from the menu, and from Settings › About (`onboarding.open`).
+    @objc func showOnboarding() {
+        onboarding.show()
+    }
+
+    /// `onboarding.finish`.
+    func finishOnboarding() {
+        onboarding.finish()
     }
 
     /// A call just found Accessibility missing or stale: the menu's warning follows at once.

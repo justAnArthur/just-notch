@@ -200,6 +200,17 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
         case "permissions.status":
             return GrantedResult(granted: await permissionState(try decode(PermissionParams.self, params).permission) == .allowed).json()
 
+        case "permissions.request":
+            return PermissionStateReply(state: await requestPermission(try decode(PermissionParams.self, params).permission)).json()
+
+        case "onboarding.open":
+            app.showOnboarding()
+            return nil
+
+        case "onboarding.finish":
+            app.finishOnboarding()
+            return nil
+
         case "permissions.state":
             return PermissionStateReply(state: await permissionState(try decode(PermissionParams.self, params).permission)).json()
 
@@ -402,6 +413,38 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             plugins: plugins.plugins,
             geometry: app.geometry(for: webView)
         )
+    }
+
+    /// Keeps the manager that asked for Bluetooth alive until the user answers.
+    private var bluetoothAsk: CBCentralManager?
+
+    /// Shows the system's prompt for one permission now (the onboarding card or Allow… explained it first),
+    /// and returns the state after. Calendar and Location go through their services, which keep their stores.
+    private func requestPermission(_ permission: String) async -> PermissionStateValue {
+        switch permission {
+        case "accessibility":
+            Accessibility.prompt()
+        case "calendar", "location":
+            let method = permission == "calendar" ? "calendar.requestAccess" : "weather.requestAccess"
+            if let service = services.first(where: { $0.methods.contains(method) }) {
+                _ = try? await service.handle(method: method, params: Data("{}".utf8))
+            }
+        case "notifications":
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        case "bluetooth":
+            if CBManager.authorization == .notDetermined { bluetoothAsk = CBCentralManager(delegate: nil, queue: nil) }
+        case "automation":
+            // Asking blocks until the user answers: off the main thread, one installed player at a time.
+            let players = ["com.apple.Music", "com.spotify.client"].filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+            await Task.detached {
+                for player in players {
+                    _ = AEDeterminePermissionToAutomateTarget(NSAppleEventDescriptor(bundleIdentifier: player).aeDesc, typeWildCard, typeWildCard, true)
+                }
+            }.value
+        default:
+            break
+        }
+        return await permissionState(permission)
     }
 
     /// What macOS says about a permission, without ever prompting.
