@@ -9,6 +9,7 @@ import { call } from '../host/client'
 import { EXPANDED } from '../island/geometry'
 import { setLauncherRegions } from '../island/hit-regions'
 import { useReduceMotion } from '../island/motion'
+import { motionScale, settle } from '@justanarthur/modo-ui-notch/lib/motion'
 import { bridgePath, type Circle } from './metaball'
 import { ActionPanel, filterActions, panelHeight } from './actions'
 import { hasPreviews, Preview, PREVIEW_MIN_H } from './preview'
@@ -119,20 +120,19 @@ const endCap = (body: Body): Circle => {
   return { x: body.x.get() + Math.max(0, body.w.get()) / 2 - r, y: body.y.get(), r }
 }
 
-// Motion tuned to read like water.
-const SWELL = { duration: 0.07, ease: [0.3, 0, 0.6, 1] } as const
-/** The bead hangs and stretches on its neck before it lets go. */
-const HANG_T = { duration: 0.09, ease: [0.45, 0, 0.55, 1] } as const
-/** The fall: off the notch quickly, then easing into the landing, so you see the drop arrive and become the bar. */
-const FALL = { duration: 0.2, ease: [0.45, 0, 0.2, 1] } as const
-/** Landing: the drop spreads into the bar, fast at first and easing into the ends. */
-const FILL = { duration: 0.28, ease: [0.25, 0.75, 0.3, 1] } as const
-const SHEET_SPRING = { type: 'spring', visualDuration: 0.18, bounce: 0.12 } as const
-const SPLIT = { type: 'spring', visualDuration: 0.2, bounce: 0.18 } as const
-const RECOIL = { type: 'spring', visualDuration: 0.2, bounce: 0.5 } as const
-const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
+/** The open's beats, in ms: swell, fall, spread until the field shows. Field readable ≈ their sum + FIELD_FADE. */
+const SWELL_MS = 40
+const FALL_MS = 80
+const SPREAD_MS = 50
+/** From the field showing to the buttons pinching off, while the bar still settles. */
+const SPLIT_AFTER_MS = 120
+/** The field's fade in, in seconds. */
+const FIELD_FADE = 0.06
+const SHEET_SPRING = motionScale.small
 /** A provider slower than this shows the loading bar. */
 const LOADING_AFTER_MS = 150
+const SPLIT = motionScale.small
+const QUICK = motionScale.micro
 /** The close's fade, in seconds. */
 const CLOSE_S = 0.06
 /** After the keyboard goes back, before an action runs: the app in front takes it, so a paste lands there. */
@@ -186,6 +186,14 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const layout = layoutOf(geometry, top, scopes.length)
   const layoutRef = useRef(layout)
   layoutRef.current = layout
+  const fieldWRef = useRef(0)
+  /** The field shows only over the bar's black: while the drop spreads, it is revealed with it. */
+  const fieldClip = useTransform(() => {
+    const l = layoutRef.current
+    const left = Math.max(0, drop.x.get() - drop.w.get() / 2 - l.rowLeft)
+    const right = Math.max(0, l.rowLeft + fieldWRef.current - (drop.x.get() + drop.w.get() / 2))
+    return `inset(0 ${right}px 0 ${left}px round ${PILL_H / 2}px)`
+  })
 
   // Every liquid neck in one path: notch ↔ drop, and the pill's end ↔ each button near it.
   const bridges = useTransform(() => {
@@ -264,55 +272,44 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     satellite.r.set(0)
     set(drop, { x: l.cx, y: budTop, w: 0, h: 0 })
 
-    // 1. Swell: the notch's bottom edge sags into a bead.
-    await Promise.all([
-      animate(bud.r, BUD, SWELL),
-      animate(bud.y, l.notchBottom - 4, SWELL),
-      animate(drop.w, HANG, SWELL),
-      animate(drop.h, HANG, SWELL),
-      animate(drop.y, l.notchBottom + 8, SWELL),
-    ])
+    // On the kit's spring scale, and on a clock: each beat starts the next before its spring settles, so the
+    // motion stays one continuous drop and the field is readable within 250 ms.
+    const beat = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+    // 1. Swell and hang: the notch's edge sags into a bead that stretches down on a thinning neck.
+    void animate(bud.r, BUD * 0.8, motionScale.micro)
+    void animate(bud.y, l.notchBottom - 4, motionScale.micro)
+    void animate(drop.w, HANG * 0.9, motionScale.micro)
+    void animate(drop.h, HANG * 1.2, motionScale.micro)
+    void animate(drop.y, l.notchBottom + 30, motionScale.micro)
+    await beat(SWELL_MS)
     if (!alive()) return
 
-    // 2. Hang: it stretches down on a neck that thins.
-    await Promise.all([
-      animate(drop.y, l.notchBottom + 40, HANG_T),
-      animate(drop.h, HANG * 1.2, HANG_T),
-      animate(drop.w, HANG * 0.9, HANG_T),
-      animate(bud.r, BUD * 0.65, HANG_T),
-    ])
-    if (!alive()) return
-
-    // 3. Let go: the neck snaps, the notch's bead springs back, a satellite drop trails the big one down.
+    // 2. Let go: the neck snaps, the bead springs back into the notch, a satellite drop trails the big one down.
     reach.set(0.3)
-    void animate(bud.y, l.notchBottom - BUD - 2, RECOIL)
-    void animate(bud.r, 0, { ...RECOIL, delay: 0.02 })
+    void animate(bud.y, l.notchBottom - BUD - 2, motionScale.medium)
+    void animate(bud.r, 0, settle('small'))
     satellite.y.set(l.notchBottom + 14)
     satellite.r.set(3.5)
-    void animate(satellite.y, l.top - 6, { ...FALL, duration: FALL.duration * 1.05 }).then(() => satellite.r.set(0))
-    await Promise.all([
-      animate(drop.y, l.pillCy, FALL),
-      animate(drop.h, [HANG * 1.2, DROP * 1.2], FALL),
-      animate(drop.w, [HANG * 0.9, DROP * 0.9], FALL),
-    ])
+    void animate(satellite.y, l.top - 6, motionScale.small).then(() => satellite.r.set(0))
+    void animate(drop.y, l.pillCy, motionScale.small)
+    void animate(drop.h, DROP * 0.85, motionScale.small)
+    void animate(drop.w, DROP * 1.2, motionScale.small)
+    await beat(FALL_MS)
     if (!alive()) return
 
-    // 4. Land: it squashes as it touches down…
-    await Promise.all([
-      animate(drop.w, DROP * 1.3, { duration: 0.06, ease: 'easeOut' }),
-      animate(drop.h, DROP * 0.8, { duration: 0.06, ease: 'easeOut' }),
-    ])
+    // 3. Land: it spreads into the bar (rounding out to its height first, so its ends stay round); the field shows
+    // once the bar is most of the way across, and results with it.
+    void animate(drop.y, l.pillCy, motionScale.micro)
+    void animate(drop.h, PILL_H, motionScale.micro)
+    const spread = animate(drop.w, l.rowW, motionScale.small)
+    await beat(SPREAD_MS)
     if (!alive()) return
-    // …and spreads into the bar, one rounded shape, rounding out to its height first so its ends stay round.
-    setTimeout(() => alive() && setContent(true), 140)
-    await Promise.all([
-      animate(drop.w, l.rowW, FILL),
-      animate(drop.h, PILL_H, { type: 'spring', visualDuration: 0.12, bounce: 0.25 }),
-    ])
+    setContent(true)
+    void animate(satellite.r, 0, motionScale.micro)
+    await Promise.race([spread, beat(SPLIT_AFTER_MS)])
     if (!alive()) return
-    // 5. Then it draws back from its end, leaving the scope buttons behind, each pinching off.
-    await arrange(l, false)
-    if (!alive()) return
+    // 4. Open: the scope buttons pinch off the bar's end, unless a key was typed on the way (see the effect below).
     setPhase('open')
   }
 
@@ -364,6 +361,8 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
 
   // Typing draws the buttons back into the bar, which spans the row; clearing it lets them out again.
   const typing = query !== ''
+  const fieldW = typing ? layout.rowW : layout.pillW
+  fieldWRef.current = fieldW
   useEffect(() => {
     if (phase === 'open') void arrange(layoutRef.current, typing)
   }, [typing, phase === 'open'])
@@ -380,8 +379,9 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const listH = view.note ? NOTE_H : showPane ? Math.max(rowsH, PREVIEW_MIN_H) : rowsH
   // The sheet grows to hold the panel when it has fewer rows than the panel has actions.
   const sheetH = panelOpen ? Math.max(listH, panelHeight(listed.length) + 2 * SHEET_PAD) : listH
+  // Results show with the field, not after the buttons split off.
   const loadingShown = useHeld(view.loading && content && (phase === 'opening' || phase === 'open'), LOADING_AFTER_MS)
-  const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
+  const showResults = content && (phase === 'opening' || phase === 'open') && (view.note !== undefined || flat.length > 0)
 
   // A new query or scope starts at the top.
   useEffect(() => setSelection(undefined), [query, scope])
@@ -405,7 +405,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   }, [query])
 
   useEffect(() => {
-    if (phase === 'open') regions(layout, showResults ? sheetH : 0)
+    if (phase === 'open' || phase === 'opening') regions(layout, showResults ? sheetH : 0)
   }, [phase, showResults, sheetH, top])
 
   /**
@@ -532,10 +532,10 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       {/* Mounted from the first frame, so the field has focus and takes keys while the drop still falls. */}
       <motion.label
         className="pointer-events-auto absolute flex items-center gap-3 rounded-full px-4 text-foreground"
-        style={{ left: layout.rowLeft, top: layout.top, width: typing ? layout.rowW : layout.pillW, height: PILL_H }}
+        style={{ left: layout.rowLeft, top: layout.top, width: fieldW, height: PILL_H, clipPath: fieldClip }}
         initial={{ opacity: 0 }}
         animate={{ opacity: content ? 1 : 0 }}
-        transition={{ duration: content ? 0.12 : 0.06, ease: 'easeOut' }}
+        transition={{ duration: content ? FIELD_FADE : 0.06, ease: 'easeOut' }}
       >
         <Search className="size-5 shrink-0 text-muted-foreground" />
         <input
@@ -604,7 +604,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             initial={{ opacity: 0, scaleY: 0.85, y: -6, height: sheetH }}
             animate={{ opacity: 1, scaleY: 1, y: 0, height: sheetH }}
             exit={{ opacity: 0, scaleY: 0.92, y: -4, transition: { duration: 0.08 } }}
-            transition={{ ...SHEET_SPRING, height: springHeight ? SHEET_SPRING : { duration: 0 } }}
+            transition={{ ...SHEET_SPRING, opacity: { duration: FIELD_FADE }, height: springHeight ? SHEET_SPRING : { duration: 0 } }}
           >
             {view.note ? (
               <Note>{view.note}</Note>
