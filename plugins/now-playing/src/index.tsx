@@ -1,8 +1,9 @@
-import { NowPlaying, type NowPlayingOutput, type NowPlayingTrack } from '@justanarthur/modo-ui-notch'
+import { NowPlaying, NowPlayingArtwork, type NowPlayingOutput, type NowPlayingTrack } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
 import { definePlugin, type MediaState, type PluginContext, signal, SwitchRow, useMediaPosition, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { Music } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { shortOutput } from './output'
 import { supportedRepeat } from './repeat'
 
 const PAUSED_MS = 30_000
@@ -64,6 +65,7 @@ function toTrack(media: MediaState, artless: boolean, position: number, output?:
     artwork: media.artworkUrl ?? (artless ? null : undefined),
     source: appName(media.sourceApp),
     output,
+    outputShort: output ? shortOutput(output) : undefined,
     outputKind: output ? outputKind(output) : undefined,
     duration: media.durationS,
     position,
@@ -110,8 +112,9 @@ function Player() {
   )
 }
 
+/** The compact left wing: the artwork at 20 px, radius 6, centered in its slot with even margins. */
 function Leading() {
-  return <NowPlaying.Leading track={useTrack().track} />
+  return <NowPlayingArtwork track={useTrack().track} glyph={12} className="size-5 rounded-1.5" />
 }
 
 function Trailing() {
