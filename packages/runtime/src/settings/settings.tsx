@@ -1,5 +1,5 @@
-import type { AppPreferences, InstalledPlugin, LibraryEntry, Methods, UpdateState } from '@just-notch/bridge-schema'
-import { Badge, Button, List } from '@justanarthur/modo-ui'
+import type { AppPreferences, InstalledPlugin, LibraryEntry, Methods, UpdaterPreferences, UpdateState } from '@just-notch/bridge-schema'
+import { Badge, Button, List, Switch } from '@justanarthur/modo-ui'
 import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
 import { Library, Search } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
@@ -13,10 +13,12 @@ import LauncherPage, { type PreferenceChange } from './launcher'
 import LibraryPage, { useLibrary } from './library'
 import { entryState, updateCount } from './library-state'
 import { setSettingsTarget, useSettingsTarget } from './target'
+import { lastCheckedText } from './updates'
 
 type SystemPermission = Methods['permissions.status']['params']['permission']
 const PRIVACY = 'x-apple.systempreferences:com.apple.preference.security?Privacy_'
 const REPO = 'https://github.com/justAnArthur/just-notch'
+const COPYRIGHT_YEAR = 2026
 
 function Link({ url, children }: { url: string; children: string }) {
   return (
@@ -43,18 +45,34 @@ function updateText(state: UpdateState, checked: boolean) {
   }
 }
 
+/** The host's own errors are already in words; a failed call gets these. */
+const CHECK_FAILED = "Couldn't check for updates. Try again later."
+
+/** Sparkle's switches and last check; read again after each check, which moves the time. */
+function useUpdaterPreferences() {
+  const [preferences, setPreferences] = useState<UpdaterPreferences>()
+  const reload = () => void call('runtime', 'updater.preferences', {}).then(setPreferences, () => {})
+  useEffect(reload, [])
+  const change = (next: Partial<Pick<UpdaterPreferences, 'automaticChecks' | 'automaticDownloads'>>) => {
+    setPreferences((current) => current && { ...current, ...next })
+    void call('runtime', 'updater.setPreferences', next).then(setPreferences, reload)
+  }
+  return [preferences, change, reload] as const
+}
+
 /** Sparkle checks here; installing opens its own window, whose steps (and the menu's, and scheduled checks') come back as `updater.state`. */
-function Updates() {
+function Updates({ onChecked }: { onChecked: () => void }) {
   const [state, setState] = useState<UpdateState>({ kind: 'idle' })
   const [checked, setChecked] = useState(false)
   useEffect(() => on('updater.state', setState), [])
 
   const check = async () => {
     setState({ kind: 'checking' })
-    setState(await call('runtime', 'updater.check', {}).catch((error) => ({ kind: 'error', message: String(error) }) as const))
+    setState(await call('runtime', 'updater.check', {}).catch(() => ({ kind: 'error', message: CHECK_FAILED }) as const))
     setChecked(true)
+    onChecked()
   }
-  const install = () => void call('runtime', 'updater.install', {}).catch((error) => setState({ kind: 'error', message: String(error) }))
+  const install = () => void call('runtime', 'updater.install', {}).catch(() => setState({ kind: 'error', message: CHECK_FAILED }))
   const text = updateText(state, checked)
 
   return (
@@ -66,19 +84,37 @@ function Updates() {
         </Button>
       ) : (
         <Button variant="link" size="compact" loading={state.kind === 'checking'} disabled={state.kind === 'downloading' || state.kind === 'ready'} onClick={() => void check()}>
-          Check for updates
+          Check now
         </Button>
       )}
     </span>
   )
 }
 
-const PERMISSIONS: (Omit<SettingsPermission, 'granted'> & { pane: string; status?: SystemPermission })[] = [
-  { id: 'calendar', status: 'calendar', pane: 'Calendars', label: 'Calendar', description: 'Shows your events and a countdown to the next one.' },
-  { id: 'location', status: 'location', pane: 'LocationServices', label: 'Location', description: 'Gets the weather where you are.' },
-  { id: 'automation', status: 'automation', pane: 'Automation', label: 'Automation', description: 'Controls the apps that play media.' },
-  { id: 'files', pane: 'FilesAndFolders', label: 'Downloads and Desktop', description: 'Lists your recent downloads and screenshots.' },
+/** Each row names what it powers, so a missing grant reads as a feature that won't work, not a setting. */
+const PERMISSIONS: (Omit<SettingsPermission, 'granted'> & { url: string; status?: SystemPermission })[] = [
+  {
+    id: 'accessibility',
+    status: 'accessibility',
+    url: `${PRIVACY}Accessibility`,
+    label: 'Accessibility',
+    description: 'Moves and resizes windows, and pastes from clipboard history.',
+  },
+  { id: 'calendar', status: 'calendar', url: `${PRIVACY}Calendars`, label: 'Calendar', description: 'Shows your next event and a countdown to it.' },
+  { id: 'location', status: 'location', url: `${PRIVACY}LocationServices`, label: 'Location', description: 'Gets the weather where you are.' },
+  { id: 'automation', status: 'automation', url: `${PRIVACY}Automation`, label: 'Automation', description: 'Plays, pauses and skips in Music and Spotify.' },
+  { id: 'files', url: `${PRIVACY}FilesAndFolders`, label: 'Downloads and Desktop', description: 'Lists your recent downloads and screenshots.' },
+  { id: 'bluetooth', status: 'bluetooth', url: `${PRIVACY}Bluetooth`, label: 'Bluetooth', description: 'Shows connected headphones and their battery.' },
+  {
+    id: 'notifications',
+    status: 'notifications',
+    url: 'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
+    label: 'Notifications',
+    description: 'Lets plugins alert you, such as when a timer ends.',
+  },
 ]
+/** How often the Permissions page asks again while it's shown: a grant in System Settings shows within this. */
+const RECHECK_MS = 2000
 
 /** The host's preferences; a change shows at once and settles to what the host kept (a taken shortcut isn't). */
 function usePreferences() {
@@ -97,14 +133,34 @@ function usePreferences() {
   return [preferences, change, error] as const
 }
 
-function useGranted() {
+/**
+ * Each permission's state, asked on mount, whenever the island's page comes back (the app activates or the
+ * page shows again), and every 2 s while `watching` (the Permissions page is open and visible).
+ */
+function useGranted(watching: boolean) {
   const [granted, setGranted] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    for (const { id, status } of PERMISSIONS)
-      if (status) void call('runtime', 'permissions.status', { permission: status }).then((r) => setGranted((g) => ({ ...g, [id]: r.granted })))
-    // The folders have no status check that doesn't prompt: the recent files watcher already knows.
-    return subscribeTopic('recentFiles', (state) => setGranted((g) => ({ ...g, files: state.access === 'granted' })))
-  }, [])
+    const check = () => {
+      for (const { id, status } of PERMISSIONS)
+        if (status)
+          void call('runtime', 'permissions.status', { permission: status }).then(
+            (r) => setGranted((g) => (g[id] === r.granted ? g : { ...g, [id]: r.granted })),
+            () => {},
+          )
+    }
+    check()
+    const visible = () => document.visibilityState === 'visible' && check()
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', visible)
+    const timer = watching ? setInterval(() => document.visibilityState === 'visible' && check(), RECHECK_MS) : undefined
+    return () => {
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', visible)
+      clearInterval(timer)
+    }
+  }, [watching])
+  // The folders have no status check that doesn't prompt: the recent files watcher already knows.
+  useEffect(() => subscribeTopic('recentFiles', (state) => setGranted((g) => ({ ...g, files: state.access === 'granted' }))), [])
   return granted
 }
 
@@ -161,9 +217,11 @@ export default function Settings() {
   const installed = useInstalled()
   const loaded = usePlugins()
   const [preferences, setPreferences, preferencesError] = usePreferences()
-  const granted = useGranted()
-  const library = useLibrary()
   const target = useSettingsTarget()
+  const granted = useGranted(target.page === 'permissions')
+  const library = useLibrary()
+  const [diagnostics, setDiagnostics] = useState(false)
+  const [updater, setUpdater, reloadUpdater] = useUpdaterPreferences()
   const apiVersion = info?.apiVersion ?? '0.0.0'
 
   // Opening the Library asks for a fresh catalog.
@@ -224,15 +282,53 @@ export default function Settings() {
     },
   ]
 
+  // ⌥-click on the version shows what a bug report needs; the build's mode only exists in development.
   const about = info
     ? [
-        { label: 'Version', value: info.version },
-        { label: 'Updates', value: <Updates /> },
-        { label: 'Mode', value: info.devMode ? `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` : 'Release' },
-        { label: 'Screen', value: info.geometry.hasNotch ? 'Hardware notch' : 'Virtual notch' },
+        {
+          label: 'Version',
+          value: (
+            // biome-ignore lint/a11y/noStaticElementInteractions: a hidden ⌥-click for diagnostics, not a control
+            // biome-ignore lint/a11y/useKeyWithClickEvents: as above
+            <span onClick={(event) => event.altKey && setDiagnostics((shown) => !shown)}>{`Just Notch ${info.version}`}</span>
+          ),
+        },
+        { label: updater ? lastCheckedText(updater.lastChecked) : 'Updates', value: <Updates onChecked={reloadUpdater} /> },
+        ...(updater
+          ? [
+              {
+                label: 'Check automatically',
+                value: (
+                  <Switch
+                    aria-label="Check for updates automatically"
+                    checked={updater.automaticChecks}
+                    onCheckedChange={(automaticChecks) => setUpdater({ automaticChecks })}
+                  />
+                ),
+              },
+              {
+                label: 'Download automatically',
+                value: (
+                  <Switch
+                    aria-label="Download updates automatically"
+                    checked={updater.automaticDownloads}
+                    disabled={!updater.automaticChecks}
+                    onCheckedChange={(automaticDownloads) => setUpdater({ automaticDownloads })}
+                  />
+                ),
+              },
+            ]
+          : []),
+        ...(diagnostics
+          ? [
+              ...(info.devMode ? [{ label: 'Mode', value: `Development${info.devServerUrl ? ` · ${info.devServerUrl}` : ''}` }] : []),
+              { label: 'Screen', value: info.geometry.hasNotch ? 'Hardware notch' : 'Virtual notch' },
+              { label: 'Plugin API', value: info.apiVersion },
+            ]
+          : []),
         { label: 'Website', value: <Link url="https://justanarthur.github.io/just-notch/">justanarthur.github.io/just-notch</Link> },
-        { label: 'Source', value: <Link url={REPO}>github.com/justAnArthur/just-notch</Link> },
         { label: 'License', value: <Link url={`${REPO}/blob/main/LICENSE.md`}>FSL-1.1-MIT</Link> },
+        { label: 'Copyright', value: `© ${COPYRIGHT_YEAR} justAnArthur` },
       ]
     : []
 
@@ -257,8 +353,8 @@ export default function Settings() {
         }}
         permissions={PERMISSIONS.map(({ id, label, description }) => ({ id, label, description, granted: granted[id] }))}
         onOpenPermission={(id) => {
-          const pane = PERMISSIONS.find((p) => p.id === id)?.pane
-          if (pane) void call('runtime', 'system.openUrl', { url: PRIVACY + pane })
+          const url = PERMISSIONS.find((p) => p.id === id)?.url
+          if (url) void call('runtime', 'system.openUrl', { url })
         }}
         about={about}
       />
