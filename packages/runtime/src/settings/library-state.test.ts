@@ -1,6 +1,6 @@
 import type { InstalledPlugin, LibraryEntry } from '@just-notch/bridge-schema'
 import { describe, expect, test } from 'vitest'
-import { entryState, updateCount } from './library-state'
+import { entryState, incompatibility, librarySections, needsAppUpdate, updateCount } from './library-state'
 
 const entry = (version: string, notch = '^1.1.0'): LibraryEntry => ({
   id: 'github',
@@ -29,7 +29,7 @@ describe('entryState', () => {
     expect(entryState(entry('0.1.0'), undefined, '1.1.0')).toEqual({ status: 'not-installed' })
     expect(entryState(entry('0.1.0', '^2.0.0'), undefined, '1.1.0')).toEqual({
       status: 'incompatible',
-      reason: 'Needs plugin API ^2.0.0; this Just Notch has 1.1.0.',
+      reason: 'Needs a newer Just Notch. Update Just Notch to use it.',
     })
   })
 
@@ -45,7 +45,7 @@ describe('entryState', () => {
 
   test('an incompatible install with a compatible update offers the update', () => {
     expect(entryState(entry('0.2.0'), installed('0.1.0', 'old'), '1.1.0')).toMatchObject({ status: 'update-available' })
-    expect(entryState(entry('0.1.0'), installed('0.1.0', 'old'), '1.1.0')).toEqual({ status: 'incompatible', reason: 'old' })
+    expect(entryState(entry('0.1.0'), installed('0.1.0', 'old'), '1.1.0')).toEqual({ status: 'incompatible', reason: 'Made for an older Just Notch. It works again once its developer updates it.' })
   })
 
   test('an install under way wins, then a failure', () => {
@@ -63,4 +63,33 @@ test('updateCount counts installed plugins behind the library', () => {
   expect(updateCount(undefined, [installed('0.1.0')], '1.1.0')).toBe(0)
   expect(updateCount([entry('0.2.0')], [installed('0.1.0')], '1.1.0')).toBe(1)
   expect(updateCount([entry('0.2.0')], [], '1.1.0')).toBe(0)
+})
+
+describe('incompatibility', () => {
+  test('a newer Just Notch, or a plugin update', () => {
+    expect(incompatibility('^2.0.0', '1.6.0')).toBe('Needs a newer Just Notch. Update Just Notch to use it.')
+    expect(incompatibility('>=1.7', '1.6.0')).toBe('Needs a newer Just Notch. Update Just Notch to use it.')
+    expect(incompatibility('^0.9.0', '1.6.0')).toBe('Made for an older Just Notch. It works again once its developer updates it.')
+    expect(needsAppUpdate(incompatibility('^2.0.0', '1.6.0'))).toBe(true)
+    expect(needsAppUpdate(incompatibility('^0.9.0', '1.6.0'))).toBe(false)
+  })
+
+  test('an installed plugin that no longer fits says so in the same words', () => {
+    const state = entryState(entry('0.1.0', '^2.0.0'), installed('0.1.0', 'Needs plugin API ^1.1.0; this Just Notch has 2.0.0.'), '2.0.0')
+    expect(state).toEqual({ status: 'incompatible', reason: 'Made for an older Just Notch. It works again once its developer updates it.' })
+  })
+})
+
+describe('librarySections', () => {
+  const row = (id: string, status: 'installed' | 'not-installed' | 'incompatible') => ({
+    id,
+    state: status === 'incompatible' ? ({ status, reason: 'x' } as const) : ({ status } as const),
+  })
+  test('installed, available, and the ones that cannot run here aside', () => {
+    const rows = [row('a', 'installed'), row('b', 'not-installed'), row('c', 'incompatible'), row('d', 'incompatible')]
+    const { installed, available, waiting } = librarySections(rows, new Set(['a', 'd']))
+    expect(installed.map((r) => r.id)).toEqual(['a', 'd'])
+    expect(available.map((r) => r.id)).toEqual(['b'])
+    expect(waiting.map((r) => r.id)).toEqual(['c'])
+  })
 })

@@ -47,14 +47,23 @@ enum Consent {
             text.append(lines.isEmpty ? "This version asks for nothing new." : "This version can also:\n" + lines.joined(separator: "\n"))
         } else {
             alert.messageText = "Install “\(name)” \(version)?"
-            if let author { text.append("By \(author).") }
+            let firstParty = author.map(isFirstParty) ?? false
+            if firstParty { text.append("By Just Notch.") } else if let author { text.append("By \(author).") }
             text.append(lines.isEmpty ? "It asks for no permissions." : "It will be able to:\n" + lines.joined(separator: "\n"))
-            text.append("Plugins run inside Just Notch alongside your other plugins, so a plugin can reach what the others can. Install only plugins you trust.")
+            // The shared-context caution matters for someone else's code, not for the app's own plugins.
+            if !firstParty {
+                text.append("Plugins run inside Just Notch alongside your other plugins, so a plugin can reach what the others can. Install only plugins you trust.")
+            }
         }
         alert.informativeText = text.joined(separator: "\n\n")
         alert.addButton(withTitle: update ? "Update" : "Install")
         alert.addButton(withTitle: "Cancel")
         return run(alert)
+    }
+
+    /// The app's own plugins, as the library's catalog names their author.
+    static func isFirstParty(_ author: String) -> Bool {
+        author.caseInsensitiveCompare("justAnArthur") == .orderedSame
     }
 
     /// Whether to uninstall, and whether to drop the plugin's data too (unchecked by default).

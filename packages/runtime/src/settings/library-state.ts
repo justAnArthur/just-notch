@@ -16,7 +16,20 @@ function share({ phase, progress = 0 }: Progress): number {
   return phase === 'downloading' ? progress * 0.8 : phase === 'verifying' ? 0.85 : 0.95
 }
 
-const incompatibility = (range: string, apiVersion: string) => `Needs plugin API ${range}; this Just Notch has ${apiVersion}.`
+/**
+ * Why a plugin can't run here, in a buyer's words: either this Just Notch is older than the plugin needs (an app
+ * update fixes it), or the plugin was made for an older Just Notch (its next version will).
+ */
+export function incompatibility(range: string, apiVersion: string): string {
+  const lowest = /\d+(\.\d+){0,2}/.exec(range)?.[0]
+  const padded = lowest && [...lowest.split('.'), '0', '0'].slice(0, 3).join('.')
+  return padded && compareVersions(padded, apiVersion) > 0
+    ? 'Needs a newer Just Notch. Update Just Notch to use it.'
+    : 'Made for an older Just Notch. It works again once its developer updates it.'
+}
+
+/** Whether an incompatible plugin waits on an update of Just Notch itself. */
+export const needsAppUpdate = (reason: string) => reason.startsWith('Needs a newer Just Notch')
 
 /** Where a catalog plugin stands here, from what's installed, the host's API version and any install under way. */
 export function entryState(
@@ -32,7 +45,7 @@ export function entryState(
   if (!installed) return compatible ? { status: 'not-installed' } : { status: 'incompatible', reason: incompatibility(entry.engines.notch, apiVersion) }
   if (compatible && compareVersions(entry.version, installed.manifest.version) > 0)
     return { status: 'update-available', from: installed.manifest.version, to: entry.version }
-  if (installed.incompatible) return { status: 'incompatible', reason: installed.incompatible }
+  if (installed.incompatible) return { status: 'incompatible', reason: incompatibility(installed.manifest.engines.notch, apiVersion) }
   return { status: 'installed' }
 }
 
@@ -44,3 +57,16 @@ export function updateCount(catalog: CatalogEntry[] | undefined, installed: Inst
   }).length
 }
 
+
+/**
+ * The library in two lists: what's installed here, and what can be installed. A plugin that can't run on this
+ * Just Notch and isn't installed is set aside (`waiting`) rather than offered.
+ */
+export function librarySections<T extends { id: string; state: LibraryEntryState }>(entries: T[], installedIds: ReadonlySet<string>) {
+  const notInstalled = entries.filter((entry) => !installedIds.has(entry.id))
+  return {
+    installed: entries.filter((entry) => installedIds.has(entry.id)),
+    available: notInstalled.filter((entry) => entry.state.status !== 'incompatible'),
+    waiting: notInstalled.filter((entry) => entry.state.status === 'incompatible'),
+  }
+}

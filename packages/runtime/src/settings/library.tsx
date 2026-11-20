@@ -1,9 +1,10 @@
 import type { InstalledPlugin, LibraryCatalog, LibraryEntry as CatalogEntry, Permission } from '@just-notch/bridge-schema'
 import { type LibraryEntry, LibraryListing, type LibraryPermission } from '@justanarthur/modo-ui-notch'
+import { Button, List } from '@justanarthur/modo-ui'
 import { useCallback, useEffect, useState } from 'react'
 import { on } from '../host/bus'
 import { call, log } from '../host/client'
-import { entryState, type Progress } from './library-state'
+import { entryState, librarySections, needsAppUpdate, type Progress } from './library-state'
 
 /** Every permission in plain words, as the host's install dialog puts them (Library/Consent.swift). */
 export const PERMISSION_INFO: Record<Permission, LibraryPermission> = {
@@ -129,14 +130,40 @@ export default function LibraryPage({
   const entry = entries.find((e) => e.id === open)
 
   if (entry) return <LibraryListing.Detail entry={entry} onBack={() => onOpen(undefined)} onOpenSource={openUrl} {...actions} />
+  if (!catalog || entries.length === 0)
+    return (
+      <LibraryListing
+        entries={entries}
+        loading={!catalog && (loading || !error)}
+        error={!catalog && error ? 'Couldn’t reach the library. Check your connection and try again.' : undefined}
+        onRetry={() => void refresh()}
+        onOpen={onOpen}
+        {...actions}
+      />
+    )
+
+  const sections = librarySections(entries, new Set(installed.map((p) => p.manifest.id)))
+  const waitingOnApp = sections.waiting.filter((e) => e.state.status === 'incompatible' && needsAppUpdate(e.state.reason))
   return (
-    <LibraryListing
-      entries={entries}
-      loading={!catalog && (loading || !error)}
-      error={!catalog && error ? 'Couldn’t reach the library. Check your connection and try again.' : undefined}
-      onRetry={() => void refresh()}
-      onOpen={onOpen}
-      {...actions}
-    />
+    <div className="flex flex-col gap-6">
+      {sections.installed.length > 0 && <LibraryListing title="Installed" entries={sections.installed} onOpen={onOpen} {...actions} />}
+      {sections.available.length > 0 ? (
+        <LibraryListing title="Available" entries={sections.available} onOpen={onOpen} {...actions} />
+      ) : (
+        <p className="m-0 pl-2 text-body text-muted-foreground">You have every plugin in the library.</p>
+      )}
+      {waitingOnApp.length > 0 && (
+        <List>
+          <List.Row
+            label={waitingOnApp.length === 1 ? `${waitingOnApp[0]?.name} needs a newer Just Notch` : `${waitingOnApp.length} plugins need a newer Just Notch`}
+            description="Update Just Notch to install them."
+          >
+            <Button variant="secondary" size="compact" className="mr-3" onClick={() => void call('runtime', 'updater.install', {}).catch(() => {})}>
+              Update Just Notch…
+            </Button>
+          </List.Row>
+        </List>
+      )}
+    </div>
   )
 }
