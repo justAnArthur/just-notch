@@ -1,7 +1,7 @@
 import Copy from '@justanarthur/modo-ui/components/actions/copy'
 import Tabs from '@justanarthur/modo-ui/components/navigation/tabs'
 import Code from '@justanarthur/modo-ui/primitives/content/code'
-import { CREATE_COMMAND, REPO_URL } from '../data'
+import { CREATE_COMMAND, LIBRARY_GUIDE_URL, REPO_URL } from '../data'
 
 // What `notch create my-plugin` writes (packages/cli/src/create.ts), trimmed to the parts that matter.
 const TERMINAL = `${CREATE_COMMAND}
@@ -77,13 +77,14 @@ export default definePlugin({
   },
 })`
 
-export function Build() {
+/** The developer page's body; `Heading` is its h1 there. */
+export function Build({ heading: Heading = 'h2' }: { heading?: 'h1' | 'h2' }) {
   return (
     <section className="build field-ink" id="build" aria-labelledby="build-title">
       <div className="build-copy">
-        <h2 className="headline" id="build-title" data-rv>
+        <Heading className="headline" id="build-title" data-rv>
           Write a plugin<br /> of your own.
-        </h2>
+        </Heading>
         <p className="body" data-rv style={{ '--i': 1 } as React.CSSProperties}>
           A plugin is a React component, a manifest and the permissions it asks for. It draws with modo-ui, the
           island's own components, so it looks native from the first line. It can add a scope to the launcher too: results, their actions and a preview. The CLI scaffolds, builds and packs
@@ -94,6 +95,9 @@ export function Build() {
         </div>
         <a className="text-link" href={REPO_URL} data-rv style={{ '--i': 3 } as React.CSSProperties}>
           The SDK and the CLI on GitHub
+        </a>
+        <a className="text-link" href={LIBRARY_GUIDE_URL} data-rv style={{ '--i': 4 } as React.CSSProperties}>
+          Publish it to the library, where anyone installs it from Settings
         </a>
       </div>
       <div className="build-code" data-rv style={{ '--i': 2 } as React.CSSProperties}>

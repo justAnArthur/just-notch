@@ -4,13 +4,17 @@ export const DOWNLOAD_URL = `${REPO_URL}/releases/latest/download/JustNotch.zip`
 export const RELEASES_URL = `${REPO_URL}/releases`
 export const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE.md`
 export const MODO_URL = 'https://github.com/justAnArthur/modo'
-export const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine /Applications/JustNotch.app'
+export const ISSUES_URL = `${REPO_URL}/issues`
+/** The site's own pages, under Vite's base. */
+export const HOME = import.meta.env.BASE_URL
+export const CHANGELOG_URL = `${HOME}changelog/`
+export const DEVELOPERS_URL = `${HOME}developers/`
 export const CREATE_COMMAND = 'bun run notch create my-plugin'
 export const LIBRARY_GUIDE_URL = `${REPO_URL}/tree/main/library#readme`
 /** Written by scripts/library-catalog.ts (pages.yml); the app reads the same file. */
 export const CATALOG_URL = `${import.meta.env.BASE_URL}library/index.json`
 
-const shot = (name: string) => `${import.meta.env.BASE_URL}shots/${name}.png`
+const shot = (name: string) => `${import.meta.env.BASE_URL}shots/${name}.webp`
 
 /** What each manifest permission lets a plugin read or do, in the visitor's words. */
 const PERMISSION: Record<string, string> = {
@@ -39,14 +43,10 @@ interface Plugin {
   /** manifest.json's description, verbatim. */
   description: string
   permissions: string[]
-  /** The island at its first snap, from packages/runtime/scripts/shots.ts. */
-  shot: string
-  width: number
-  height: number
 }
 
 // Copied from plugins/*/manifest.json; the order is the island's own tab order.
-const MANIFESTS: Omit<Plugin, 'shot' | 'width' | 'height'>[] = [
+export const PLUGINS: Plugin[] = [
   {
     id: 'now-playing',
     name: 'Now Playing',
@@ -65,24 +65,6 @@ const MANIFESTS: Omit<Plugin, 'shot' | 'width' | 'height'>[] = [
   { id: 'system', name: 'System', description: 'CPU, memory, battery, disk and the busiest processes.', permissions: ['stats.read', 'power.read'] },
   { id: 'weather', name: 'Weather', description: 'The temperature now, the next hours and rain on its way.', permissions: ['weather.read'] },
 ]
-
-// Pixel sizes of the screenshots in public/shots (2x).
-const FIT: Record<string, [number, number]> = {
-  'now-playing': [1440, 474],
-  calendar: [1440, 402],
-  clipboard: [1440, 498],
-  clock: [1440, 406],
-  'recent-files': [1440, 418],
-  system: [1440, 462],
-  weather: [1440, 462],
-}
-
-export const PLUGINS: Plugin[] = MANIFESTS.map((m) => ({
-  ...m,
-  shot: shot(`${m.id}-fit`),
-  width: FIT[m.id]![0],
-  height: FIT[m.id]![1],
-}))
 
 export const permissionLabel = (id: string) => PERMISSION[id] ?? id
 

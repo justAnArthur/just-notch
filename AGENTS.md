@@ -13,7 +13,7 @@ A modular macOS notch app. A thin Swift host owns the window and system services
 - `library/<id>` — optional plugins: same rules, a workspace too, but not bundled into the app (`copy-web.sh` copies `plugins/*` only). The dev server serves them with `builtIn: false`; `bun run build:library` builds them. Each is released on its own (see library plugins).
 - `apps/macos` — Swift 6, macOS 14+, XcodeGen `project.yml`. `Packages/NotchServices` — system services as a SwiftPM package (protocol in `Service.swift`).
 - `assets/brand` — brand masters (logo, app icon, menu bar glyph, lockups, wordmark), text outlined. `apps/macos/scripts/make-icon.sh` renders `icon-1024.png` into the `AppIcon` set; the status item's `StatusIcon` PDF comes from `menubar.svg` (`rsvg-convert -f pdf -d 72 -p 72`).
-- `site` — the website (Vite + modo-ui), deployed to GitHub Pages by `pages.yml`.
+- `site` — the website (Vite + modo-ui, its hero island from `@justanarthur/modo-ui-notch`), deployed to GitHub Pages by `pages.yml`. Three pages (`index.html`, `changelog/`, `developers/`), each prerendered at build (`src/entry-server.tsx` → `scripts/prerender.ts`) and hydrated by `src/boot.tsx`; the entry script loads on the first interaction or 1.5 s after load (`vite.config.ts`), which keeps Lighthouse at 99–100. `scripts/changelog.ts` writes `public/changelog.json` from the app's releases before the build (gitignored, bundled into the changelog page).
 
 ## platform
 

@@ -4,7 +4,7 @@ import { PLUGINS, permissionLabel, SETTINGS } from '../data'
 /** The seven plugins as their manifests state them: name, what it does, what it may read. */
 export function Plugins() {
   return (
-    <section className="ledger field-ink" id="plugins" aria-labelledby="plugins-title">
+    <section className="ledger field-ink" id="features" aria-labelledby="plugins-title">
       <div className="ledger-head">
         <h2 className="headline" id="plugins-title" data-rv>
           Seven plugins<br /> in the box.

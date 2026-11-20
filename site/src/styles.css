@@ -154,9 +154,10 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  height: 44px;
+  height: 38px;
   padding: 0 var(--gutter);
-  background: var(--island);
+  background: oklch(0.32 0 0 / 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
   font-size: 14px;
 }
 
@@ -194,52 +195,78 @@ a:focus-visible {
 
 .island-stage {
   position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
+  z-index: 3;
+  /* The island hangs from the page's top edge, over the menu bar, as it does over a Mac's. Room below
+     for the open panel, so nothing moves when it opens. */
+  margin-top: -38px;
+  height: 300px;
 }
 
-/* Every plugin's screenshot in one grid cell; the chosen one shows. The clip opens from the notch. */
-.island {
-  display: grid;
-  width: min(780px, calc(100% - 2 * var(--gutter)));
-  clip-path: inset(0 37% calc(100% - 12px) 37% round 0 0 12px 12px);
-  transition: clip-path 1000ms var(--ease-out);
+.island-placeholder {
+  width: 249px;
+  height: 38px;
+  margin: 0 auto;
+  border-radius: 0 0 13px 13px;
+  background: var(--island);
 }
 
-.island.is-open {
-  clip-path: inset(0 0 0 0 round 0);
-}
-
-.island > img {
-  grid-area: 1 / 1;
-  width: 100%;
-  height: auto;
-  align-self: start;
-  opacity: 0;
-  transform: translateY(-6px) scale(0.985);
-  transform-origin: 50% 0;
-  transition:
-    opacity 360ms ease,
-    transform 520ms var(--ease-out);
-}
-
-.island > img.on {
-  opacity: 1;
-  transform: none;
-}
-
-.hero-switch {
-  display: flex;
-  justify-content: center;
-  margin-top: clamp(16px, 2.4vw, 32px);
-  padding: 0 var(--gutter);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.hero-switch::-webkit-scrollbar {
+.hint-touch {
   display: none;
+}
+
+@media (hover: none) {
+  .hint-pointer {
+    display: none;
+  }
+  .hint-touch {
+    display: inline;
+  }
+}
+
+.island-hint {
+  margin: 0;
+  padding: 0 var(--gutter);
+  text-align: center;
+  font-size: 14px;
+  color: var(--quiet);
+}
+
+/* The hero's stand-in artwork, so the page loads no album art. */
+.hero-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 30% 30%, oklch(0.85 0.1 300) 0 18%, transparent 19%),
+    linear-gradient(135deg, oklch(0.55 0.2 280), oklch(0.6 0.15 200) 60%, oklch(0.55 0.12 150));
+}
+
+.jobs {
+  display: grid;
+  gap: 14px;
+  max-width: 62ch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(17px, 1.4vw, 20px);
+  line-height: 1.45;
+  color: oklch(0.97 0 0 / 0.78);
+}
+
+.jobs li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+}
+
+.jobs strong {
+  color: oklch(0.97 0 0);
+  font-weight: 600;
+}
+
+.jobs-icon {
+  margin-top: 0.2em;
+  color: var(--accent-brand);
 }
 
 .hero-foot {
@@ -590,10 +617,6 @@ a:focus-visible {
   letter-spacing: 0;
 }
 
-.install-faq {
-  grid-column: 2;
-}
-
 .faq {
   width: 100%;
   /* modo's app-sized text, raised to the page's reading size inside the FAQ. */
@@ -682,6 +705,227 @@ a:focus-visible {
   color: oklch(0.97 0 0);
 }
 
+/* ── Hero headline: a sentence, not a slogan, so a step down from the display size ── */
+
+.hero .display {
+  max-width: 20ch;
+  font-size: clamp(36px, 5.2vw, 80px);
+  line-height: 1;
+}
+
+/* ── Pricing ── */
+
+.pricing {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  column-gap: clamp(40px, 5vw, 96px);
+  row-gap: 48px;
+  padding: var(--section) var(--gutter);
+}
+
+.pricing-head {
+  display: grid;
+  align-content: start;
+  gap: 24px;
+}
+
+.tiers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tier {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 24px;
+  padding: 28px;
+  border-radius: 22px;
+  background: oklch(0.2 0 0);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.tier-name {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
+}
+
+.tier-note {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--quiet);
+}
+
+.tier-list {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.tier-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+}
+
+.tier-list svg {
+  margin-top: 0.15em;
+  color: var(--accent-brand);
+}
+
+.tier-foot {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* ── Install: System Settings' Open Anyway row, drawn ── */
+
+.gatekeeper {
+  width: min(100%, 560px);
+  margin: 24px 0 0;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.gatekeeper-window {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border-radius: 13px;
+  background: oklch(0.97 0 0);
+  box-shadow: inset 0 0 0 1px var(--hairline), 0 12px 32px oklch(0 0 0 / 0.08);
+  font-size: 14px;
+}
+
+.gatekeeper-path {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.gatekeeper-group {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quiet);
+}
+
+.gatekeeper-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: oklch(1 0 0);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.gatekeeper-button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: oklch(1 0 0);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 1px 1px oklch(0 0 0 / 0.08);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.gatekeeper figcaption {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--quiet);
+}
+
+/* ── FAQ ── */
+
+.faq-section {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  column-gap: clamp(40px, 5vw, 96px);
+  row-gap: 48px;
+  padding: var(--section) var(--gutter);
+}
+
+/* ── Other pages: changelog, developers ── */
+
+.page-intro {
+  display: grid;
+  gap: 24px;
+  padding: clamp(80px, 10vw, 160px) var(--gutter) clamp(48px, 6vw, 96px);
+}
+
+.changelog {
+  display: grid;
+  gap: 0;
+  padding: clamp(32px, 4vw, 64px) var(--gutter) var(--section);
+}
+
+.release {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
+  column-gap: clamp(40px, 5vw, 96px);
+  row-gap: 16px;
+  padding: 40px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.release-version {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.release-version a {
+  text-decoration: none;
+}
+
+.release-date {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--quiet);
+}
+
+.release-groups {
+  display: grid;
+  gap: 24px;
+}
+
+.release-area {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--quiet);
+}
+
+.release-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.release-list li {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: baseline;
+  gap: 12px;
+}
+
 /* ── Entrances: rise once, staggered; still for reduced motion ── */
 
 .rv-ready [data-rv] {
@@ -707,18 +951,17 @@ a:focus-visible {
     transform: none;
     transition: none;
   }
-  .island,
-  .island > img {
-    transition: none;
-  }
 }
 
 /* ── Tablet ── */
 
-@media (max-width: 1100px) {
+@media (max-width: 860px) {
   .menubar-link:not(.keep) {
     display: none;
   }
+}
+
+@media (max-width: 1100px) {
   .hero-foot {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
@@ -737,22 +980,19 @@ a:focus-visible {
   .ledger-figure {
     max-width: 560px;
   }
-  .install-faq {
-    grid-column: auto;
-  }
-  .hero-switch {
-    justify-content: flex-start;
-  }
-  .hero-switch > * {
-    margin-inline: auto;
+  .pricing,
+  .faq-section,
+  .tiers,
+  .release {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* ── Phone ── */
 
 @media (max-width: 640px) {
-  .island {
-    width: calc(100% - 8px);
+  .island-stage {
+    height: 280px;
   }
   .hero-foot {
     grid-template-columns: minmax(0, 1fr);

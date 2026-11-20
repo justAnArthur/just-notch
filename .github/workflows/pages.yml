@@ -6,7 +6,8 @@
 # site/ is its own package with its own bun.lock (not a root workspace), so the
 # root install, which needs the just-apps checkout, never runs here.
 #
-# before the build, site/scripts/library-catalog.ts writes site/public/library/ (index.json, icons,
+# before the build, site/scripts/changelog.ts writes site/public/changelog.json from the app's releases, and
+# site/scripts/library-catalog.ts writes site/public/library/ (index.json, icons,
 # screenshots) from the library plugins' GitHub releases; Vite copies public/ into dist. Reading releases
 # of this public repo needs only `contents: read`. build-library-on-tag.yml starts this workflow after
 # every library release.
@@ -60,6 +61,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           LIBRARY_BASE_URL: ${{ steps.pages.outputs.base_url }}/
+      - name: Changelog
+        run: bun scripts/changelog.ts
+        working-directory: site
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: bun run build
         working-directory: site
         env:

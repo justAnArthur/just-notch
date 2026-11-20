@@ -1,19 +1,34 @@
-import Accordion from '@justanarthur/modo-ui/components/containers/accordion'
 import Button from '@justanarthur/modo-ui/components/actions/button'
-import Copy from '@justanarthur/modo-ui/components/actions/copy'
 import { ArrowDownToLine } from 'lucide-react'
-import { DOWNLOAD_URL, LICENSE_URL, QUARANTINE_COMMAND } from '../data'
+import { DOWNLOAD_URL } from '../data'
+
+/** System Settings › Privacy & Security, drawn: the row macOS 15 and 26 add after a blocked first open. */
+function OpenAnyway() {
+  return (
+    <figure className="gatekeeper" aria-label="System Settings, Privacy & Security: “Just Notch” was blocked to protect your Mac, with an Open Anyway button.">
+      <div className="gatekeeper-window" aria-hidden="true">
+        <p className="gatekeeper-path">Privacy & Security</p>
+        <p className="gatekeeper-group">Security</p>
+        <div className="gatekeeper-row">
+          <span>“Just Notch” was blocked to protect your Mac.</span>
+          <span className="gatekeeper-button">Open Anyway</span>
+        </div>
+      </div>
+      <figcaption>System Settings › Privacy & Security, under Security.</figcaption>
+    </figure>
+  )
+}
 
 export function Install() {
   return (
     <section className="install field-light light" id="install" aria-labelledby="install-title">
       <h2 className="headline" id="install-title" data-rv>
-        Install in<br /> three steps.
+        Install in<br /> four steps.
       </h2>
 
       <ol className="steps">
         <li data-rv style={{ '--i': 1 } as React.CSSProperties}>
-          <p className="step-text">Download JustNotch.zip from the latest release on GitHub.</p>
+          <p className="step-text">Download Just Notch from the latest release.</p>
           <Button className="cta brand-action" leadingIcon={ArrowDownToLine} render={<a href={DOWNLOAD_URL} />}>
             Download for Mac
           </Button>
@@ -22,46 +37,22 @@ export function Install() {
           <p className="step-text">Unzip it and drag Just Notch into Applications.</p>
         </li>
         <li data-rv style={{ '--i': 3 } as React.CSSProperties}>
-          <p className="step-text">The first time, right-click the app and choose Open.</p>
+          <p className="step-text">Open it once. macOS says it can’t check it: choose Done.</p>
           <p className="body">
-            The build is self-signed and not notarized, so macOS asks once. If it refuses to open, clear the
-            quarantine flag in Terminal instead:
+            Apple only vouches for notarized apps, and this build isn’t notarized yet. Nothing is wrong with your
+            download.
           </p>
-          <Copy className="step-copy" value={QUARANTINE_COMMAND} label="Terminal" />
+        </li>
+        <li data-rv style={{ '--i': 4 } as React.CSSProperties}>
+          <p className="step-text">In Privacy & Security, choose Open Anyway.</p>
+          <p className="body">
+            Open System Settings › Privacy & Security, scroll to Security and choose Open Anyway beside Just
+            Notch, then confirm with your password or Touch ID. You do this once; after that it opens like any
+            app. On macOS 14 Sonoma, Control-click the app and choose Open instead.
+          </p>
+          <OpenAnyway />
         </li>
       </ol>
-
-      <div className="install-faq" data-rv style={{ '--i': 4 } as React.CSSProperties}>
-        <Accordion.Group type="single" className="faq">
-          <Accordion.Item value="warning">
-            <Accordion.Trigger>Why does macOS warn me?</Accordion.Trigger>
-            <Accordion.Content>
-              Apple only skips the warning for notarized apps. This build is signed on the machine that made
-              it, so Gatekeeper cannot vouch for it. The source it was built from is on GitHub for you to read
-              or build yourself.
-            </Accordion.Content>
-          </Accordion.Item>
-          <Accordion.Item value="needs">
-            <Accordion.Trigger>What does it need?</Accordion.Trigger>
-            <Accordion.Content>
-              macOS 14 Sonoma or later. It is made for a MacBook with a notch; on other screens it can draw a
-              virtual notch. Each plugin asks only for the permissions in its manifest, such as your calendars
-              for Calendar.
-            </Accordion.Content>
-          </Accordion.Item>
-          <Accordion.Item value="fair">
-            <Accordion.Trigger>What does fair source mean?</Accordion.Trigger>
-            <Accordion.Content>
-              The code is public under the{' '}
-              <a href={LICENSE_URL} className="inline-link">
-                Functional Source License (FSL-1.1-MIT)
-              </a>
-              . You may read it, build it and use it for free. Nobody may sell a competing product made from it,
-              and every release becomes MIT two years after it ships.
-            </Accordion.Content>
-          </Accordion.Item>
-        </Accordion.Group>
-      </div>
     </section>
   )
 }

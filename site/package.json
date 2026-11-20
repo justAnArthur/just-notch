@@ -4,14 +4,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir .ssr && bun scripts/prerender.ts",
     "preview": "vite preview --port 4173 --strictPort",
     "check": "tsc -p . --noEmit",
     "catalog": "bun scripts/library-catalog.ts",
     "test": "bun test scripts"
   },
   "dependencies": {
-    "@justanarthur/modo-ui": "^2.5.0",
+    "@justanarthur/modo-ui": "^2.10.0",
+    "@justanarthur/modo-ui-notch": "^0.7.0",
     "lucide-react": "^1.72.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

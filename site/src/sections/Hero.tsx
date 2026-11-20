@@ -1,108 +1,60 @@
 import Button from '@justanarthur/modo-ui/components/actions/button'
-import Tabs from '@justanarthur/modo-ui/components/navigation/tabs'
-import { Activity, ArrowDownToLine, CalendarDays, ClipboardList, Clock3, CloudSun, FolderDown, Music } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { Wordmark } from '../brand/Mark'
-import { DOWNLOAD_URL, PLUGINS, REPO_URL } from '../data'
+import { ArrowDownToLine, Command, Eye } from 'lucide-react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { DOWNLOAD_URL } from '../data'
+import { Nav } from './Nav'
 
-const ICON = {
-  'now-playing': Music,
-  calendar: CalendarDays,
-  clipboard: ClipboardList,
-  clock: Clock3,
-  'recent-files': FolderDown,
-  system: Activity,
-  weather: CloudSun,
-} as const
+// The live island is the heaviest thing on the page; it loads after the headline paints.
+const HeroIsland = lazy(() => import('./HeroIsland'))
 
-function useNarrow() {
-  const query = '(max-width: 640px)'
-  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches)
-  useEffect(() => {
-    const list = window.matchMedia(query)
-    const update = () => setNarrow(list.matches)
-    list.addEventListener('change', update)
-    return () => list.removeEventListener('change', update)
-  }, [])
-  return narrow
-}
+const placeholder = <div className="island-placeholder" aria-hidden="true" />
 
 export function Hero() {
-  const [active, setActive] = useState('now-playing')
-  const [open, setOpen] = useState(false)
-  // On a phone the strip shows icons, with only the chosen plugin named, as the island's own tab row does.
-  const narrow = useNarrow()
-
-  // The island grows out of the notch once the page is up, as it does on hover.
-  useEffect(() => {
-    const timer = setTimeout(() => setOpen(true), 450)
-    return () => clearTimeout(timer)
-  }, [])
-
+  // The prerendered page carries the closed notch; the island mounts once the page is hydrated.
+  const [live, setLive] = useState(false)
+  useEffect(() => setLive(true), [])
   return (
     <header className="hero field-screen" id="top">
-      <nav className="menubar" aria-label="Main">
-        <div className="menubar-side">
-          <a href="#top" className="menubar-home" aria-label="Just Notch, top of the page">
-            <Wordmark />
-          </a>
-          <a className="menubar-link" href="#plugins">Plugins</a>
-          <a className="menubar-link" href="#library">Library</a>
-          <a className="menubar-link" href="#launcher">Launcher</a>
-          <a className="menubar-link" href="#install">Install</a>
-        </div>
-        <div className="menubar-side menubar-end">
-          <a className="menubar-link" href="#build">Build a plugin</a>
-          <a className="menubar-link" href={REPO_URL}>GitHub</a>
-          <Button size="compact" variant="secondary" render={<a href={DOWNLOAD_URL} />}>
-            Download
-          </Button>
-        </div>
-      </nav>
+      <Nav />
 
       <div className="island-stage">
-        <div
-          className={`island${open ? ' is-open' : ''}`}
-          role="img"
-          aria-label={`The open island showing the ${PLUGINS.find((p) => p.id === active)?.name} plugin`}
-        >
-          {PLUGINS.map((p) => (
-            <img
-              key={p.id}
-              src={p.shot}
-              width={p.width / 2}
-              height={p.height / 2}
-              alt=""
-              className={p.id === active ? 'on' : undefined}
-              decoding="async"
-              fetchPriority={p.id === 'now-playing' ? 'high' : 'low'}
-            />
-          ))}
-        </div>
+        {live ? (
+          <Suspense fallback={placeholder}>
+            <HeroIsland />
+          </Suspense>
+        ) : (
+          placeholder
+        )}
       </div>
-
-      <div className="hero-switch" data-rv style={{ '--i': 2 } as React.CSSProperties}>
-        <Tabs value={active} onValueChange={(v) => { setActive(v); setOpen(true) }} variant="subtle" size="compact" activeLabel={narrow}>
-          <Tabs.List aria-label="Show a plugin in the island">
-            {PLUGINS.map((p) => (
-              <Tabs.Item key={p.id} value={p.id} icon={ICON[p.id as keyof typeof ICON]} label={p.name} />
-            ))}
-          </Tabs.List>
-        </Tabs>
-      </div>
+      <p className="island-hint">
+        <span className="hint-pointer">Hover the island, or click it.</span>
+        <span className="hint-touch">Tap the island.</span>
+      </p>
 
       <div className="hero-foot">
         <div className="hero-copy">
-          <h1 className="display" data-rv>
-            Your notch,<br /> put to work.
+          <h1 className="display">
+            The Dynamic Island Apple only gives the new MacBook Pro, on the Mac you already have.
           </h1>
-          <p className="lede" data-rv style={{ '--i': 1 } as React.CSSProperties}>
-            Just Notch turns the MacBook notch into a Dynamic Island: what is playing, your next meeting, the
-            weather and four more plugins, one hover away. Press ⌥Space and search drops out of it.
-          </p>
+          <ul className="jobs">
+            <li>
+              <Eye className="jobs-icon" size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span>
+                <strong>Glance.</strong> What is playing, your next meeting and the weather sit beside the notch,
+                one hover from the whole view.
+              </span>
+            </li>
+            <li>
+              <Command className="jobs-icon" size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span>
+                <strong>Act.</strong> Press ⌥Space and a launcher drops out of the notch: apps, files, answers,
+                your clipboard, and windows moved to halves and thirds.
+              </span>
+            </li>
+          </ul>
         </div>
-        <div className="capsule" data-rv style={{ '--i': 2 } as React.CSSProperties}>
-          <span className="capsule-note">Free · macOS 14 or later</span>
+        <div className="capsule" id="download">
+          <span className="capsule-note">macOS 14 or later</span>
           <Button className="cta brand-action" leadingIcon={ArrowDownToLine} render={<a href={DOWNLOAD_URL} />}>
             Download for Mac
           </Button>
