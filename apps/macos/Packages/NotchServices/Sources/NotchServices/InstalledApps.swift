@@ -92,8 +92,13 @@ enum InstalledApps {
         return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
     }
 
-    /// A 32 px PNG by default, the icon at 16 pt on a Retina screen.
+    /// A 32 px PNG by default, the icon at 16 pt on a Retina screen. Its own autorelease pool: these run in
+    /// batches on a detached task, whose pool drains late, and each decoded icon is megabytes until then.
     static func icon(_ url: URL, side: Int = 32) -> String? {
+        autoreleasepool { render(url, side: side) }
+    }
+
+    private static func render(_ url: URL, side: Int) -> String? {
         let image = NSWorkspace.shared.icon(forFile: url.path)
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4,
                                          hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
