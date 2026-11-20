@@ -1,6 +1,6 @@
 import { type ClipboardClip, ClipboardHistory } from '@justanarthur/modo-ui-notch'
 import { Button, Combobox, List, Select } from '@justanarthur/modo-ui'
-import { type AppInfo, type Clip, type ClipboardRetention, definePlugin, type PluginContext, type SearchItem, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
+import { type AppInfo, type Clip, type ClipboardRetention, definePlugin, type PluginContext, type SearchAction, type SearchItem, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { ClipboardList, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -214,12 +214,22 @@ function clipItem(clip: Clip, ctx: PluginContext): SearchItem {
     icon: clip.preview ?? (clip.kind === 'color' ? swatch(clip.content) : undefined),
     accessory: clip.pinned ? 'Pinned' : ago(clip.copiedAt),
     preview: clipPreview(clip),
-    actions: [
-      { title: 'Paste', run: () => void ctx.call('clipboard.paste', { id: clip.id }) },
-      { title: 'Copy', run: () => void ctx.call('clipboard.copy', { id: clip.id }) },
-      { title: 'Paste as Plain Text', run: () => void ctx.call('clipboard.paste', { id: clip.id, plain: true }) },
-    ],
+    actions: clipActions(clip, ctx),
   }
+}
+
+/** `shortcut` and `stay` arrive with plugin API 1.6; older launchers ignore them. */
+type Action = SearchAction & { shortcut?: string; stay?: boolean }
+
+/** ↩ paste, ⌘↩ copy, ⇧↩ paste as plain text (the first three, by order), ⌘. pin, ⌘⌫ delete. */
+function clipActions(clip: Clip, ctx: PluginContext): Action[] {
+  return [
+    { title: 'Paste', run: () => void ctx.call('clipboard.paste', { id: clip.id }) },
+    { title: 'Copy', run: () => void ctx.call('clipboard.copy', { id: clip.id }) },
+    { title: 'Paste as Plain Text', run: () => void ctx.call('clipboard.paste', { id: clip.id, plain: true }) },
+    { title: clip.pinned ? 'Unpin' : 'Pin', shortcut: 'Command+.', stay: true, run: async () => void (await ctx.call('clipboard.pin', { id: clip.id, pinned: !clip.pinned })) },
+    { title: 'Delete', shortcut: 'Command+Backspace', stay: true, run: async () => void (await ctx.call('clipboard.delete', { id: clip.id })) },
+  ]
 }
 
 /** A colour clip's icon: a rounded square of the colour. */
@@ -244,6 +254,14 @@ function clipPreview(clip: Clip): SearchItem['preview'] {
 /** Root search asks for this many characters before it shows clips: fewer match too much by chance. */
 const ROOT_MIN = 3
 
+/** Inside the scope a first word such as `image:` or `links:` keeps only clips of that kind. */
+const KIND_FILTER: Record<string, Clip['kind']> = Object.fromEntries(
+  (['text', 'link', 'image', 'color', 'file'] as const).flatMap((kind) => [
+    [`${kind}:`, kind],
+    [`${kind}s:`, kind],
+  ]),
+)
+
 /**
  * Pinned clips, then the newest; every word of the query must appear. Inside the Clipboard scope that's in the clip,
  * its file name or the app it came from; in the root search only in the clip itself, so "saf" doesn't list every
@@ -251,8 +269,11 @@ const ROOT_MIN = 3
  */
 function search(query: string, ctx: PluginContext, root: boolean): SearchItem[] {
   if (root && query.trim().length < ROOT_MIN) return []
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  let words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const kind = root ? undefined : KIND_FILTER[words[0] ?? '']
+  if (kind) words = words.slice(1)
   return history
+    .filter((clip) => !kind || clip.kind === kind)
     .filter((clip) => {
       const text = (root ? clip.content : `${clip.content} ${clip.detail ?? ''} ${clip.app ?? ''}`).toLowerCase()
       return words.every((w) => text.includes(w))
