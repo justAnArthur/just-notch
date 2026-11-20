@@ -106,11 +106,27 @@ function pluginRow(scope: Scope, item: SearchItem): Row {
   return { id: `${scope.id}:${item.id}`, title: item.title, subtitle: item.subtitle, icon, accessory: item.accessory, actions: item.actions, preview: item.preview }
 }
 
-/** Results that arrive later (files, plugin scopes), kept with the query they answer. */
+/** An async source's latest answer, with the key (query, scope) it answers. */
+export interface Latest<T> {
+  key: string
+  value: T
+}
+
+/**
+ * What an async source shows: its latest answer, even one for an older key while the fresh one loads, so its
+ * section stays put between keystrokes instead of blinking out and back. A source turned off shows nothing.
+ */
+export const shownAnswer = <T>(latest: Latest<T> | undefined, enabled: boolean): T | undefined => (enabled ? latest?.value : undefined)
+
+/** Results that arrive later (files, plugin scopes); the last ones stay until fresh ones replace them. */
 function useAsync<T>(key: string, enabled: boolean, load: (signal: AbortSignal) => Promise<T>, delay = 0): T | undefined {
-  const [state, setState] = useState<{ key: string; value: T }>()
+  const [state, setState] = useState<Latest<T>>()
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) {
+      // Turned back on later, it mustn't show answers from before.
+      setState(undefined)
+      return
+    }
     const controller = new AbortController()
     const timer = setTimeout(() => {
       load(controller.signal).then(
@@ -123,7 +139,7 @@ function useAsync<T>(key: string, enabled: boolean, load: (signal: AbortSignal) 
       controller.abort()
     }
   }, [key, enabled])
-  return state?.key === key ? state.value : undefined
+  return shownAnswer(state, enabled)
 }
 
 /** A system action or a Shortcut that matches the query, best first. */

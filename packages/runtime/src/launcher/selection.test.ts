@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { moveSelection, selectedIndex } from './selection'
+import { ROW_H } from './results'
+import { animatesHeight, moveSelection, selectedIndex } from './selection'
 
 const rows = (...ids: string[]) => ids.map((id) => ({ id }))
 
@@ -24,5 +25,14 @@ describe('selection', () => {
     expect(moveSelection(rows('new', 'a', 'b'), { id: 'a', index: 0 }, 1)).toEqual({ id: 'b', index: 2 })
     expect(moveSelection(rows('a', 'b'), { id: 'b', index: 1 }, 1)).toEqual({ id: 'a', index: 0 })
     expect(moveSelection([], undefined, 1)).toBeUndefined()
+  })
+})
+
+describe('sheet height', () => {
+  it('springs the sheet only when it grows by more than a row', () => {
+    expect(animatesHeight(0, 200)).toBe(true)
+    expect(animatesHeight(200, 200 + ROW_H)).toBe(false)
+    expect(animatesHeight(200, 200 + ROW_H + 26)).toBe(true)
+    expect(animatesHeight(300, 120)).toBe(false)
   })
 })

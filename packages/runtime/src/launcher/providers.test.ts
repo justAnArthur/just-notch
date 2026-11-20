@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { matchActions } from './providers'
+import { matchActions, shownAnswer } from './providers'
+
+describe('stable results', () => {
+  it('keeps the last answer while the next loads, and shows nothing once off', () => {
+    const latest = { key: 'files rea', value: ['README.md'] }
+    expect(shownAnswer(latest, true)).toEqual(['README.md'])
+    expect(shownAnswer(latest, false)).toBeUndefined()
+    expect(shownAnswer(undefined, true)).toBeUndefined()
+  })
+})
 
 describe('root ranking', () => {
   const shortcuts = ['Start Pomodoro', 'Translate Clipboard', 'Morning Summary', 'Copy Timestamp', 'Resize Images']

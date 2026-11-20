@@ -1,3 +1,5 @@
+import { ROW_H } from './results'
+
 /**
  * The selected row, by id: rows that arrive late (files, plugins) push it down the list without changing what ↩
  * runs. `undefined` until the user moves, when the first row is selected, whichever it is.
@@ -22,3 +24,5 @@ export function moveSelection(rows: readonly { id: string }[], selection: Select
   return { id: rows[index].id, index }
 }
 
+/** The sheet animates its height only when it grows by more than a row; smaller changes are instant, so typing doesn't make it bob. */
+export const animatesHeight = (from: number, to: number) => to - from > ROW_H

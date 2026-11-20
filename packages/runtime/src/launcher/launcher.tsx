@@ -15,7 +15,7 @@ import { hasPreviews, Preview, PREVIEW_MIN_H } from './preview'
 import { MAX_SCOPES, type Scope, scopeByKeyword, useScopes, useSearch } from './providers'
 import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './results'
 import type { Row } from './rows'
-import { moveSelection, type Selection, selectedIndex } from './selection'
+import { animatesHeight, moveSelection, type Selection, selectedIndex } from './selection'
 import { setLauncherOpen } from './state'
 
 const PILL_H = 52
@@ -122,6 +122,7 @@ const HANG_T = { duration: 0.09, ease: [0.45, 0, 0.55, 1] } as const
 const FALL = { duration: 0.2, ease: [0.45, 0, 0.2, 1] } as const
 /** Landing: the drop spreads into the bar, fast at first and easing into the ends. */
 const FILL = { duration: 0.28, ease: [0.25, 0.75, 0.3, 1] } as const
+const SHEET_SPRING = { type: 'spring', visualDuration: 0.18, bounce: 0.12 } as const
 const SPLIT = { type: 'spring', visualDuration: 0.2, bounce: 0.18 } as const
 const RECOIL = { type: 'spring', visualDuration: 0.2, bounce: 0.5 } as const
 const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
@@ -375,6 +376,13 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   // The panel belongs to one row: another row, query or scope closes it.
   useEffect(() => setPanel(undefined), [query, scope, current?.id])
 
+  // The sheet's height springs when it grows by more than a row (or on open), and changes at once otherwise.
+  const shownH = useRef(0)
+  const springHeight = animatesHeight(shownH.current, sheetH)
+  useEffect(() => {
+    shownH.current = showResults ? sheetH : 0
+  }, [showResults, sheetH])
+
   // A scope's keyword and a space enter it: `clip `, `file `.
   useEffect(() => {
     if (scope !== undefined) return
@@ -567,7 +575,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             initial={{ opacity: 0, scaleY: 0.85, y: -6, height: sheetH }}
             animate={{ opacity: 1, scaleY: 1, y: 0, height: sheetH }}
             exit={{ opacity: 0, scaleY: 0.92, y: -4, transition: { duration: 0.08 } }}
-            transition={{ type: 'spring', visualDuration: 0.18, bounce: 0.12 }}
+            transition={{ ...SHEET_SPRING, height: springHeight ? SHEET_SPRING : { duration: 0 } }}
           >
             {view.note ? (
               <Note>{view.note}</Note>
