@@ -31,6 +31,9 @@ const RESULTS_GAP = 8
 const RESULTS_MAX = 420
 /** A note's height, for a scope that isn't built yet or nothing found. */
 const NOTE_H = 56
+const PLACEHOLDER = 'Search apps, files and commands'
+/** The pill's width that fits PLACEHOLDER at 17 px beside the icon and padding; a narrower pill (six scopes) says "Search…". */
+const PLACEHOLDER_PILL_W = 332
 /** How far the liquid between the pill's end and a button stretches before it snaps, in button radii: under the gap (10 pt), so none stays joined at rest. */
 const BUTTON_REACH = 0.3
 
@@ -530,10 +533,10 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
           ref={input}
           aria-label="Search"
           value={query}
-          placeholder={active ? active.title : 'Search apps, files and commands'}
+          placeholder={active ? active.title : layout.pillW >= PLACEHOLDER_PILL_W ? PLACEHOLDER : 'Search…'}
           spellCheck={false}
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-[20px] text-foreground outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent text-[20px] text-foreground outline-none placeholder:text-[17px] placeholder:text-muted-foreground"
           onChange={(event) => setQuery(event.target.value)}
         />
         {active && (
