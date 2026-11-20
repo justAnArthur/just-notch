@@ -2,7 +2,7 @@ import { conditionFromCode, Weather, type WeatherNow, type WeatherUnit } from '@
 import { Button, Input, List } from '@justanarthur/modo-ui'
 import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic, type WeatherState } from '@just-notch/sdk'
 import { CloudSun, MapPin } from 'lucide-react'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 const MINUTE = 60_000
 /** How far ahead "rain soon" looks. */
@@ -42,11 +42,37 @@ const Marked = ({ empty, children }: { empty: boolean; children: ReactNode }) =>
   </div>
 )
 
+/** The host refreshes every 15 minutes while subscribed; past that (after sleep, say) the forecast is stale. */
+const STALE_MS = 15 * 60_000
+const CHECK_MS = 60_000
+
+/**
+ * With no refresh button any more, the tab keeps its own forecast fresh: on open, then each minute while it shows,
+ * it asks for a refresh once the reading is stale. One ask per reading, so a slow fetch isn't asked twice.
+ */
+function useFreshForecast(updatedAt: number | undefined, refresh: () => void) {
+  const asked = useRef<number | undefined>(undefined)
+  const latest = useRef({ updatedAt, refresh })
+  latest.current = { updatedAt, refresh }
+  useEffect(() => {
+    const check = () => {
+      const { updatedAt, refresh } = latest.current
+      if (updatedAt === undefined || Date.now() - updatedAt < STALE_MS || asked.current === updatedAt) return
+      asked.current = updatedAt
+      refresh()
+    }
+    check()
+    const timer = setInterval(check, CHECK_MS)
+    return () => clearInterval(timer)
+  }, [updatedAt])
+}
+
 function Widget() {
   const state = useTopic('weather')
   const [unit] = useStorage<WeatherUnit>(UNIT, 'celsius')
   const actions = useActions()
   const layout = useSheet()
+  useFreshForecast(state?.status === 'ready' ? state.updatedAt : undefined, actions.onRefresh)
   return (
     <Marked empty={!state?.current}>
       {state ? <Weather layout={layout} {...forecast(state)} unit={unit} {...actions} /> : <Weather layout={layout} status="loading" unit={unit} />}
