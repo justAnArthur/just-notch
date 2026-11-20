@@ -1,39 +1,49 @@
 import { IslandFlash } from '@justanarthur/modo-ui-notch'
 import { definePlugin, type FrontWindow, type PluginContext, type Rect, type SearchItem } from '@just-notch/sdk'
-import { LayoutPanelLeft, TriangleAlert } from 'lucide-react'
+import { LayoutPanelLeft, Scaling, TriangleAlert } from 'lucide-react'
 import { COMMANDS, cycleStep, type LastMove } from './commands'
 import { STORAGE, startHotkeys } from './hotkeys'
+import { anchorRefused, screenOf } from './displays'
 import { findLayouts, icon, type Layout, place } from './layouts'
+import { RestoreMemory } from './restore'
 import Settings from './settings'
 
-/** Where each window was before the plugin first moved it, for Restore; and where it put it last. */
-const restore = new Map<string, Rect>()
-const placed = new Map<string, Rect>()
+const memory = new RestoreMemory()
 let last: LastMove | undefined
 
-const near = (a: Rect, b: Rect) => Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2
 const keyOf = (win: FrontWindow) => `${win.pid}:${win.title}`
 
-/** Moves the front window to `pick(win)`; resolves with where it went, or `undefined` when it stayed. */
+/**
+ * Moves the front window to `pick(win)`; resolves with where it went, or `undefined` when it stayed. An app that
+ * keeps its window larger than asked gets it pushed back against the edges the layout touched, with a notice.
+ */
 async function arrange(ctx: PluginContext, pick: (win: FrontWindow) => Layout): Promise<Rect | undefined> {
   const win = await ctx.call('windows.front', {})
-  const key = keyOf(win)
   const layout = pick(win)
   if (layout.op === 'restore') {
-    const frame = restore.get(key)
+    const frame = memory.take(win)
     if (!frame) return
-    restore.delete(key)
-    placed.delete(key)
     await ctx.call('windows.setFrame', { frame })
     return frame
   }
-  const frame = place(layout, win)
-  if (!frame) return
-  // A window the user moved since is remembered afresh; one still where the plugin put it keeps its first frame.
-  const prev = placed.get(key)
-  if (!restore.has(key) || !prev || !near(prev, win.frame)) restore.set(key, win.frame)
-  placed.set(key, frame)
-  await ctx.call('windows.setFrame', { frame })
+  const asked = place(layout, win)
+  if (!asked) return
+  await ctx.call('windows.setFrame', { frame: asked })
+  const after = await ctx.call('windows.front', {})
+  const screen = screenOf(asked, win.screens)
+  const anchored = screen && anchorRefused(asked, after.frame, screen)
+  let frame = after.frame
+  if (anchored) {
+    if (anchored.x !== after.frame.x || anchored.y !== after.frame.y) await ctx.call('windows.setFrame', { frame: anchored })
+    frame = anchored
+    ctx.activity.flash({
+      priority: 'hud',
+      key: 'windows',
+      durationMs: 2500,
+      view: () => <IslandFlash tone="info" icon={<Scaling />} title={`${win.app || 'The app'} won't go smaller`} caption={`Its window stays ${Math.round(frame.w)} × ${Math.round(frame.h)}`} />,
+    })
+  }
+  memory.moved(win, frame)
   return frame
 }
 

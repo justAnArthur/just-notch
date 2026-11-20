@@ -1,4 +1,5 @@
 import type { FrontWindow, Rect } from '@just-notch/sdk'
+import { clampTo as clamp, neighbor, toScreen } from './displays'
 
 /** A part of the screen, as fractions of its visible frame. */
 type Part = { x: number; y: number; w: number; h: number }
@@ -84,12 +85,6 @@ const STEP = 0.05
 const MIN_W = 240
 const MIN_H = 160
 
-const clamp = (r: Rect, s: Rect): Rect => {
-  const w = Math.min(r.w, s.w)
-  const h = Math.min(r.h, s.h)
-  return { x: Math.min(Math.max(r.x, s.x), s.x + s.w - w), y: Math.min(Math.max(r.y, s.y), s.y + s.h - h), w, h }
-}
-
 /** Where `layout` puts the window; `undefined` for `restore`, which the plugin answers from what it remembers. */
 export function place(layout: Layout, win: FrontWindow): Rect | undefined {
   const s = win.screens[win.screen] ?? win.screens[0]
@@ -128,12 +123,9 @@ export function place(layout: Layout, win: FrontWindow): Rect | undefined {
     }
     case 'nextDisplay':
     case 'previousDisplay': {
-      const n = win.screens.length
-      if (n < 2) return undefined
-      const to = win.screens[(win.screen + (layout.op === 'nextDisplay' ? 1 : n - 1)) % n]!
-      const sx = to.w / s.w
-      const sy = to.h / s.h
-      return clamp({ x: Math.round(to.x + (f.x - s.x) * sx), y: Math.round(to.y + (f.y - s.y) * sy), w: Math.round(f.w * sx), h: Math.round(f.h * sy) }, to)
+      if (win.screens.length < 2) return undefined
+      const to = win.screens[neighbor(win.screens, win.screen, layout.op === 'nextDisplay' ? 1 : -1)]!
+      return toScreen(f, s, to)
     }
   }
   return undefined
