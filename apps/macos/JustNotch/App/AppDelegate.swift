@@ -367,13 +367,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     }
 
     var preferences: AppPreferences {
-        AppPreferences(launchAtLogin: launchAtLogin, screens: ScreenLayout.screens, launcher: launcher.preferences)
+        AppPreferences(launchAtLogin: launchAtLogin, screens: ScreenLayout.screens, launcher: launcher.preferences,
+                       displays: ScreenLayout.displays(), hideWhen: ScreenLayout.hideWhen)
     }
 
     func setPreferences(_ update: PreferencesParams) throws {
         if let screens = update.screens, screens != ScreenLayout.screens {
             ScreenLayout.screens = screens
             rebuildPanels()
+        }
+        if let modes = update.displayModes {
+            ScreenLayout.setModes(modes)
+            rebuildPanels()
+        }
+        if let rules = update.hideWhen {
+            ScreenLayout.hideWhen = HideWhen(fullScreen: rules.fullScreen ?? ScreenLayout.hideWhen.fullScreen, calls: rules.calls ?? ScreenLayout.hideWhen.calls)
+            PresenceMonitor.shared.check()
         }
         if let enabled = update.launchAtLogin, enabled != launchAtLogin {
             try setLaunchAtLogin(enabled)

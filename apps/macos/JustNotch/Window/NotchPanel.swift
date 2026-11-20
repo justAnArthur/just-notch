@@ -73,7 +73,8 @@ enum ScreenLayout {
             notch: Rect(x: notch.minX - panelFrame.minX, y: 0, w: notch.width, h: notch.height),
             hasNotch: hasNotch,
             scale: screen.backingScaleFactor,
-            screenId: id(screen)
+            screenId: id(screen),
+            mode: mode(screen)
         )
         return (panelFrame, geometry)
     }
@@ -106,24 +107,6 @@ enum ScreenLayout {
     static var screens: AppPreferences.Screens {
         get { UserDefaults.standard.string(forKey: "panel.screens") == "all" ? .all : .notched }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "panel.screens") }
-    }
-
-    /// What the island does on a display: nothing (`hidden`), keep to activities and hover (`pill`), or stay (`full`).
-    enum DisplayMode: String, Codable {
-        case hidden, pill, full
-    }
-
-    struct DisplayInfo: Codable, Equatable {
-        var id: String
-        var name: String
-        var hasNotch: Bool
-        var mode: DisplayMode
-    }
-
-    /// When the island steps aside on its own.
-    struct HideWhen: Codable, Equatable {
-        var fullScreen = true
-        var calls = true
     }
 
     private static let modesKey = "panel.displayModes"
