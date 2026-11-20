@@ -22,7 +22,8 @@ public final class PowerService: NotchService {
             MainActor.assumeIsolated { service.refresh() }
         }, context)?.takeRetainedValue() else { return }
         runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        // Common modes: a plug-in while a menu is open or a window is dragged still flashes at once.
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
 
         lowPowerObserver = NotificationCenter.default.addObserver(
             forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
@@ -33,7 +34,7 @@ public final class PowerService: NotchService {
     }
 
     public func stop(topic: String) {
-        if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .defaultMode) }
+        if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
         runLoopSource = nil
         if let lowPowerObserver { NotificationCenter.default.removeObserver(lowPowerObserver) }
         lowPowerObserver = nil
