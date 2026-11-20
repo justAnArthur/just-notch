@@ -44,6 +44,12 @@ final class Updater: NSObject {
     /// The last check, scheduled or not; nil before the first one.
     var lastChecked: Date? { enabled ? controller.updater.lastUpdateCheckDate : nil }
 
+    /// `updater.preferences`: lastChecked in milliseconds since 1970, as JavaScript dates count.
+    var preferences: UpdaterPreferences {
+        UpdaterPreferences(automaticChecks: automaticChecks, automaticDownloads: automaticDownloads,
+                           lastChecked: lastChecked.map { ($0.timeIntervalSince1970 * 1000).rounded() })
+    }
+
     /// The standard flow: Sparkle's alert, download and Install and Relaunch.
     func install() {
         guard enabled else { return }
@@ -153,4 +159,27 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
     func standardUserDriverWillFinishUpdateSession() {
         remind(nil)
     }
+}
+
+/// `UpdaterPreferences`.
+struct UpdaterPreferences: Encodable {
+    var automaticChecks: Bool
+    var automaticDownloads: Bool
+    /// Encoded as `null` before the first check, as the contract says.
+    var lastChecked: Double?
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(automaticChecks, forKey: .automaticChecks)
+        try container.encode(automaticDownloads, forKey: .automaticDownloads)
+        try container.encode(lastChecked, forKey: .lastChecked)
+    }
+
+    private enum CodingKeys: String, CodingKey { case automaticChecks, automaticDownloads, lastChecked }
+}
+
+/// `updater.setPreferences`: only the switches the page changed.
+struct UpdaterPreferencesParams: Decodable {
+    var automaticChecks: Bool?
+    var automaticDownloads: Bool?
 }

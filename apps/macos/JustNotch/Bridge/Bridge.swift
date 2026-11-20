@@ -218,6 +218,15 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             app.updater.install()
             return nil
 
+        case "updater.preferences":
+            return app.updater.preferences.json()
+
+        case "updater.setPreferences":
+            let p = try decode(UpdaterPreferencesParams.self, params)
+            if let checks = p.automaticChecks { app.updater.automaticChecks = checks }
+            if let downloads = p.automaticDownloads { app.updater.automaticDownloads = downloads }
+            return app.updater.preferences.json()
+
         case "plugins.setEnabled":
             let p = try decode(SetEnabledParams.self, params)
             guard plugins.manifest(p.id) != nil else { throw ServiceError("unknown plugin \(p.id)") }
