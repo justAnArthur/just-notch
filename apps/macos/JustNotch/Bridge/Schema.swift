@@ -187,6 +187,8 @@ enum Schema {
         "deepLinks.initial",
         "updater.check",
         "updater.install",
+        "updater.preferences",
+        "updater.setPreferences",
         "net.revokeHost",
         "library.catalog",
         "library.install",

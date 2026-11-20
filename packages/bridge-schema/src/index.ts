@@ -21,6 +21,12 @@ export interface Rect {
   h: number
 }
 
+export interface UpdaterPreferences {
+  automaticChecks: boolean
+  automaticDownloads: boolean
+  lastChecked: number | null
+}
+
 /** `windows.front`. */
 export interface FrontWindow {
   app: string
@@ -832,8 +838,11 @@ export interface Methods {
   'updater.check': { params: Record<string, never>; result: UpdateState }
   /** Starts Sparkle's own install flow in its window; `updater.state` events follow. */
   'updater.install': { params: Record<string, never>; result: null }
+  /** Sparkle's automatic check and download switches, and when it last checked (ms since epoch). */
+  'updater.preferences': { params: Record<string, never>; result: UpdaterPreferences }
+  'updater.setPreferences': { params: Partial<Pick<UpdaterPreferences, 'automaticChecks' | 'automaticDownloads'>>; result: UpdaterPreferences }
   'permissions.status': {
-    params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' }
+    params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' | 'notifications' }
     result: { granted: boolean }
   }
 
@@ -954,6 +963,8 @@ export const RUNTIME_ONLY: Method[] = [
   'deepLinks.initial',
   'updater.check',
   'updater.install',
+  'updater.preferences',
+  'updater.setPreferences',
   'net.revokeHost',
   'library.catalog',
   'library.install',

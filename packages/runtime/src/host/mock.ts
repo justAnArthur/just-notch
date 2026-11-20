@@ -479,6 +479,8 @@ function libraryUninstall(id: string) {
 /** The host's wording (PluginStore.swift). */
 const incompatibility = (range: string) => `Needs plugin API ${range}; this Just Notch has ${API_VERSION}.`
 
+let updaterPreferences = { automaticChecks: true, automaticDownloads: false, lastChecked: Date.now() - 3 * 3_600_000 as number | null }
+
 /** The mock's front window, which `windows.setFrame` moves. */
 let mockWindow = { x: 200, y: 120, w: 900, h: 600 }
 
@@ -715,6 +717,8 @@ const handlers: Handlers = {
     setTimeout(() => emit({ type: 'updater.state', payload: { kind: 'ready', version } }), 1200)
     return null
   },
+  'updater.preferences': () => updaterPreferences,
+  'updater.setPreferences': (changes) => (updaterPreferences = { ...updaterPreferences, ...changes }),
   'permissions.status': ({ permission }) => ({ granted: permission !== 'accessibility' }),
   'plugins.setEnabled': ({ id, enabled }) => {
     localStorage.setItem(enabledKey(id), String(enabled))
