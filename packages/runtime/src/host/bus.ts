@@ -22,7 +22,10 @@ export function dispatch(events: HostEvent[]) {
   }
 }
 
-/** The host's only way in: `window.__notch.dispatch(events)`. */
-export function installDispatch() {
-  window.__notch = { dispatch }
+/**
+ * The host's only way in: `window.__notch.dispatch(events)`. `idle()` tells the host the page shows
+ * nothing (no activity, flash or open sheet), so it may reload it to give back WebKit's memory.
+ */
+export function installDispatch(idle?: () => boolean) {
+  window.__notch = { dispatch, idle }
 }

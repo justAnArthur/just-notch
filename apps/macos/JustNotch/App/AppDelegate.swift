@@ -29,7 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private var pressTimer: Timer?
     private var dragChangeCount = 0
     /// The `justnotch://` URL the app was launched with: one that arrives before any page is up.
-    private(set) var initialDeepLink: String?
+    private var initialDeepLink: String?
+    private var reclaimer: IdleReclaimer?
     private var pagesUp = false
     #if DEBUG
     private var probe: DebugProbe?
@@ -59,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         rebuildPanels()
         installPointerMonitors()
         registerLauncherShortcut()
+        reclaimer = IdleReclaimer(panels: { [unowned self] in Array(panels.values) }) { [unowned self] webView in
+            bridge.release(webView)
+            webView.reload()
+        }
         #if DEBUG
         // The Welcome window's page while it's open, else the island's.
         probe = DebugProbe { [weak self] in self?.onboarding.openWebView ?? self?.panels.values.first?.webView }
@@ -91,6 +96,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             guard let payload = try? JSONSerialization.data(withJSONObject: ["url": url.absoluteString]) else { continue }
             events.send("deepLink.open", payload: payload, to: webViews)
         }
+    }
+
+    /// The link the app was opened with, once: a page that reloads later doesn't open it again.
+    func takeInitialDeepLink() -> String? {
+        defer { initialDeepLink = nil }
+        return initialDeepLink
     }
 
     /// A page said `host.ready`: from now on links go to the pages as they arrive.

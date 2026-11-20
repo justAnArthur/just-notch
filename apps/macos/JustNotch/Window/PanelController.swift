@@ -21,6 +21,11 @@ final class PanelController {
     private var externalFileDrag = false
     /// Faded out for a full-screen app on this screen, or a call (`ScreenLayout.hideWhen`).
     private(set) var steppedAside = false
+    /// The last time the pointer was at the island, its shape changed or a drag touched it (`IdleReclaimer`).
+    private(set) var lastActive = Date()
+
+    /// Nothing is happening here: the pointer is away, no launcher, no file drag.
+    var isQuiet: Bool { !hoverInside && !panel.launcher && !fileDragActive && !externalFileDrag }
 
     init(screen: NSScreen, events: EventDispatcher, makeWebView: (NSRect) -> NotchWebView) {
         let layout = ScreenLayout.layout(screen)
@@ -50,6 +55,7 @@ final class PanelController {
     }
 
     func setHitRegions(_ rects: [Rect]) {
+        if rects != hitRegions { lastActive = Date() }
         hitRegions = rects
         pointerMoved()
     }
@@ -62,6 +68,7 @@ final class PanelController {
         let p = panelPoint(screen: NSEvent.mouseLocation)
         let inRegion = hitRegions.contains { $0.contains(p) }
         let inZone = inRegion || hoverZone.contains(p)
+        if inZone || externalFileDrag || panel.launcher { lastActive = Date() }
 
         if inZone != hoverInside {
             hoverInside = inZone
@@ -110,6 +117,7 @@ final class PanelController {
     func fileDragging(active: Bool, count: Int) {
         guard active != fileDragActive || active else { return }
         fileDragActive = active
+        lastActive = Date()
         events.send("files.dragging", DraggingPayload(active: active, count: count), key: "files.dragging", to: [webView])
         pointerMoved()
     }

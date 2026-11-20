@@ -223,7 +223,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             return nil
 
         case "deepLinks.initial":
-            return DeepLinkResult(url: app.initialDeepLink).json()
+            return DeepLinkResult(url: app.takeInitialDeepLink()).json()
 
         case "updater.check":
             return await app.updater.check().json()

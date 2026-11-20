@@ -7,7 +7,7 @@ export interface HostHandler {
 declare global {
   interface Window {
     webkit?: { messageHandlers: { host: HostHandler } }
-    __notch?: { dispatch(events: HostEvent[]): void }
+    __notch?: { dispatch(events: HostEvent[]): void; idle?: () => boolean }
   }
 }
 
