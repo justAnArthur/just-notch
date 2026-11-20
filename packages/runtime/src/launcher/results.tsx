@@ -22,10 +22,12 @@ interface ResultsProps {
   onRun: (index: number) => void
   /** Beside the preview pane, which shows the subtitle: titles get the room. */
   compact?: boolean
+  /** ⌘1–⌘9 run the first nine rows (a scope that takes number keys): each shows its key. */
+  numbered?: boolean
 }
 
 /** Grouped rows under the bar; the selected one shows its main action. Indexes run across sections. */
-export function Results({ sections, selected, onSelect, onRun, compact }: ResultsProps) {
+export function Results({ sections, selected, onSelect, onRun, compact, numbered }: ResultsProps) {
   const paths = sections.flatMap((s) => s.rows.flatMap((r) => (r.icon && 'path' in r.icon ? [r.icon.path] : [])))
   const icons = useIcons(paths)
   const list = useRef<HTMLDivElement>(null)
@@ -64,7 +66,10 @@ export function Results({ sections, selected, onSelect, onRun, compact }: Result
                       {row.actions.length > 1 && <span className="ml-2 rounded-md bg-surface-4 px-1.5 py-0.5">⌘K</span>}
                     </>
                   ) : (
-                    row.accessory
+                    <>
+                      {row.accessory}
+                      {numbered && i < 9 && <span className="ml-2 rounded-md bg-surface-3 px-1.5 py-0.5">⌘{i + 1}</span>}
+                    </>
                   )}
                 </span>
               </div>

@@ -6,8 +6,10 @@ import type { InlineAnswer } from './engines'
 export interface RowAction {
   title: string
   run(): void | Promise<void>
-  /** Runs with the launcher still open (Retry), instead of hiding it first. */
-  keepOpen?: boolean
+  /** Runs it while its row is selected, in accelerator syntax (`Command+.`); shown in the ⌘K list. */
+  shortcut?: string
+  /** Runs with the launcher still open (Pin, Delete, Retry), then the providers are asked again. */
+  stay?: boolean
 }
 
 /** What draws a row's icon: a file's or app's own icon (by path), an image, or a glyph. */

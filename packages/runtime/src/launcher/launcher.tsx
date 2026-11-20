@@ -19,6 +19,7 @@ import type { Row } from './rows'
 import { animatesHeight, moveSelection, type Selection, selectedIndex } from './selection'
 import { setLauncherOpen } from './state'
 import { showFailure } from './failure'
+import { actionForKey, numberKey } from './shortcut'
 import { useHeld } from './sources'
 
 const PILL_H = 52
@@ -410,12 +411,26 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
 
   /**
    * Hides at once and runs the action while the launcher fades, once the app in front has the keyboard back; a
-   * failure shows in the island. Retry on an error row runs with the launcher still open.
+   * failure shows in the island. An action that stays (Pin, Delete, Retry) runs in place instead; then the providers
+   * are asked again and the selection keeps to its row.
    */
   const runRow = (row: Row | undefined, action = 0) => {
     const run = row?.actions[action] ?? row?.actions[0]
     if (!row || !run) return
-    if (run.keepOpen) return void run.run()
+    if (run.stay) {
+      const index = flat.indexOf(row)
+      if (index >= 0) setSelection({ id: row.id, index })
+      setPanel(undefined)
+      void (async () => {
+        try {
+          await run.run()
+        } catch (error) {
+          showFailure(row, error)
+        }
+        view.refresh()
+      })()
+      return
+    }
     view.record(row.id)
     void closeSequence()
     setTimeout(async () => {
@@ -454,10 +469,19 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         else void closeSequence()
         return
       }
-      if (event.metaKey && /^[1-9]$/.test(event.key)) {
+      const nth = numberKey(event)
+      if (nth !== undefined) {
         event.preventDefault()
-        const next = Number(event.key) - 1
-        if (next < scopes.length) setScope(scope === next ? undefined : next)
+        // A scope whose provider takes number keys runs its nth row (Clipboard); elsewhere they pick a scope.
+        if (active?.numberKeys) runRow(flat[nth])
+        else if (nth < scopes.length) setScope(scope === nth ? undefined : nth)
+        return
+      }
+      // The selected row's own shortcuts (⌘. pin, ⌘⌫ delete), ahead of the field's editing keys.
+      const shortcut = current ? actionForKey(current.actions, event) : -1
+      if (shortcut >= 0) {
+        event.preventDefault()
+        runRow(current, shortcut)
         return
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -617,6 +641,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
                     onSelect={(i) => !panelOpen && setSelection({ id: flat[i].id, index: i })}
                     onRun={(i) => runRow(flat[i])}
                     compact={showPane}
+                    numbered={active?.numberKeys}
                   />
                 </div>
                 {showPane && <Preview row={current} />}

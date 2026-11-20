@@ -98,3 +98,33 @@ export function formatAccelerator(accelerator: string): string {
   const symbols = MODIFIERS.filter(([name]) => held.has(name)).map(([, symbol]) => symbol)
   return symbols.join('') + (KEY_SYMBOLS[key] ?? key.toUpperCase())
 }
+
+/** Key names an accelerator may spell differently from `acceleratorOf`'s. */
+const KEY_ALIASES: Record<string, string> = { period: '.', comma: ',', slash: '/', return: 'Enter', esc: 'Escape', del: 'Delete' }
+
+/** `cmd+backspace` → `Command+Backspace`: modifiers by their names in macOS's order, the key as `acceleratorOf` names it. */
+export function normalizeAccelerator(accelerator: string): string {
+  const parts = accelerator.split('+').map((p) => p.trim())
+  const key = parts.pop() ?? ''
+  const held = new Set(parts.map((p) => ALIASES[p.toLowerCase()] ?? p))
+  const modifiers = MODIFIERS.filter(([name]) => held.has(name)).map(([name]) => name)
+  const named = KEY_ALIASES[key.toLowerCase()] ?? (key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1))
+  return [...modifiers, named].join('+')
+}
+
+/** The launcher's own keys, which a result's action can't take: ⌘K (actions), ⌘Y (preview), ⌘1–⌘9 (scopes). */
+const RESERVED = /^Command\+[KY1-9]$/
+
+/** Which of a result's actions this key press runs by its `shortcut`, or -1. */
+export function actionForKey(actions: readonly { shortcut?: string }[], event: KeyEventLike): number {
+  const pressed = acceleratorOf(event)
+  if (!pressed || RESERVED.test(pressed)) return -1
+  return actions.findIndex((a) => a.shortcut !== undefined && !RESERVED.test(normalizeAccelerator(a.shortcut)) && normalizeAccelerator(a.shortcut) === pressed)
+}
+
+/** ⌘1–⌘9 as a result's place (0–8), for a scope whose provider takes number keys; undefined for any other key. */
+export function numberKey(event: KeyEventLike): number | undefined {
+  const pressed = acceleratorOf(event)
+  const match = pressed && /^Command\+([1-9])$/.exec(pressed)
+  return match ? Number(match[1]) - 1 : undefined
+}

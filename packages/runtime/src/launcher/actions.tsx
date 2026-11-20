@@ -2,9 +2,14 @@ import { useEffect, useRef } from 'react'
 import { bestScore } from './match'
 import type { Row, RowAction } from './rows'
 import { SHEET_PAD, SHEET_RADIUS } from './results'
+import { formatAccelerator } from './shortcut'
 
 /** The keys that run a row's first actions without the panel; the panel shows them beside those actions. */
 export const ACTION_KEYS = ['↩', '⌘↩', '⇧↩']
+
+/** The key the panel shows beside an action: ↩, ⌘↩, ⇧↩ for the first three, else its own shortcut. */
+export const actionKey = (action: RowAction, index: number): string | undefined =>
+  ACTION_KEYS[index] ?? (action.shortcut ? formatAccelerator(action.shortcut) : undefined)
 
 export const PANEL_W = 280
 const PANEL_ROW_H = 34
@@ -79,7 +84,7 @@ export function ActionPanel({ row, listed, filter, selected, onSelect, onRun }: 
               onClick={() => onRun(index)}
             >
               <span className="min-w-0 flex-1 truncate">{action.title}</span>
-              {ACTION_KEYS[index] && <span className="shrink-0 text-caption text-muted-foreground">{ACTION_KEYS[index]}</span>}
+              {actionKey(action, index) && <span className="shrink-0 text-caption text-muted-foreground">{actionKey(action, index)}</span>}
             </div>
           )
         })}

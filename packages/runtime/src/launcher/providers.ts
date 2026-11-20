@@ -21,6 +21,8 @@ export interface Scope {
   keywords: string[]
   /** Rows it adds to the root search; `false` only inside the scope. */
   rootLimit: number | false
+  /** Inside it, ⌘1–⌘9 run the 1st–9th row instead of switching scopes. */
+  numberKeys?: boolean
 }
 
 const BUILT_IN: Scope[] = [
@@ -42,7 +44,7 @@ export function useScopes(): Scope[] {
     const search = plugin.definition.search
     if (!search) return []
     const root = search.root === false ? false : (search.root?.limit ?? 3)
-    return [{ id: `plugin:${plugin.installed.manifest.id}`, title: search.title, icon: search.icon ?? Sparkles, plugin, keywords: search.keywords ?? [], rootLimit: root }]
+    return [{ id: `plugin:${plugin.installed.manifest.id}`, title: search.title, icon: search.icon ?? Sparkles, plugin, keywords: search.keywords ?? [], rootLimit: root, numberKeys: search.numberKeys }]
   })
   return [...BUILT_IN, ...own].slice(0, MAX_SCOPES)
 }
@@ -144,6 +146,8 @@ export interface SearchView {
   loading: boolean
   /** Remembers that the row was picked for what's typed now. */
   record(id: string): void
+  /** Asks the providers again, after an action that changed their results (Pin, Delete). */
+  refresh(): void
 }
 
 /** How long a slow provider gets before its section says so, and how long a network one waits for typing to pause. */
@@ -159,7 +163,7 @@ function errorRow(id: string, title: string, error: 'failed' | 'timeout', net: b
     title: error === 'timeout' ? `${title} took too long` : net ? `Couldn't reach ${title}` : `${title} didn't answer`,
     icon: { glyph: CircleAlert },
     failed: true,
-    actions: [{ title: 'Retry', run: retry, keepOpen: true }],
+    actions: [{ title: 'Retry', run: retry, stay: true }],
   }
 }
 
@@ -204,6 +208,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
   ]
   const { views, retry } = useSources(sources)
   const loading = sources.some((s) => views[s.id].pending)
+  const state = { loading, record, refresh: retry }
   /** A source's rows, or its error row once it failed. */
   const rowsOf = (id: string, title: string, isNet = false): { rows?: Row[]; failed?: boolean } => {
     const view = views[id]
@@ -247,15 +252,15 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
     let failed = false
     if (scope.id === 'apps') rows = appResults(SCOPE_LIMIT).map(appRow)
     else if (scope.id === 'actions') rows = matchActions(q, false, shortcuts, frecency).slice(0, SCOPE_LIMIT).map(actionRow)
-    else if (scope.id === 'files' && !q) return { sections: [], note: 'Type to search your files.', loading, record }
+    else if (scope.id === 'files' && !q) return { sections: [], note: 'Type to search your files.', ...state }
     else ({ rows, failed = false } = rowsOf(scope.id === 'files' ? 'files' : scope.id, scope.title, scope.plugin ? net(scope) : false))
-    if (!rows) return { sections: [], loading, record }
-    if (!rows.length) return { sections: [], note: q ? `Nothing in ${scope.title} matches “${q}”.` : `${scope.title} is empty.`, loading, record }
+    if (!rows) return { sections: [], ...state }
+    if (!rows.length) return { sections: [], note: q ? `Nothing in ${scope.title} matches “${q}”.` : `${scope.title} is empty.`, ...state }
     if (!failed && known) rows = liftKnown(rows, known, knowledge)
-    return { sections: [{ title: scope.title, rows }], loading, record }
+    return { sections: [{ title: scope.title, rows }], ...state }
   }
 
-  if (!q) return { sections: [], loading, record }
+  if (!q) return { sections: [], ...state }
   const answer = inlineAnswer(q, { rates })
   const groups: Group[] = [
     { title: 'Applications', rows: appResults(BUILT_IN[0].rootLimit as number).map((r) => ({ row: appRow(r), match: r.match })) },
@@ -279,7 +284,7 @@ export function useSearch(query: string, scope: Scope | undefined, scopes: Scope
       rows: [{ id: `answer:${answer.kind}`, title: answer.result, answer, actions: [{ title: 'Copy', run: () => run('clipboard.writeText', { text: answer.copy }) }] }],
     } : undefined,
   })
-  return { sections, loading, record }
+  return { sections, ...state }
 }
 
 /** Calls the host for a row's action, so a failure reaches the launcher (which shows it) instead of vanishing. */
