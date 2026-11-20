@@ -3,6 +3,7 @@
   "name": "Clock",
   "version": "0.2.0",
   "description": "The time, world clocks and a Pomodoro cycle.",
+  "defaultEnabled": false,
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [],
