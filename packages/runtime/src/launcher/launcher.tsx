@@ -17,6 +17,8 @@ import { Note, Results, SHEET_PAD, SHEET_RADIUS, sectionsHeight } from './result
 import type { Row } from './rows'
 import { animatesHeight, moveSelection, type Selection, selectedIndex } from './selection'
 import { setLauncherOpen } from './state'
+import { showFailure } from './failure'
+import { useHeld } from './sources'
 
 const PILL_H = 52
 const BUTTON = 52
@@ -129,6 +131,8 @@ const SHEET_SPRING = { type: 'spring', visualDuration: 0.18, bounce: 0.12 } as c
 const SPLIT = { type: 'spring', visualDuration: 0.2, bounce: 0.18 } as const
 const RECOIL = { type: 'spring', visualDuration: 0.2, bounce: 0.5 } as const
 const QUICK = { type: 'spring', visualDuration: 0.12, bounce: 0 } as const
+/** A provider slower than this shows the loading bar. */
+const LOADING_AFTER_MS = 150
 /** The close's fade, in seconds. */
 const CLOSE_S = 0.06
 /** After the keyboard goes back, before an action runs: the app in front takes it, so a paste lands there. */
@@ -376,6 +380,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const listH = view.note ? NOTE_H : showPane ? Math.max(rowsH, PREVIEW_MIN_H) : rowsH
   // The sheet grows to hold the panel when it has fewer rows than the panel has actions.
   const sheetH = panelOpen ? Math.max(listH, panelHeight(listed.length) + 2 * SHEET_PAD) : listH
+  const loadingShown = useHeld(view.loading && content && (phase === 'opening' || phase === 'open'), LOADING_AFTER_MS)
   const showResults = phase === 'open' && (view.note !== undefined || flat.length > 0)
 
   // A new query or scope starts at the top.
@@ -403,10 +408,14 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
     if (phase === 'open') regions(layout, showResults ? sheetH : 0)
   }, [phase, showResults, sheetH, top])
 
-  /** Hides at once and runs the action while the launcher fades, once the app in front has the keyboard back. */
+  /**
+   * Hides at once and runs the action while the launcher fades, once the app in front has the keyboard back; a
+   * failure shows in the island. Retry on an error row runs with the launcher still open.
+   */
   const runRow = (row: Row | undefined, action = 0) => {
     const run = row?.actions[action] ?? row?.actions[0]
     if (!row || !run) return
+    if (run.keepOpen) return void run.run()
     view.record(row.id)
     void closeSequence()
     setTimeout(async () => {
@@ -414,7 +423,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
       try {
         await run.run()
       } catch (error) {
-        console.error(error)
+        showFailure(row, error)
       }
     }, HANDOFF_MS)
   }
@@ -546,6 +555,18 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
           </span>
         )}
       </motion.label>
+
+      {/* A thin bar under the pill while a provider takes longer than a moment. */}
+      {loadingShown && (
+        <div className="absolute overflow-hidden rounded-full" style={{ left: layout.rowLeft + 26, top: layout.top + PILL_H + 3, width: layout.rowW - 52, height: 1 }}>
+          <motion.div
+            className="h-full w-1/3 rounded-full bg-muted-foreground"
+            initial={{ x: '-100%' }}
+            animate={{ x: '300%' }}
+            transition={{ duration: 0.9, ease: 'easeInOut', repeat: Infinity }}
+          />
+        </div>
+      )}
 
       {scopes.map((s, i) => (
         <motion.button
