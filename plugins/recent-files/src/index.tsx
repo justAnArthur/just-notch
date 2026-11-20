@@ -1,12 +1,15 @@
 import { type RecentDownload, type RecentFile as KitFile, RecentFiles, Widget } from '@justanarthur/modo-ui-notch'
 import { Button, List } from '@justanarthur/modo-ui'
-import { type ActiveDownload, definePlugin, type PluginContext, type RecentFile, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
+import { type ActiveDownload, definePlugin, type Unsubscribe, type PluginContext, type RecentFile, type RecentFilesState, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { FolderDown, FolderLock } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 const SOURCES = 'sources'
 const SHOW = 'show'
 const FLASH = 'flashOnSave'
+/** Set once the tab is first opened or access is allowed in Settings: until then nothing touches the folders, so
+ * macOS asks for Downloads and Desktop only when the user comes to them, not at launch. */
+const WATCHING = 'watching'
 const THUMBNAIL = 96
 const PRIVACY_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders'
 
@@ -53,7 +56,8 @@ function useFiles() {
 }
 
 function Files() {
-  const { call } = usePlugin()
+  const { call, storage } = usePlugin()
+  useEffect(() => void storage.set(WATCHING, true), [storage])
   const { state, files, download } = useFiles()
   const withThumbnail = useThumbnails(files)
   const layout = useSheet()
@@ -132,7 +136,21 @@ function FolderRow({ source }: { source: RecentFile['source'] }) {
   )
 }
 
+/** Before the first watch: one row to allow access, instead of folder rows that would ask macOS straight away. */
+function Access({ onAllow }: { onAllow: () => void }) {
+  return (
+    <List.Section title="Folders">
+      <List.Row label="Downloads and screenshots" description="macOS asks once for each folder. Opening the tab asks too.">
+        <Button variant="secondary" size="compact" onClick={onAllow}>
+          Allow access
+        </Button>
+      </List.Row>
+    </List.Section>
+  )
+}
+
 function Settings() {
+  const [watching, setWatching] = useStorage(WATCHING, false)
   const [sources, setSources] = useStorage(SOURCES, ALL)
   const [show, setShow] = useStorage(SHOW, 12)
   const [flash, setFlash] = useStorage(FLASH, true)
@@ -152,10 +170,14 @@ function Settings() {
           onCheckedChange={(screenshots) => setSources({ ...sources, screenshots })}
         />
       </List.Section>
-      <List.Section title="Folders">
-        <FolderRow source="downloads" />
-        <FolderRow source="screenshots" />
-      </List.Section>
+      {watching ? (
+        <List.Section title="Folders">
+          <FolderRow source="downloads" />
+          <FolderRow source="screenshots" />
+        </List.Section>
+      ) : (
+        <Access onAllow={() => setWatching(true)} />
+      )}
       <List.Section title="List">
         <SelectRow
           label="Show"
@@ -175,12 +197,17 @@ function Settings() {
   )
 }
 
-/** Watches both folders while the plugin runs: a flash when a file lands, the wings while a download is under way. */
+/**
+ * Watches both folders while the plugin runs, once watching was allowed: a flash when a file lands, the wings while
+ * a download is under way.
+ */
 function activate(ctx: PluginContext) {
   let seen: Set<string> | undefined
   let shown = false
+  let live = true
+  let stop: Unsubscribe | undefined
 
-  const stop = ctx.subscribe('recentFiles', async (state) => {
+  const onState = async (state: RecentFilesState) => {
     const sources = (await ctx.storage.get<Sources>(SOURCES)) ?? ALL
     const download = sources.downloads ? toDownload(state.downloads[0]) : null
     downloading.set(download)
@@ -195,10 +222,18 @@ function activate(ctx: PluginContext) {
     const thumbnail = await ctx.call('files.thumbnail', { path: newest.id, size: THUMBNAIL }).then((r) => r.url, () => undefined)
     landed.set({ ...newest, thumbnail })
     ctx.activity.flash({ priority: 'alert', key: 'saved', view: Saved, durationMs: 4000 })
-  })
+  }
+
+  const watch = (allowed: boolean | undefined) => {
+    if (allowed && live && !stop) stop = ctx.subscribe('recentFiles', onState)
+  }
+  void ctx.storage.get<boolean>(WATCHING).then(watch)
+  const unwatch = ctx.storage.subscribe<boolean>(WATCHING, watch)
 
   return () => {
-    stop()
+    live = false
+    unwatch()
+    stop?.()
     if (shown) ctx.activity.hide()
   }
 }
