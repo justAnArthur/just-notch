@@ -1,10 +1,11 @@
-import { Button, Kbd, List } from '@justanarthur/modo-ui'
-import { SwitchRow, useStorage } from '@just-notch/sdk'
+import { Button, Combobox, Kbd, List } from '@justanarthur/modo-ui'
+import { type AppInfo, SwitchRow, type TilingSettings, usePlugin, useStorage } from '@just-notch/sdk'
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { bindings, type Command, COMMANDS } from './commands'
-import { problems, setRecording, STORAGE } from './hotkeys'
+import { pause, problems, STORAGE } from './hotkeys'
 import { acceleratorOf, formatAccelerator, reservedBy } from './shortcut'
+import { DESKTOP_SETTINGS, TILING_DETAIL, TILING_TITLE, tilingOn } from './tiling'
 
 type Overrides = Record<string, string | null>
 
@@ -14,7 +15,7 @@ function Recorder({ title, value, onChange }: { title: string; value: string | n
 
   useEffect(() => {
     if (!active) return
-    setRecording(true)
+    pause('recording', true)
     const onKey = (event: KeyboardEvent) => {
       event.preventDefault()
       event.stopPropagation()
@@ -32,7 +33,7 @@ function Recorder({ title, value, onChange }: { title: string; value: string | n
     window.addEventListener('keydown', onKey, true)
     return () => {
       window.removeEventListener('keydown', onKey, true)
-      setRecording(false)
+      pause('recording', false)
     }
   }, [active])
 
@@ -60,10 +61,72 @@ function CommandRow({ command, value, problem, onChange }: { command: Command; v
   )
 }
 
+function AppLabel({ app }: { app: AppInfo }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      {app.icon && <img src={app.icon} alt="" className="size-4 shrink-0" />}
+      <span className="truncate">{app.name}</span>
+    </span>
+  )
+}
+
+/** Apps whose own ⌃⌥ shortcuts win: while one is in front, the hotkeys step aside. */
+function IgnoredApps() {
+  const { call } = usePlugin()
+  const [ignored, setIgnored] = useStorage<string[]>(STORAGE.ignoredApps, [])
+  const [apps, setApps] = useState<AppInfo[]>([])
+  const [query, setQuery] = useState('')
+  useEffect(() => {
+    call('apps.list', {}).then(setApps, () => {})
+  }, [call])
+
+  const byId = new Map(apps.map((app) => [app.bundleId, app]))
+  const items = apps.filter((app) => !ignored.includes(app.bundleId)).map((app) => ({ value: app.bundleId, label: <AppLabel app={app} />, textValue: app.name }))
+  const add = (id: string) => {
+    setQuery('')
+    if (id && !ignored.includes(id)) setIgnored([...ignored, id])
+  }
+
+  return (
+    <List.Section title="Ignore in" aside={`${ignored.length} ${ignored.length === 1 ? 'app' : 'apps'}`}>
+      {ignored.map((id) => (
+        <List.Row key={id} label={<AppLabel app={byId.get(id) ?? { bundleId: id, name: id }} />}>
+          <Button variant="ghost" size="icon-compact" aria-label={`Remove ${byId.get(id)?.name ?? id}`} onClick={() => setIgnored(ignored.filter((a) => a !== id))}>
+            <X />
+          </Button>
+        </List.Row>
+      ))}
+      <List.Row label="Add an app" description="While it's in front, its own ⌃⌥ shortcuts work instead (an IDE, a terminal).">
+        <Combobox items={items} value="" onValueChange={add} query={query} onQueryChange={setQuery}>
+          <Combobox.Input aria-label="App" placeholder="Search apps…" className="w-56" />
+          <Combobox.Content>
+            <Combobox.Empty>No app matches.</Combobox.Empty>
+            <Combobox.List>
+              {(item) =>
+                typeof item !== 'string' && (
+                  <Combobox.Item key={item.value} value={item.value}>
+                    {item.label}
+                  </Combobox.Item>
+                )
+              }
+            </Combobox.List>
+          </Combobox.Content>
+        </Combobox>
+      </List.Row>
+    </List.Section>
+  )
+}
+
 /** Settings › Window Management: the master switch, cycling, and every command's rebindable shortcut. */
 export default function Settings() {
   const [enabled, setEnabled] = useStorage(STORAGE.enabled, true)
   const [cycling, setCycling] = useStorage(STORAGE.cycling, true)
+  const [animate, setAnimate] = useStorage(STORAGE.animate, true)
+  const { call } = usePlugin()
+  const [tiling, setTiling] = useState<TilingSettings>()
+  useEffect(() => {
+    call('windows.tiling', {}).then(setTiling, () => {})
+  }, [call])
   const [overrides, setOverrides] = useStorage<Overrides>(STORAGE.bindings, {})
   const issues = problems.use()
   const bound = bindings(overrides)
@@ -92,6 +155,14 @@ export default function Settings() {
           checked={cycling}
           onCheckedChange={setCycling}
         />
+        <SwitchRow label="Animate moves" description="Windows glide into place. Off while Reduce Motion is on." checked={animate} onCheckedChange={setAnimate} />
+        {tiling && tilingOn(tiling) && (
+          <List.Row label={TILING_TITLE} description={TILING_DETAIL}>
+            <Button variant="secondary" size="compact" onClick={() => void call('system.openUrl', { url: DESKTOP_SETTINGS })}>
+              Open Desktop & Dock
+            </Button>
+          </List.Row>
+        )}
       </List.Section>
       {enabled && (
         <List.Section title="Shortcuts" aside={conflicts ? `${conflicts} ${conflicts === 1 ? 'conflict' : 'conflicts'}` : undefined}>
@@ -105,6 +176,7 @@ export default function Settings() {
           </List.Row>
         </List.Section>
       )}
+      {enabled && <IgnoredApps />}
     </List>
   )
 }

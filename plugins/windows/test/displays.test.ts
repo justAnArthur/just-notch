@@ -3,6 +3,7 @@ import type { FrontWindow, Rect } from '@just-notch/sdk'
 import { anchorRefused, neighbor, screenOrder, toScreen } from '../src/displays'
 import { place, LAYOUTS } from '../src/layouts'
 import { RestoreMemory } from '../src/restore'
+import { tilingOn } from '../src/tiling'
 
 // Accessibility space: origin at the main screen's top left, y down. Visible frames (menu bar and Dock out).
 const laptop: Rect = { x: 0, y: 25, w: 1512, h: 920 }
@@ -108,5 +109,12 @@ describe('restore', () => {
     const dragged = { x: 400, y: 100, w: 700, h: 500 }
     m.moved(win(dragged), third)
     expect(m.take(win(third))).toEqual(dragged)
+  })
+})
+
+describe('macOS tiling', () => {
+  test('any drag-to-tile switch counts; margins alone do not', () => {
+    expect(tilingOn({ edgeDrag: false, topEdgeDrag: false, optionDrag: true, margins: false })).toBe(true)
+    expect(tilingOn({ edgeDrag: false, topEdgeDrag: false, optionDrag: false, margins: true })).toBe(false)
   })
 })

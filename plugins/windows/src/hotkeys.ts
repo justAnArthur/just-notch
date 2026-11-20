@@ -2,19 +2,23 @@ import { type PluginContext, signal, type Unsubscribe } from '@just-notch/sdk'
 import { bindings, COMMANDS } from './commands'
 import { normalize } from './shortcut'
 
-export const STORAGE = { bindings: 'hotkeys', enabled: 'hotkeysEnabled', cycling: 'cycling' } as const
+export const STORAGE = { bindings: 'hotkeys', enabled: 'hotkeysEnabled', cycling: 'cycling', ignoredApps: 'ignoredApps', tilingNoticed: 'tilingNoticed', animate: 'animate' } as const
 
 /** Why a command's shortcut isn't working, by command id; read by the settings page. */
 export const problems = signal<Record<string, string>>({})
 
-let recording = false
-const recordingChanged = new Set<() => void>()
+const pauses = new Set<string>()
+const pausesChanged = new Set<() => void>()
 
-/** While the settings page records a shortcut the hotkeys step aside, so the keys reach the recorder. */
-export function setRecording(on: boolean) {
-  if (on === recording) return
-  recording = on
-  for (const cb of [...recordingChanged]) cb()
+/**
+ * Steps the hotkeys aside while `reason` holds, so the keys reach someone else: the settings page's recorder
+ * (`recording`), or an app the user listed (`ignored`).
+ */
+export function pause(reason: 'recording' | 'ignored', on: boolean) {
+  if (on === pauses.has(reason)) return
+  if (on) pauses.add(reason)
+  else pauses.delete(reason)
+  for (const cb of [...pausesChanged]) cb()
 }
 
 interface Held {
@@ -23,7 +27,7 @@ interface Held {
 }
 
 /**
- * Keeps the host's registrations in line with the stored bindings, the master switch and `recording`, and runs
+ * Keeps the host's registrations in line with the stored bindings, the master switch and `pause`, and runs
  * `press` with a command id when one fires. Returns the cleanup that unregisters everything.
  */
 export function startHotkeys(ctx: PluginContext, press: (command: string) => void): Unsubscribe {
@@ -41,7 +45,7 @@ export function startHotkeys(ctx: PluginContext, press: (command: string) => voi
     const wanted = new Map<string, string>()
     const next: Record<string, string> = {}
     const owner = new Map<string, string>()
-    if (enabled && !recording && !stopped) {
+    if (enabled && !pauses.size && !stopped) {
       for (const [id, accelerator] of bindings(overrides)) {
         if (!accelerator) continue
         const key = normalize(accelerator)
@@ -83,7 +87,7 @@ export function startHotkeys(ctx: PluginContext, press: (command: string) => voi
       sync()
     }),
   ]
-  recordingChanged.add(sync)
+  pausesChanged.add(sync)
 
   void Promise.all([ctx.storage.get<Record<string, string | null>>(STORAGE.bindings), ctx.storage.get<boolean>(STORAGE.enabled)]).then(([b, e]) => {
     overrides = b
@@ -93,7 +97,7 @@ export function startHotkeys(ctx: PluginContext, press: (command: string) => voi
 
   return () => {
     stopped = true
-    recordingChanged.delete(sync)
+    pausesChanged.delete(sync)
     for (const stop of stops) stop()
     sync()
   }
