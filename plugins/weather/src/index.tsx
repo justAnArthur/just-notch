@@ -2,7 +2,7 @@ import { conditionFromCode, Weather, type WeatherNow, type WeatherUnit } from '@
 import { Button, Input, List } from '@justanarthur/modo-ui'
 import { definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic, type WeatherState } from '@just-notch/sdk'
 import { CloudSun, MapPin } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 const MINUTE = 60_000
 /** How far ahead "rain soon" looks. */
@@ -35,13 +35,23 @@ function useActions() {
   }
 }
 
+/** Wraps the view without a box of its own; `empty` tells the island this tab has nothing to show, so it opens elsewhere. */
+const Marked = ({ empty, children }: { empty: boolean; children: ReactNode }) => (
+  <div data-island-empty={empty ? '' : undefined} style={{ display: 'contents' }}>
+    {children}
+  </div>
+)
+
 function Widget() {
   const state = useTopic('weather')
   const [unit] = useStorage<WeatherUnit>(UNIT, 'celsius')
   const actions = useActions()
   const layout = useSheet()
-  if (!state) return <Weather layout={layout} status="loading" unit={unit} />
-  return <Weather layout={layout} {...forecast(state)} unit={unit} {...actions} />
+  return (
+    <Marked empty={!state?.current}>
+      {state ? <Weather layout={layout} {...forecast(state)} unit={unit} {...actions} /> : <Weather layout={layout} status="loading" unit={unit} />}
+    </Marked>
+  )
 }
 
 /** The rain the alert is about: when it starts and how sure. */

@@ -2,6 +2,7 @@ import { Agenda, type AgendaEvent } from '@justanarthur/modo-ui-notch'
 import { List } from '@justanarthur/modo-ui'
 import { type CalendarEvent, definePlugin, type PluginContext, SelectRow, signal, SwitchRow, usePlugin, useSheet, useStorage, useTopic } from '@just-notch/sdk'
 import { CalendarDays } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 const MINUTE = 60_000
 /** The activity stays this long into the event, for a late Join. */
@@ -27,18 +28,28 @@ function useActions() {
   }
 }
 
+/** Wraps the view without a box of its own; `empty` tells the island this tab has nothing to show, so it opens elsewhere. */
+const Marked = ({ empty, children }: { empty: boolean; children: ReactNode }) => (
+  <div data-island-empty={empty ? '' : undefined} style={{ display: 'contents' }}>
+    {children}
+  </div>
+)
+
+/**
+ * The tab's one view, with or without an event soon: the agenda already sets the next event as its hero (how soon,
+ * Join), so the activity opens this same view instead of a layout of its own.
+ */
 function Widget() {
   const calendar = useTopic('calendar')
   const [allDay] = useStorage(ALL_DAY, false)
   const events = (calendar?.upcoming ?? []).filter((e) => allDay || !e.allDay).map(toEvent)
   const actions = useActions()
-  return <Agenda layout={useSheet()} events={events} access={calendar?.access} {...actions} />
-}
-
-function UpNext() {
-  const event = next.use()
-  const { onJoin } = useActions()
-  return event ? <Agenda.UpNext event={event} onJoin={onJoin} /> : null
+  const empty = calendar?.access !== 'granted' || !events.some((e) => !e.allDay && e.end > Date.now())
+  return (
+    <Marked empty={empty}>
+      <Agenda layout={useSheet()} events={events} access={calendar?.access} {...actions} />
+    </Marked>
+  )
 }
 
 function Leading() {
@@ -106,7 +117,7 @@ function activate(ctx: PluginContext) {
     const event = events.find((e) => !e.allDay && e.start - settings.lead * MINUTE <= now && now < e.start + AFTER_START_MS)
     const prev = next.get()
     next.set(event ? (prev?.id === event.id && prev.start === event.start ? prev : toEvent(event)) : undefined)
-    if (event && !shown) ctx.activity.show({ priority: 'calendar', compact: { leading: Leading, trailing: Trailing }, minimal: Minimal, expanded: UpNext })
+    if (event && !shown) ctx.activity.show({ priority: 'calendar', compact: { leading: Leading, trailing: Trailing }, minimal: Minimal, expanded: Widget })
     if (!event && shown) ctx.activity.hide()
     shown = !!event
 

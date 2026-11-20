@@ -1,15 +1,16 @@
 import type { ScreenGeometry } from '@just-notch/bridge-schema'
 import { Button, SizeProvider } from '@justanarthur/modo-ui'
-import { Puzzle, Settings as SettingsIcon } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
 import { type RefObject, useEffect, useLayoutEffect, useRef } from 'react'
 import { type ActivityEntry, SETTINGS_TAB, type Snap } from '../activity/reducer'
 import { dispatch, useActivityState } from '../activity/store'
-import { type LoadedPlugin, usePlugins } from '../plugins/loader'
+import { usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
 import Settings from '../settings/settings'
 import { useEdgeFade } from './edge-fade'
 import { type Shape, stripLayout } from './geometry'
-import TabStrip, { type Tab } from './tabs'
+import { rememberEmpty, tabsOf } from './tab-order'
+import TabStrip from './tabs'
 
 /** Moves the selection `delta` tabs, round from settings back to the first; true when it moved. */
 export type TabStep = (delta: number) => boolean
@@ -41,26 +42,17 @@ function useHeight(ref: RefObject<HTMLElement | null>, onHeight: (height: number
   }, [ref, active])
 }
 
-/** The primary activity's view, then every other plugin's widget. */
-function tabsOf(primary: ActivityEntry | undefined, plugins: LoadedPlugin[]): Tab[] {
-  const tabs: Tab[] = []
-  const activityView = primary?.spec.expanded
-  if (primary && activityView) {
-    const owner = plugins.find((p) => p.installed.manifest.id === primary.plugin)
-    tabs.push({
-      id: `activity:${primary.plugin}`,
-      plugin: primary.plugin,
-      label: primary.spec.title ?? owner?.installed.manifest.name ?? primary.plugin,
-      icon: owner?.definition.widget?.icon ?? Puzzle,
-      view: activityView,
-    })
-  }
-  for (const { installed, definition } of plugins) {
-    const { id } = installed.manifest
-    if (!definition.widget || tabs[0]?.plugin === id) continue
-    tabs.push({ id: `widget:${id}`, plugin: id, label: definition.widget.title, icon: definition.widget.icon ?? Puzzle, view: definition.widget.view })
-  }
-  return tabs
+/** Remembers whether the tab in `ref` shows only its empty state, as it changes. */
+function useEmptyMemory(ref: RefObject<HTMLElement | null>, tab: string | undefined) {
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !tab) return
+    const read = () => rememberEmpty(tab, el.querySelector('[data-island-empty]') !== null)
+    read()
+    const observer = new MutationObserver(read)
+    observer.observe(el, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-island-empty'] })
+    return () => observer.disconnect()
+  }, [ref, tab])
 }
 
 /**
@@ -83,6 +75,7 @@ export default function Expanded({ primary, shape, geometry, step, onFit }: Expa
   const fills: boolean = settings || (snap as Snap) === 1
   useEdgeFade(content, 'y', settings ? SETTINGS_TAB : tab?.id)
   useHeight(measure, onFit, !fills)
+  useEmptyMemory(content, settings ? undefined : tab?.id)
 
   const select = (id: string | undefined) => id && dispatch({ type: 'tab', tab: id })
   // Swipes and arrows go round: the widgets, then settings, then back to the first widget.

@@ -78,7 +78,7 @@ await context.addInitScript((off: string[]) => {
   if (location.pathname.includes('settings')) return
   localStorage.clear()
   for (const id of off) localStorage.setItem(`notch:mock:enabled:${id}`, 'false')
-}, [...defaults, 'hello-plugin', 'timer-plugin'])
+}, [...defaults, 'hello-plugin', 'timer-plugin', 'github', 'youtrack'])
 
 const page = await context.newPage()
 watch(page)
@@ -130,13 +130,18 @@ check(hit.focusable && hit.rects[0].w > 600, `hover expands, focusable, hit regi
 await shoot(page, '4-expanded')
 
 const tabs = () => page.locator('#island [role=tab]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? e.textContent))
-check((await page.getByRole('tab', { name: 'Greeting' }).count()) === 0, "the primary activity's own widget gets no second tab")
+check(
+  (await page.getByRole('tab', { name: 'Greeting' }).count()) === 1 && (await selectedTab(page)) === 'Greeting',
+  "the primary activity's plugin keeps its one tab, selected on open",
+)
+await page.waitForSelector('#hello-widget')
+check(true, 'during its activity the tab shows the widget, not a view of its own')
 await mock(page, 'stopMedia()')
 await page.getByRole('tab', { name: 'Greeting' }).click()
 await page.waitForSelector('#hello-widget')
 await page.getByRole('button', { name: 'Say hi' }).click()
 await page.getByRole('button', { name: 'Said hi 1×' }).waitFor()
-check(true, 'without its activity the widget tab returns; it renders a modo-ui Button and its useState hook updates')
+check(true, 'without its activity the widget tab stays; it renders a modo-ui Button and its useState hook updates')
 await shoot(page, '5-expanded-widget')
 await mock(page, 'startMedia()')
 
@@ -364,6 +369,63 @@ await page.reload()
 await page.waitForSelector('#island')
 await settle(page)
 await page.screenshot({ path: join(shots, '0-page.png') })
+
+// --- WS-A: island shell
+{
+  check((await page.locator('#island [data-island-title]').count()) === 0, 'no title row above the tabs')
+
+  // Activities start and end under an open island; the icons never move.
+  await mock(page, 'hover(true)')
+  await waitState(page, 'expanded')
+  const order = await tabs()
+  const changes = ['startMedia()', 'eventSoon(5)', 'stopMedia()', 'download()', 'startMedia()', 'nextTrack()', 'stopMedia()', 'eventSoon(3)', 'startMedia()', 'stopMedia()']
+  for (const change of changes) {
+    await mock(page, change)
+    await page.waitForTimeout(150)
+    check(JSON.stringify(await tabs()) === JSON.stringify(order), `tab order unchanged after ${change}`)
+  }
+
+  // With an event soon the island opens on Calendar, and Calendar is the same agenda, not a view of its own.
+  await away()
+  await mock(page, 'hover(false)')
+  await page.waitForTimeout(500)
+  await mock(page, 'hover(true)')
+  await waitState(page, 'expanded')
+  await settle(page)
+  check((await selectedTab(page)) === 'Calendar', `with an event soon the island opens on its tab (${await selectedTab(page)})`)
+  const content = page.locator('#island [data-island-content]')
+  await content.getByText('Sync with Alex').first().waitFor({ timeout: 4000 })
+  check(await content.getByText('Design standup').count(), 'the calendar tab keeps its agenda during the event: the next event leads, the rest of the day follows')
+  await away()
+  await mock(page, 'hover(false)')
+
+  // A fresh profile: five tabs and the gear, all tabs in the left wing.
+  const fresh = await browser.newContext({ viewport: { width: 900, height: 560 }, deviceScaleFactor: 2 })
+  await fresh.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return
+    sessionStorage.setItem('seeded', '1')
+    localStorage.clear()
+    // The fixtures and the library plugins the mock also serves are not part of the built-in set.
+    for (const id of ['hello-plugin', 'timer-plugin', 'github', 'youtrack']) localStorage.setItem(`notch:mock:enabled:${id}`, 'false')
+  })
+  const first = await fresh.newPage()
+  watch(first)
+  await first.goto(url)
+  await first.waitForSelector('#island')
+  await first.evaluate('window.__notchMock.hover(true)')
+  await waitState(first, 'expanded')
+  await settle(first)
+  const labels = await first.$$eval('#island [role=tab]', (t) => t.map((el) => el.getAttribute('aria-label')))
+  const wings = await first.evaluate(() => {
+    const island = document.querySelector('#island')!.getBoundingClientRect()
+    const mid = island.left + island.width / 2
+    const gear = document.querySelector('#island button[aria-label="Settings"]')!.getBoundingClientRect()
+    return { left: [...document.querySelectorAll('#island [role=tab]')].every((t) => t.getBoundingClientRect().right < mid), gearRight: gear.left > mid }
+  })
+  check(labels.length === 5 && wings.left && wings.gearRight, `a fresh profile shows five tabs on the left wing and the gear alone on the right: ${labels.join(', ')}`)
+  await shoot(first, 'ws-a-fresh-profile')
+  await fresh.close()
+}
 
 check(errors.length === 0, `no console errors${errors.length ? `:\n${errors.join('\n')}` : ''}`)
 await browser.close()

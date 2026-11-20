@@ -7,11 +7,13 @@ import { dispatch, getState, holdFlash, useActivityState } from '../activity/sto
 import { on } from '../host/bus'
 import { call } from '../host/client'
 import { isLauncherOpen } from '../launcher/state'
+import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
 import Expanded, { type TabStep } from './expanded'
 import { POPUP_SELECTOR, setIslandRegions, trackPopups } from './hit-regions'
 import { type Box, boxOf, bubbleFor, centerX, islandPath, rectOf, type Shape, shapeFor, slotWidth, union } from './geometry'
 import { type NativeGestures, type Swipe, useSwipes } from './gestures'
+import { openingTab, tabsOf } from './tab-order'
 import {
   bubbleTransition,
   contentEnter,
@@ -29,6 +31,17 @@ const GOO_MATRIX = '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10'
 const GOO_BLUR = 6
 
 const INTERACTIVE = 'button, a, input, select, textarea, label, [role=slider], [role=switch], [role=tab], [role=menuitem], [contenteditable]'
+
+/** The running plugins, as the island last rendered them, for opening on the right tab outside a render. */
+const loaded: { current: LoadedPlugin[] } = { current: [] }
+
+/** Opens the island on the activity's tab, else the last one shown if it has content, else the first with content. */
+function expand() {
+  const state = getState()
+  const { primary } = present(state)
+  const tab = openingTab(tabsOf(primary, loaded.current), state.tab, primary)
+  dispatch(tab ? { type: 'expand', tab } : { type: 'expand' })
+}
 
 /** The pointer is over the island (its shape or content) or over one of its popups. */
 const overIsland = (target: EventTarget | null) => target instanceof Element && target.closest(`#island, ${POPUP_SELECTOR}`) !== null
@@ -82,7 +95,8 @@ function useHover(island: IslandState) {
     const act = () => {
       if (hovering && isLauncherOpen()) return
       if (hovering === getState().expanded || (hovering && present(getState()).island === 'flash')) return
-      dispatch({ type: hovering ? 'expand' : 'collapse' })
+      if (hovering) expand()
+      else dispatch({ type: 'collapse' })
     }
     const timer = setTimeout(act, hovering ? HOVER_INTENT_MS : HOVER_LEAVE_MS)
     return () => clearTimeout(timer)
@@ -112,7 +126,7 @@ function useClickToExpand(island: IslandState) {
     onClick: () => {
       const surface = onSurface.current
       onSurface.current = false
-      if (surface && island !== 'expanded') dispatch({ type: 'expand' })
+      if (surface && island !== 'expanded') expand()
     },
   }
 }
@@ -141,7 +155,8 @@ function useIslandSwipes(root: React.RefObject<HTMLDivElement | null>, step: Rea
     const open = island === 'expanded'
     if (swipe === 'down') {
       if (open && state.snap === 1) return
-      dispatch(open ? { type: 'snap', snap: 1 } : { type: 'expand' })
+      if (open) dispatch({ type: 'snap', snap: 1 })
+      else expand()
       return haptic('generic')
     }
     if (swipe === 'up') {
@@ -212,6 +227,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   const gooId = useId()
   const root = useRef<HTMLDivElement>(null)
   const step = useRef<TabStep | null>(null)
+  loaded.current = usePlugins()
   useHover(island)
   useIslandSwipes(root, step)
   const click = useClickToExpand(island)
