@@ -880,6 +880,15 @@ export interface Methods {
     params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' | 'notifications' }
     result: { granted: boolean }
   }
+  /** Shows the system prompt for one permission now (the caller has explained why) and answers its state after. */
+  'permissions.request': {
+    params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' | 'notifications' }
+    result: { state: PermissionState }
+  }
+  /** Opens the Welcome window. */
+  'onboarding.open': { params: Record<string, never>; result: null }
+  /** Marks onboarding done and closes the Welcome window. */
+  'onboarding.finish': { params: Record<string, never>; result: null }
   /** One permission's state for the Permissions page; `stale` is granted in System Settings but not working (a re-signed app). */
   'permissions.state': {
     params: { permission: 'accessibility' | 'calendar' | 'bluetooth' | 'automation' | 'location' | 'notifications' }
@@ -1008,6 +1017,9 @@ export const RUNTIME_ONLY: Method[] = [
   'updater.preferences',
   'updater.setPreferences',
   'permissions.state',
+  'permissions.request',
+  'onboarding.open',
+  'onboarding.finish',
   'net.revokeHost',
   'library.catalog',
   'library.install',

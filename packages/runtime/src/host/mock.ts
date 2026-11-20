@@ -21,6 +21,7 @@ import {
   netHostKey,
   netSchemeAllowed,
   PLUGIN_ONLY,
+  type PermissionState,
   type PluginManifest,
   type Rect,
   RUNTIME_ONLY,
@@ -483,6 +484,9 @@ const incompatibility = (range: string) => `Needs plugin API ${range}; this Just
 
 let updaterPreferences = { automaticChecks: true, automaticDownloads: false, lastChecked: Date.now() - 3 * 3_600_000 as number | null }
 
+/** The Permissions page shows every state against the mock; `permissions.request` grants. */
+const mockPermissions: Record<string, PermissionState> = { accessibility: 'stale', notifications: 'notAsked', bluetooth: 'off' }
+
 /** The mock's front window, which `windows.setFrame` moves. */
 let mockWindow = { x: 200, y: 120, w: 900, h: 600 }
 
@@ -726,7 +730,10 @@ const handlers: Handlers = {
   },
   'updater.preferences': () => updaterPreferences,
   'updater.setPreferences': (changes) => (updaterPreferences = { ...updaterPreferences, ...changes }),
-  'permissions.state': ({ permission }) => ({ state: ({ accessibility: 'stale', notifications: 'notAsked', bluetooth: 'off' } as const)[permission as 'accessibility'] ?? 'allowed' }),
+  'permissions.state': ({ permission }) => ({ state: mockPermissions[permission] ?? 'allowed' }),
+  'permissions.request': ({ permission }) => ({ state: (mockPermissions[permission] = 'allowed') }),
+  'onboarding.open': () => null,
+  'onboarding.finish': () => null,
   'permissions.status': ({ permission }) => ({ granted: permission !== 'accessibility' }),
   'plugins.setEnabled': ({ id, enabled }) => {
     localStorage.setItem(enabledKey(id), String(enabled))
