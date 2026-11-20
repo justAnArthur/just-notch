@@ -1,6 +1,6 @@
 import type { AppPreferences, InstalledPlugin, LibraryEntry, Methods, UpdaterPreferences, UpdateState } from '@just-notch/bridge-schema'
-import { Badge, Button, List, Switch } from '@justanarthur/modo-ui'
-import { type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
+import { Badge, Button, LIST_SWITCH, List, Switch } from '@justanarthur/modo-ui'
+import { type PermissionState, type SettingsPermission, SettingsWindow } from '@justanarthur/modo-ui-notch'
 import { Library, Search } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { on } from '../host/bus'
@@ -92,7 +92,7 @@ function Updates({ onChecked }: { onChecked: () => void }) {
 }
 
 /** Each row names what it powers, so a missing grant reads as a feature that won't work, not a setting. */
-const PERMISSIONS: (Omit<SettingsPermission, 'granted'> & { url: string; status?: SystemPermission })[] = [
+const PERMISSIONS: (Pick<SettingsPermission, 'id' | 'label' | 'description'> & { url: string; status?: SystemPermission })[] = [
   {
     id: 'accessibility',
     status: 'accessibility',
@@ -137,16 +137,13 @@ function usePreferences() {
  * Each permission's state, asked on mount, whenever the island's page comes back (the app activates or the
  * page shows again), and every 2 s while `watching` (the Permissions page is open and visible).
  */
-function useGranted(watching: boolean) {
-  const [granted, setGranted] = useState<Record<string, boolean>>({})
+function usePermissionStates(watching: boolean) {
+  const [states, setStates] = useState<Record<string, PermissionState>>({})
+  const put = (id: string, state: PermissionState) => setStates((current) => (current[id] === state ? current : { ...current, [id]: state }))
   useEffect(() => {
     const check = () => {
       for (const { id, status } of PERMISSIONS)
-        if (status)
-          void call('runtime', 'permissions.status', { permission: status }).then(
-            (r) => setGranted((g) => (g[id] === r.granted ? g : { ...g, [id]: r.granted })),
-            () => {},
-          )
+        if (status) void call('runtime', 'permissions.state', { permission: status }).then((r) => put(id, r.state), () => {})
     }
     check()
     const visible = () => document.visibilityState === 'visible' && check()
@@ -159,9 +156,42 @@ function useGranted(watching: boolean) {
       clearInterval(timer)
     }
   }, [watching])
-  // The folders have no status check that doesn't prompt: the recent files watcher already knows.
-  useEffect(() => subscribeTopic('recentFiles', (state) => setGranted((g) => ({ ...g, files: state.access === 'granted' }))), [])
-  return granted
+  // The folders have no check that doesn't prompt: the recent files watcher already knows.
+  useEffect(
+    () =>
+      subscribeTopic('recentFiles', ({ access }) => put('files', access === 'granted' ? 'allowed' : access === 'denied' ? 'off' : 'notAsked')),
+    [],
+  )
+  return states
+}
+
+/**
+ * What a row says beyond the kit's own line for its state. The app never resets a grant itself (no `tccutil`):
+ * Fix opens the pane with the steps. A feature that hasn't asked yet asks the first time it's used, so only
+ * Accessibility, which can be added by hand, keeps the Allow… button.
+ */
+function permissionRow(permission: (typeof PERMISSIONS)[number], state: PermissionState | undefined): SettingsPermission {
+  const { id, label, description } = permission
+  if (state === 'stale')
+    return {
+      id,
+      label,
+      description,
+      state,
+      note: "System Settings shows it as on, but macOS isn't honouring it. Fix opens the list: remove Just Notch with −, add it back with +, then come back.",
+    }
+  if (state === 'notAsked' && id !== 'accessibility')
+    return {
+      id,
+      label,
+      description,
+      state,
+      note: 'Just Notch asks the first time a feature needs it.',
+      // No button: the state already reads "Not asked" beside the name.
+      action: <></>,
+    }
+  if (state === 'notAsked') return { id, label, description, state, note: 'Turn on Just Notch in the list, or add it with +, then come back.' }
+  return { id, label, description, state }
 }
 
 /** A plugin row's label: why it doesn't run, a newer version in the library, or where it came from. */
@@ -198,7 +228,7 @@ function HostGrants({ plugin }: { plugin: string }) {
       <List.Section title="Allowed hosts">
         {granted.map((host) => (
           <List.Row key={host} label={host} description="You let it connect here.">
-            <Button variant="secondary" size="compact" onClick={() => revoke(host)}>
+            <Button variant="secondary" size="compact" className={LIST_SWITCH} onClick={() => revoke(host)}>
               Revoke
             </Button>
           </List.Row>
@@ -218,7 +248,7 @@ export default function Settings() {
   const loaded = usePlugins()
   const [preferences, setPreferences, preferencesError] = usePreferences()
   const target = useSettingsTarget()
-  const granted = useGranted(target.page === 'permissions')
+  const permissionStates = usePermissionStates(target.page === 'permissions')
   const library = useLibrary()
   const [diagnostics, setDiagnostics] = useState(false)
   const [updater, setUpdater, reloadUpdater] = useUpdaterPreferences()
@@ -342,7 +372,7 @@ export default function Settings() {
   return (
     <div className="-mx-2 h-full">
       <SettingsWindow
-        name="Just Notch"
+        name="Just Notch settings"
         flush
         className="size-full"
         value={target.page}
@@ -356,8 +386,8 @@ export default function Settings() {
           for (const { manifest, enabled } of installed)
             if (next[manifest.id] !== enabled) void call('runtime', 'plugins.setEnabled', { id: manifest.id, enabled: next[manifest.id] })
         }}
-        permissions={PERMISSIONS.map(({ id, label, description }) => ({ id, label, description, granted: granted[id] }))}
-        onOpenPermission={(id) => {
+        permissions={PERMISSIONS.map((permission) => permissionRow(permission, permissionStates[permission.id]))}
+        onFixPermission={(id) => {
           const url = PERMISSIONS.find((p) => p.id === id)?.url
           if (url) void call('runtime', 'system.openUrl', { url })
         }}
