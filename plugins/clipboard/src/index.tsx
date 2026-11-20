@@ -183,12 +183,20 @@ function clipPreview(clip: Clip): SearchItem['preview'] {
   return { text: clip.content.length > 4000 ? `${clip.content.slice(0, 4000)}…` : clip.content, details }
 }
 
-/** The launcher's Clipboard scope: pinned clips, then the newest; every word of the query must appear. */
-function search(query: string, ctx: PluginContext): SearchItem[] {
+/** Root search asks for this many characters before it shows clips: fewer match too much by chance. */
+const ROOT_MIN = 3
+
+/**
+ * Pinned clips, then the newest; every word of the query must appear. Inside the Clipboard scope that's in the clip,
+ * its file name or the app it came from; in the root search only in the clip itself, so "saf" doesn't list every
+ * clip copied in Safari.
+ */
+function search(query: string, ctx: PluginContext, root: boolean): SearchItem[] {
+  if (root && query.trim().length < ROOT_MIN) return []
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   return history
     .filter((clip) => {
-      const text = `${clip.content} ${clip.detail ?? ''} ${clip.app ?? ''}`.toLowerCase()
+      const text = (root ? clip.content : `${clip.content} ${clip.detail ?? ''} ${clip.app ?? ''}`).toLowerCase()
       return words.every((w) => text.includes(w))
     })
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.copiedAt - a.copiedAt)
@@ -219,6 +227,7 @@ export default definePlugin({
     icon: ClipboardList,
     keywords: ['clip', 'clipboard', 'paste'],
     root: { limit: 3 },
-    provide: (query, { ctx }) => search(query, ctx),
+    // `root` arrives with the launcher's provider env; until then every search keeps the scope's behaviour.
+    provide: (query, env) => search(query, env.ctx, (env as { root?: boolean }).root === true),
   },
 })
