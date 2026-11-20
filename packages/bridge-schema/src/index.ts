@@ -74,6 +74,8 @@ export interface PluginManifest {
   /** Optional icon (`.png` or `.svg`) relative to the plugin root, outside `dist/`; shipped in the `.notchplugin`. */
   icon?: string
   permissions: Permission[]
+  /** Whether it starts enabled before the user turns it on or off; default true. Built-in plugins use it to keep the default set small. */
+  defaultEnabled?: boolean
   /**
    * Hostnames `net.fetch` may reach without asking, such as `api.github.com`, `*.youtrack.cloud` or
    * `host:8443`: no scheme, no path. `*.` matches subdomains only, and needs at least two labels after it.

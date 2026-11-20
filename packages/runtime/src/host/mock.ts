@@ -360,7 +360,7 @@ function installedPlugin(manifest: PluginManifest, source: InstalledPlugin['sour
   return {
     manifest,
     baseUrl: new URL(`/plugins/${manifest.id}/`, location.href).href,
-    enabled: localStorage.getItem(enabledKey(manifest.id)) !== 'false',
+    enabled: (localStorage.getItem(enabledKey(manifest.id)) ?? String(manifest.defaultEnabled ?? true)) !== 'false',
     builtIn,
     source,
     ...(!builtIn && !satisfies(API_VERSION, manifest.engines.notch) && { incompatible: incompatibility(manifest.engines.notch) }),

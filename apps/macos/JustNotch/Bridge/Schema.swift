@@ -55,6 +55,8 @@ struct PluginManifest: Codable, Equatable {
     var icon: String?
     var permissions: [Permission]
     var hosts: [String]?
+    /// Whether it starts enabled before the user chooses; nil means true.
+    var defaultEnabled: Bool?
     var engines: Engines
 }
 

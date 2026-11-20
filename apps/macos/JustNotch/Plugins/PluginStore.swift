@@ -80,7 +80,7 @@ final class PluginStore {
         for (folder, builtIn) in [(Paths.builtInPlugins, true), (Paths.userPlugins, false)] {
             for manifest in manifests(in: folder) where seen.insert(manifest.id).inserted {
                 result.append(InstalledPlugin(manifest: manifest, baseUrl: baseUrl + manifest.id + "/",
-                                              enabled: states[manifest.id] ?? true, builtIn: builtIn,
+                                              enabled: states[manifest.id] ?? manifest.defaultEnabled ?? true, builtIn: builtIn,
                                               source: builtIn ? .builtIn : library[manifest.id] != nil ? .library : .user,
                                               incompatible: builtIn ? nil : Self.incompatibility(manifest)))
             }

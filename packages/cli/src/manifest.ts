@@ -27,7 +27,7 @@ export const PERMISSIONS = [
 const exhaustive: [Exclude<Permission, (typeof PERMISSIONS)[number]>] extends [never] ? true : never = true
 void exhaustive
 
-const KNOWN_FIELDS = ['id', 'name', 'version', 'description', 'entry', 'style', 'icon', 'permissions', 'hosts', 'engines']
+const KNOWN_FIELDS = ['id', 'name', 'version', 'description', 'entry', 'style', 'icon', 'permissions', 'hosts', 'defaultEnabled', 'engines']
 
 export const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -128,6 +128,7 @@ export function validateManifest(value: unknown, options: { folder?: string } = 
     errors.push('"engines.notch" must be a semver range like "^0.1.0"')
   else if (!isSemverRange(engines.notch)) errors.push(`"engines.notch" is not a semver range (got "${engines.notch}")`)
 
+  if (m.defaultEnabled !== undefined && typeof m.defaultEnabled !== 'boolean') errors.push('"defaultEnabled" must be true or false')
   for (const key of Object.keys(m)) if (!KNOWN_FIELDS.includes(key)) warnings.push(`unknown field "${key}" is ignored`)
 
   return errors.length > 0 ? { errors, warnings } : { manifest: m as unknown as PluginManifest, errors, warnings }
