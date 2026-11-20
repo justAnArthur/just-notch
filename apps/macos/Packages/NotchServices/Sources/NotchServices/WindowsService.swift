@@ -26,7 +26,7 @@ public final class WindowsService: NotchService {
         case "windows.setFrame":
             let target = try decode(SetFrameParams.self, params).frame
             let (app, window) = try focusedWindow()
-            try setFrame(window, app: app, to: CGRect(x: target.x, y: target.y, width: target.w, height: target.h))
+            try await setFrame(window, app: app, to: CGRect(x: target.x, y: target.y, width: target.w, height: target.h))
             return nil
         default:
             throw ServiceError("unknown method \(method)")
@@ -97,10 +97,34 @@ public final class WindowsService: NotchService {
         return CGRect(origin: position, size: size)
     }
 
-    /// Size, position, then size again: a window too large for the screen it's leaving can't move until it
-    /// shrinks, and one moving to a larger screen can't grow until it has moved. A window that won't resize (a
-    /// fixed-size panel) still moves; one that won't move is an error.
-    private func setFrame(_ window: AXUIElement, app: NSRunningApplication, to frame: CGRect) throws {
+    /// How long a move takes, and how often it steps: macOS's own tiling takes about this long.
+    static let duration: TimeInterval = 0.2
+    private static let frameInterval: TimeInterval = 1.0 / 60
+    /// A step slower than this means an app that redraws on every set (Chromium, Electron): jump to the end.
+    private static let slowStep: TimeInterval = 0.025
+    /// Bumped by every move, so an older animation stops when a newer move starts.
+    private var generation = 0
+
+    /// Whether a move from `from` to `to` animates: not with Reduce Motion, nor for a few points.
+    static func animates(from: CGRect, to: CGRect, reduceMotion: Bool) -> Bool {
+        guard !reduceMotion else { return false }
+        let delta = [from.minX - to.minX, from.minY - to.minY, from.width - to.width, from.height - to.height]
+        return delta.contains { abs($0) > 4 }
+    }
+
+    /// The frame `t` (0…1) of the way from `from` to `to`, eased out (fast start, soft landing), in whole points.
+    static func interpolate(from: CGRect, to: CGRect, t: Double) -> CGRect {
+        let e = 1 - pow(1 - min(max(t, 0), 1), 3)
+        func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { (a + (b - a) * e).rounded() }
+        return CGRect(x: mix(from.minX, to.minX), y: mix(from.minY, to.minY), width: mix(from.width, to.width), height: mix(from.height, to.height))
+    }
+
+    /// Steps the window toward `frame`, then sets it: size, position, then size again, since a window too large
+    /// for the screen it's leaving can't move until it shrinks, and one moving to a larger screen can't grow until
+    /// it has moved. A window that won't resize (a fixed-size panel) still moves; one that won't move is an error.
+    private func setFrame(_ window: AXUIElement, app: NSRunningApplication, to frame: CGRect) async throws {
+        generation += 1
+        let mine = generation
         // With enhanced UI on (VoiceOver, some Electron and Chromium apps) the app animates every step, slowly.
         let appElement = AXUIElementCreateApplication(app.processIdentifier)
         let enhanced = "AXEnhancedUserInterface" as CFString
@@ -109,17 +133,43 @@ public final class WindowsService: NotchService {
         if wasEnhanced { AXUIElementSetAttributeValue(appElement, enhanced, kCFBooleanFalse) }
         defer { if wasEnhanced { AXUIElementSetAttributeValue(appElement, enhanced, kCFBooleanTrue) } }
 
-        var size = frame.size
-        var origin = frame.origin
-        let sizeValue = AXValueCreate(.cgSize, &size)!
-        let originValue = AXValueCreate(.cgPoint, &origin)!
-        let first = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
-        let moved = AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, originValue)
-        let sized = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if !wasEnhanced, let start = try? self.frame(of: window, app: app), Self.animates(from: start, to: frame, reduceMotion: reduceMotion) {
+            let began = Date()
+            while true {
+                try? await Task.sleep(for: .seconds(Self.frameInterval))
+                // A newer move owns the window now; it sets the final frame.
+                guard generation == mine else { return }
+                let t = Date().timeIntervalSince(began) / Self.duration
+                if t >= 1 { break }
+                let step = Self.interpolate(from: start, to: frame, t: t)
+                let stepBegan = Date()
+                let code = set(window, kAXPositionAttribute, point: step.origin)
+                if code == .apiDisabled || code == .invalidUIElement { throw Self.error(code, app: app) }
+                if code != .success { break }
+                _ = set(window, kAXSizeAttribute, size: step.size)
+                if Date().timeIntervalSince(stepBegan) > Self.slowStep { break }
+            }
+        }
+        guard generation == mine else { return }
+
+        let first = set(window, kAXSizeAttribute, size: frame.size)
+        let moved = set(window, kAXPositionAttribute, point: frame.origin)
+        let sized = set(window, kAXSizeAttribute, size: frame.size)
         for code in [first, moved, sized] where code == .apiDisabled || code == .invalidUIElement {
             throw Self.error(code, app: app)
         }
         if moved != .success { throw Self.error(moved, app: app) }
+    }
+
+    private func set(_ window: AXUIElement, _ name: String, point: CGPoint) -> AXError {
+        var point = point
+        return AXUIElementSetAttributeValue(window, name as CFString, AXValueCreate(.cgPoint, &point)!)
+    }
+
+    private func set(_ window: AXUIElement, _ name: String, size: CGSize) -> AXError {
+        var size = size
+        return AXUIElementSetAttributeValue(window, name as CFString, AXValueCreate(.cgSize, &size)!)
     }
 
     private func attribute(_ element: AXUIElement, _ name: String, app: NSRunningApplication) throws -> AXValue {

@@ -3,7 +3,7 @@ import ApplicationServices
 import Testing
 @testable import NotchServices
 
-@Suite("Accessibility errors") @MainActor
+@Suite("Window moves") @MainActor
 struct WindowsServiceTests {
     private let app = NSRunningApplication.current
 
@@ -19,5 +19,22 @@ struct WindowsServiceTests {
         #expect(WindowsService.error(.cannotComplete, app: app).message == "\(name) didn't answer")
         #expect(WindowsService.error(.attributeUnsupported, app: app).message == "\(name) doesn't let its windows be moved")
         #expect(WindowsService.error(.failure, app: app).message.contains("AXError"))
+    }
+
+    @Test func animationEasesOutToTheExactFrame() {
+        let from = CGRect(x: 100, y: 100, width: 800, height: 600)
+        let to = CGRect(x: 0, y: 25, width: 720, height: 875)
+        #expect(WindowsService.interpolate(from: from, to: to, t: 0) == from)
+        #expect(WindowsService.interpolate(from: from, to: to, t: 1) == to)
+        #expect(WindowsService.interpolate(from: from, to: to, t: 2) == to)
+        // Ease-out: half the time covers more than half the way.
+        #expect(WindowsService.interpolate(from: from, to: to, t: 0.5).minX < 50)
+    }
+
+    @Test func reduceMotionAndTinyMovesDontAnimate() {
+        let from = CGRect(x: 100, y: 100, width: 800, height: 600)
+        #expect(WindowsService.animates(from: from, to: from.offsetBy(dx: 300, dy: 0), reduceMotion: false))
+        #expect(!WindowsService.animates(from: from, to: from.offsetBy(dx: 300, dy: 0), reduceMotion: true))
+        #expect(!WindowsService.animates(from: from, to: from.offsetBy(dx: 2, dy: 3), reduceMotion: false))
     }
 }
