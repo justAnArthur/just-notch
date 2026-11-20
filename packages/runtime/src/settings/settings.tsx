@@ -296,25 +296,30 @@ export default function Settings() {
         { label: updater ? lastCheckedText(updater.lastChecked) : 'Updates', value: <Updates onChecked={reloadUpdater} /> },
         ...(updater
           ? [
+              // The kit's About value is an inline span: the flex wrapper gives the Switch its size.
               {
                 label: 'Check automatically',
                 value: (
-                  <Switch
+                  <span className="flex">
+<Switch
                     aria-label="Check for updates automatically"
                     checked={updater.automaticChecks}
                     onCheckedChange={(automaticChecks) => setUpdater({ automaticChecks })}
                   />
+</span>
                 ),
               },
               {
                 label: 'Download automatically',
                 value: (
-                  <Switch
+                  <span className="flex">
+<Switch
                     aria-label="Download updates automatically"
                     checked={updater.automaticDownloads}
                     disabled={!updater.automaticChecks}
                     onCheckedChange={(automaticDownloads) => setUpdater({ automaticDownloads })}
                   />
+</span>
                 ),
               },
             ]
