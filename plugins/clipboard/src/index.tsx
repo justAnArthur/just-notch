@@ -227,7 +227,6 @@ export default definePlugin({
     icon: ClipboardList,
     keywords: ['clip', 'clipboard', 'paste'],
     root: { limit: 3 },
-    // `root` arrives with the launcher's provider env; until then every search keeps the scope's behaviour.
-    provide: (query, env) => search(query, env.ctx, (env as { root?: boolean }).root === true),
+    provide: (query, { ctx, root }) => search(query, ctx, root),
   },
 })
