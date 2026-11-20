@@ -56,14 +56,24 @@ export interface StripLayout {
   spacer: number
 }
 
-/** Tabs flow from the left wing into the right one, balanced, each wing filling from its outer edge. */
+/** Up to this many tabs all sit in the left wing, leaving the right wing to the settings button alone. */
+export const LEFT_WING_MAX = 6
+
+/**
+ * Up to LEFT_WING_MAX tabs (as many as the left wing holds) sit in the left wing; more flow on into the right one,
+ * balanced, each wing filling from its outer edge.
+ */
 export function stripLayout(count: number, w: number, g: ScreenGeometry): StripLayout {
   const side = (w - g.notch.w) / 2
   const left = side - STRIP_INSET - NOTCH_GAP
   const leftCap = Math.floor(left / TAB_W)
   const rightCap = Math.floor((left - GEAR_W) / TAB_W)
   const overflow = count > leftCap + rightCap
-  const before = overflow ? leftCap : Math.min(leftCap, Math.max(Math.ceil(count / 2), count - rightCap))
+  const before = overflow
+    ? leftCap
+    : count <= Math.min(LEFT_WING_MAX, leftCap)
+      ? count
+      : Math.min(leftCap, Math.max(Math.ceil(count / 2), count - rightCap))
   const hole = { start: left, end: side + g.notch.w + NOTCH_GAP - STRIP_INSET }
   return { before, overflow, hole, spacer: hole.end - before * TAB_W }
 }
