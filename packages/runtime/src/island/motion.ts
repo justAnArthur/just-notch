@@ -18,5 +18,6 @@ export {
   contentShown,
   hoverDelay,
   motionScale,
+  settle,
   shapeTransition,
 } from '@justanarthur/modo-ui-notch/lib/motion'

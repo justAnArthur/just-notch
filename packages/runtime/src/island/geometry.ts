@@ -83,9 +83,18 @@ export function stripLayout(count: number, w: number, g: ScreenGeometry): StripL
   return { before, overflow, hole, spacer: hole.end - before * TAB_W }
 }
 
+/** Drawn into the top edge: no body and no shoulders, as `pill` at idle and `hidden` always; it grows back out of the edge. */
+export const retracted = (g: ScreenGeometry): Shape => ({ w: g.notch.w, h: 0, radius: RADIUS.idle, shoulder: 0 })
+
+/** What the display shows of the island in `state`: `hidden` nothing, `pill` nothing at idle, `full` everything. */
+export function presentedState(state: IslandState, g: ScreenGeometry): IslandState {
+  return g.mode === 'hidden' ? 'idle' : state
+}
+
 export function shapeFor(state: IslandState, g: ScreenGeometry, sheet: Sheet = { snap: 0 }): Shape {
   const { notch, panel } = g
   const slot = slotWidth(g)
+  if (g.mode === 'hidden' || (g.mode === 'pill' && state === 'idle')) return retracted(g)
   if (state === 'idle') return { w: notch.w, h: notch.h, radius: RADIUS.idle, shoulder: 6 }
   if (state === 'compact' || state === 'split') return { w: notch.w + 2 * slot, h: notch.h, radius: RADIUS.compact, shoulder: 8 }
   if (state === 'flash') return { w: notch.w + 2 * (slot + 64), h: notch.h + 48, radius: RADIUS.flash, shoulder: 10 }

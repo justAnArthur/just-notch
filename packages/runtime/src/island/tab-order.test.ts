@@ -3,7 +3,7 @@ import type { ActivitySpec } from '@just-notch/sdk'
 import { describe, expect, test } from 'vitest'
 import type { ActivityEntry } from '../activity/reducer'
 import type { LoadedPlugin } from '../plugins/loader'
-import { EXPANDED, shapeFor, stripLayout } from './geometry'
+import { EXPANDED, presentedState, shapeFor, stripLayout } from './geometry'
 import { openingTab, rememberEmpty, tabsOf } from './tab-order'
 
 const View = () => null
@@ -102,5 +102,29 @@ describe('shapeFor', () => {
   test('the first snap still caps at 240', () => {
     expect(shapeFor('expanded', g, { snap: 0, content: 120 }).h).toBe(120 + chrome)
     expect(shapeFor('expanded', g, { snap: 0, content: 400 }).h).toBe(240)
+  })
+})
+
+describe('display modes', () => {
+  const base = { notch: { x: 0, y: 0, w: 185, h: 32 }, panel: { x: 0, y: 0, w: 800, h: 620 } }
+  const on = (mode: 'full' | 'pill' | 'hidden') => ({ ...base, mode }) as unknown as ScreenGeometry
+
+  test('full draws the idle notch', () => {
+    expect(shapeFor('idle', on('full')).h).toBe(32)
+  })
+
+  test('pill draws nothing at idle, and the island for activities, flashes and the open island', () => {
+    expect(shapeFor('idle', on('pill'))).toMatchObject({ h: 0, shoulder: 0 })
+    expect(shapeFor('compact', on('pill')).h).toBe(32)
+    expect(shapeFor('flash', on('pill')).h).toBeGreaterThan(32)
+    expect(shapeFor('expanded', on('pill')).h).toBeGreaterThan(100)
+    expect(presentedState('compact', on('pill'))).toBe('compact')
+  })
+
+  test('hidden draws nothing and presents every state as idle', () => {
+    for (const state of ['idle', 'compact', 'flash', 'expanded'] as const) {
+      expect(shapeFor(state, on('hidden')).h).toBe(0)
+      expect(presentedState(state, on('hidden'))).toBe('idle')
+    }
   })
 })

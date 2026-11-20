@@ -11,7 +11,7 @@ import { type LoadedPlugin, usePlugins } from '../plugins/loader'
 import PluginView from '../plugins/plugin-view'
 import Expanded, { type TabStep } from './expanded'
 import { POPUP_SELECTOR, setIslandRegions, trackPopups } from './hit-regions'
-import { type Box, boxOf, bubbleFor, centerX, islandPath, rectOf, type Shape, shapeFor, slotWidth, union } from './geometry'
+import { type Box, boxOf, bubbleFor, centerX, islandPath, presentedState, rectOf, type Shape, shapeFor, slotWidth, union } from './geometry'
 import { type NativeGestures, type Swipe, useSwipes } from './gestures'
 import { openingTab, tabsOf } from './tab-order'
 import {
@@ -23,6 +23,8 @@ import {
   contentLeave,
   contentShown,
   hoverDelay,
+  motionScale,
+  settle,
   shapeTransition,
   useReduceMotion,
 } from './motion'
@@ -36,8 +38,15 @@ const INTERACTIVE = 'button, a, input, select, textarea, label, [role=slider], [
 /** The running plugins, as the island last rendered them, for opening on the right tab outside a render. */
 const loaded: { current: LoadedPlugin[] } = { current: [] }
 
+/** The display shows no island (`hidden`): hover, clicks and swipes open nothing; only Settings still opens it. */
+const display = { hidden: false }
+
+/** Clicks land only where something is drawn: a shape drawn into the top edge takes none. */
+const solid = (rects: Rect[]) => rects.filter((r) => r.w > 0 && r.h > 0)
+
 /** Opens the island on the activity's tab, else the last one shown if it has content, else the first with content. */
 function expand() {
+  if (display.hidden) return
   const state = getState()
   const { primary } = present(state)
   const tab = openingTab(tabsOf(primary, loaded.current), state.tab, primary)
@@ -222,7 +231,11 @@ function Slot({ plugin, view, box }: { plugin: string; view?: React.ComponentTyp
 export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   const activity = useActivityState()
   const presentation = present(activity)
-  const { island, primary, secondary, flash } = presentation
+  // `pill` draws nothing at idle (the shape sits in the top edge); `hidden` draws nothing but Settings.
+  const settingsOpen = presentation.island === 'expanded' && activity.tab === SETTINGS_TAB
+  const island = settingsOpen ? presentation.island : presentedState(presentation.island, geometry)
+  const { primary, secondary, flash } = presentation
+  display.hidden = geometry.mode === 'hidden'
   const reduced = useReduceMotion()
   const gooId = useId()
   const root = useRef<HTMLDivElement>(null)
@@ -233,11 +246,16 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
   const click = useClickToExpand(island)
   useEffect(() => (root.current ? trackPopups(root.current) : undefined), [])
   useEffect(() => on('settings.open', () => dispatch({ type: 'expand', tab: SETTINGS_TAB })), [])
+  // Turning hidden closes an open island (Settings aside), so it doesn't come back open when the display shows it again.
+  useEffect(() => {
+    const state = getState()
+    if (geometry.mode === 'hidden' && state.expanded && state.tab !== SETTINGS_TAB) dispatch({ type: 'collapse' })
+  }, [geometry.mode])
   const { snap } = activity
   // Measured per snap, so the tall snap never borrows the first snap's height for a frame.
   const [fit, setFit] = useState<{ snap: Snap; height: number }>()
 
-  const shape = shapeFor(island, geometry, { snap, content: fit?.snap === snap ? fit.height : undefined, fill: activity.tab === SETTINGS_TAB })
+  const shape = shapeFor(island, settingsOpen ? { ...geometry, mode: 'full' } : geometry, { snap, content: fit?.snap === snap ? fit.height : undefined, fill: activity.tab === SETTINGS_TAB })
   const split = island === 'split'
   const bubble = bubbleFor(shape, geometry, split)
   const cx = centerX(geometry)
@@ -273,12 +291,14 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
     const from = previous.current
     previous.current = island
     const run = ++token.current
-    const transition = reduced ? { duration: 0 } : shapeTransition(from, island)
+    // A display mode change moves the shape without changing state: it grows out of the edge or settles into it.
+    const modeMove = from === island && shape.h !== h.get()
+    const transition = reduced ? { duration: 0 } : modeMove ? (shape.h < h.get() ? settle('small') : motionScale.small) : shapeTransition(from, island)
     const bubbleRect = (): Rect => ({ x: cx + bubble.x - bubble.r, y: notch.h / 2 - bubble.r, w: bubble.r * 2, h: bubble.r * 2 })
     const target = rectOf(shape, geometry)
 
     // While it moves, clicks land anywhere it is or is going; at rest, only where it is.
-    setIslandRegions([union(rectOf(current(), geometry), target), ...(split ? [bubbleRect()] : [])])
+    setIslandRegions(solid([union(rectOf(current(), geometry), target), ...(split ? [bubbleRect()] : [])]))
     setMoving(!reduced)
     const splitChanged = (from === 'split') !== split
     if (splitChanged) {
@@ -299,7 +319,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
       setGoo(false)
       setMoving(false)
       setBubbleShown(split)
-      setIslandRegions([target, ...(split ? [bubbleRect()] : [])])
+      setIslandRegions(solid([target, ...(split ? [bubbleRect()] : [])]))
     })
   }, [island, shape.w, shape.h, shape.radius, shape.shoulder, bubble.x, bubble.r, cx])
 
@@ -348,6 +368,7 @@ export default function Island({ geometry }: { geometry: ScreenGeometry }) {
       ref={root}
       id="island"
       data-state={island}
+      data-mode={geometry.mode}
       data-primary={primary?.plugin}
       className="pointer-events-none absolute top-0 left-0"
       style={{ width: panel.w, height: panel.h }}
