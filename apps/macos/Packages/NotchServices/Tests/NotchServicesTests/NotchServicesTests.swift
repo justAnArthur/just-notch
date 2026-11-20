@@ -449,9 +449,12 @@ struct NewServiceTests {
         }
         let json = try #require(ClipboardState(clips: clips, paused: false, ignoredApps: []).json())
         let growth = residentBytes() - before
-        print("clipboard 1000 clips: json \(json.count / 1024) KB, thumbnail \(thumbnail.count / 1024) KB, resident growth \(growth / 1_048_576) MB")
+        // What the service holds: the clips' strings (thumbnails shared here, so counted per clip) plus the published JSON.
+        // Resident growth is printed only: tests run in parallel, so it also counts the others.
+        let held = clips.reduce(0) { $0 + $1.content.utf8.count + ($1.preview?.utf8.count ?? 0) + ($1.detail?.utf8.count ?? 0) } + json.count
+        print("clipboard 1000 clips: json \(json.count / 1024) KB, thumbnail \(thumbnail.count / 1024) KB, held \(held / 1_048_576) MB, resident growth \(growth / 1_048_576) MB")
         #expect(json.count < 6_000_000)
-        #expect(growth < 30 * 1_048_576)
+        #expect(held < 30 * 1_048_576)
     }
 
     private func residentBytes() -> Int {
