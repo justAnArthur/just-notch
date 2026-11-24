@@ -24,6 +24,18 @@ struct RawNowPlaying: Decodable, Equatable {
     var supportsIsLiked: Bool?
 }
 
+extension RawNowPlaying {
+    /// A minute after a playing track should have ended. A browser can leave a closed tab's
+    /// session behind, "playing" forever, and the player then sends nothing more; past this the
+    /// service shows nothing. A real player reports the next track or a new position long before.
+    /// Nil for paused tracks and live streams (no duration), which never go stale.
+    var staleAt: Date? {
+        guard playing, durationS > 0 else { return nil }
+        let left = max(0, durationS - positionS) / (rate > 0 ? rate : 1)
+        return Date(timeIntervalSince1970: timestamp / 1000 + left + 60)
+    }
+}
+
 /// MediaRemote's shuffle and repeat modes, as `MRMediaRemoteCopyShuffleModeDescription` /
 /// `…RepeatModeDescription` name them (checked on macOS 26): shuffle 1 Off, 2 Albums, 3 Songs;
 /// repeat 1 None, 2 One, 3 All; 0 is unknown.

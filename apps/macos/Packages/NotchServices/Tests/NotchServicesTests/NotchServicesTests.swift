@@ -329,7 +329,7 @@ struct ShapeTests {
 
     private func raw(_ title: String, album: String = "B", artwork: Data? = nil) -> RawNowPlaying {
         RawNowPlaying(title: title, artist: "A", album: album, durationS: 100, positionS: 1, rate: 1, playing: true,
-                      timestamp: 0, bundleId: nil, artwork: artwork, artworkCleared: artwork == nil)
+                      timestamp: Date().timeIntervalSince1970 * 1000, bundleId: nil, artwork: artwork, artworkCleared: artwork == nil)
     }
 
     private func lastArtwork(_ sink: RecordingSink) throws -> String? {
@@ -355,6 +355,30 @@ struct ShapeTests {
         #expect(try lastArtwork(sink) != nil)
         backend.onChange?(raw("Two"))
         #expect(try lastArtwork(sink) == nil)
+    }
+
+    @Test func dropsAPlayingTrackLongPastItsEnd() async throws {
+        let backend = FakeBackend()
+        let sink = RecordingSink()
+        let service = MediaService { _ in backend }
+        service.sink = sink
+        service.start(topic: "media")
+        defer { service.stop(topic: "media") }
+        for _ in 0..<100 where backend.onChange == nil { await Task.yield() }
+
+        // A closed Safari tab from yesterday, still "playing".
+        var stale = raw("Video")
+        stale.timestamp = (Date().timeIntervalSince1970 - 86_400) * 1000
+        backend.onChange?(stale)
+        #expect(try JSONDecoder().decode(MediaState?.self, from: try #require(sink.published["media"]?.last)) == nil)
+
+        // Paused, or a live stream without a duration, stays.
+        stale.playing = false
+        backend.onChange?(stale)
+        #expect(try JSONDecoder().decode(MediaState?.self, from: try #require(sink.published["media"]?.last)) != nil)
+        stale.playing = true
+        stale.durationS = 0
+        #expect(stale.staleAt == nil)
     }
 }
 

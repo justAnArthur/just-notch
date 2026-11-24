@@ -30,6 +30,8 @@ public final class MediaService: NotchService {
     /// The state as the backend reported it, before `modes` fills in what it left out.
     private var reported: MediaState?
     private let modes = AppleEventModePoller()
+    /// Drops a "playing" track once it should have ended: see `RawNowPlaying.staleAt`.
+    private var staleCheck: Timer?
 
     private static let idleTimeout: TimeInterval = 60
     private let picker: @MainActor (Set<String>) async -> MediaBackend
@@ -67,6 +69,8 @@ public final class MediaService: NotchService {
         artworkUrl = nil
         latest.reset()
         reported = nil
+        staleCheck?.invalidate()
+        staleCheck = nil
         modes.watch(nil)
     }
 
@@ -151,6 +155,20 @@ public final class MediaService: NotchService {
 
     private func receive(_ raw: RawNowPlaying?) {
         known = true
+        staleCheck?.invalidate()
+        staleCheck = nil
+        var raw = raw
+        if let staleAt = raw?.staleAt {
+            if staleAt <= Date() {
+                mediaLog.info("dropping stale now playing from \(raw?.bundleId ?? "?", privacy: .public)")
+                raw = nil
+            } else {
+                let held = raw
+                staleCheck = Timer.scheduledTimer(withTimeInterval: staleAt.timeIntervalSinceNow, repeats: false) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.receive(held) }
+                }
+            }
+        }
         guard let raw else {
             artworkData = nil
             artworkUrl = nil
