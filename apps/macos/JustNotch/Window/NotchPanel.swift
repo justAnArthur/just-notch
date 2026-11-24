@@ -126,6 +126,12 @@ enum ScreenLayout {
         modes.merge(changes) { $1 }
     }
 
+    static var hoverArea: HoverArea {
+        get { UserDefaults.standard.string(forKey: hoverAreaKey).flatMap(HoverArea.init) ?? .around }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: hoverAreaKey) }
+    }
+    private static let hoverAreaKey = "island.hoverArea"
+
     static var hideWhen: HideWhen {
         get {
             UserDefaults.standard.data(forKey: hideWhenKey).flatMap { try? JSONDecoder().decode(HideWhen.self, from: $0) } ?? HideWhen()

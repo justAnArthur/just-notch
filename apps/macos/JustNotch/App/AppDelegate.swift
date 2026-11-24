@@ -382,7 +382,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
     var preferences: AppPreferences {
         AppPreferences(launchAtLogin: launchAtLogin, screens: ScreenLayout.screens, launcher: launcher.preferences,
-                       displays: ScreenLayout.displays(), hideWhen: ScreenLayout.hideWhen)
+                       displays: ScreenLayout.displays(), hideWhen: ScreenLayout.hideWhen, hoverArea: ScreenLayout.hoverArea)
     }
 
     func setPreferences(_ update: PreferencesParams) throws {
@@ -397,6 +397,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         if let rules = update.hideWhen {
             ScreenLayout.hideWhen = HideWhen(fullScreen: rules.fullScreen ?? ScreenLayout.hideWhen.fullScreen, calls: rules.calls ?? ScreenLayout.hideWhen.calls)
             PresenceMonitor.shared.check()
+        }
+        if let area = update.hoverArea {
+            ScreenLayout.hoverArea = area
+            pointerMoved()
         }
         if let enabled = update.launchAtLogin, enabled != launchAtLogin {
             try setLaunchAtLogin(enabled)

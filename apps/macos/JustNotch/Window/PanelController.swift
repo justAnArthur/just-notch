@@ -88,8 +88,9 @@ final class PanelController {
         return fileDragActive || hitRegions.contains { $0.contains(p) }
     }
 
+    /// Where pointing opens the island: the notch and a margin around it, or the notch alone (`ScreenLayout.hoverArea`).
     private var hoverZone: Rect {
-        geometry.notch.insetBy(dx: -Self.hoverInset.x, dy: -Self.hoverInset.y)
+        ScreenLayout.hoverArea == .notch ? geometry.notch : geometry.notch.insetBy(dx: -Self.hoverInset.x, dy: -Self.hoverInset.y)
     }
 
     private func panelPoint(screen point: NSPoint) -> CGPoint {

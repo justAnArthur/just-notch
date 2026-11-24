@@ -989,7 +989,14 @@ export interface AppPreferences {
   /** Read only: every connected display with its mode. Set with `displayModes`. */
   displays: DisplayInfo[]
   hideWhen: HideWhen
+  /**
+   * Where pointing opens the island: `around` (default) as the pointer comes near the notch, `notch` only once
+   * it is on the notch (or the open island) itself.
+   */
+  hoverArea: HoverArea
 }
+
+export type HoverArea = 'around' | 'notch'
 
 export interface LauncherPreferences {
   enabled: boolean

@@ -125,6 +125,12 @@ struct AppPreferences: Codable, Equatable {
     var launcher: LauncherPreferences
     var displays: [DisplayInfo] = []
     var hideWhen = HideWhen()
+    var hoverArea: HoverArea = .around
+}
+
+/// bridge-schema `HoverArea`: where pointing opens the island.
+enum HoverArea: String, Codable {
+    case around, notch
 }
 
 struct LauncherPreferences: Codable, Equatable {
@@ -304,6 +310,7 @@ struct PreferencesParams: Decodable {
     var launcher: Launcher?
     var displayModes: [String: DisplayMode]?
     var hideWhen: HideWhenChange?
+    var hoverArea: HoverArea?
 }
 
 struct AcceleratorParams: Decodable {

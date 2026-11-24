@@ -267,6 +267,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
     { id: 'mock-external', name: 'Studio Display', hasNotch: false, mode: 'hidden' },
   ],
   hideWhen: { fullScreen: true, calls: true },
+  hoverArea: 'around',
 }
 
 function preferences(): AppPreferences {

@@ -17,9 +17,17 @@ interface DisplaysPageProps {
 /** Settings › Displays: the island's mode on each display, and when it steps aside on its own. */
 export default function DisplaysPage({ preferences, onChange }: DisplaysPageProps) {
   if (!preferences) return null
-  const { displays, hideWhen } = preferences
+  const { displays, hideWhen, hoverArea } = preferences
   return (
     <List>
+      <List.Section title="Island">
+        <SwitchRow
+          label="Open only on the notch"
+          description="The island opens once the pointer is on the notch. Off, it opens as the pointer comes near."
+          checked={hoverArea === 'notch'}
+          onCheckedChange={(on) => onChange({ hoverArea: on ? 'notch' : 'around' })}
+        />
+      </List.Section>
       <List.Section title="Displays">
         {displays.map((display) => (
           <SelectRow
