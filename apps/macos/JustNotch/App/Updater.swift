@@ -13,6 +13,10 @@ final class Updater: NSObject {
     private var controller: SPUStandardUpdaterController!
     private var checks: [CheckedContinuation<UpdateState, Never>] = []
     private var found: SUAppcastItem?
+    /// An update a scheduled check found, waiting as a gentle reminder: its session stays open until the user acts.
+    private var waiting: SUAppcastItem?
+    /// A check that never hears back (a session Sparkle keeps open, a stalled connection) answers after this.
+    private static let checkTimeout: Duration = .seconds(30)
 
     /// Builds without a real key (local ones, until the key is generated) never start Sparkle: it would fail loudly.
     private let enabled = (Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String).map { !$0.hasPrefix("__") } ?? false
@@ -61,12 +65,26 @@ final class Updater: NSObject {
     /// Asks the appcast without UI.
     func check() async -> UpdateState {
         guard enabled else { return .error(Self.offMessage) }
-        guard controller.updater.canCheckForUpdates else { return .error("An update is already under way.") }
+        // A scheduled check already found one: Sparkle won't start another session while it waits.
+        if let waiting { return available(waiting) }
+        guard controller.updater.canCheckForUpdates, !controller.updater.sessionInProgress else {
+            return .error("An update is already under way.")
+        }
         return await withCheckedContinuation { continuation in
             checks.append(continuation)
             found = nil
             controller.updater.checkForUpdateInformation()
+            Task { [weak self] in
+                try? await Task.sleep(for: Self.checkTimeout)
+                self?.answerChecks(.error("Couldn't reach the update server. Check your connection and try again."))
+            }
         }
+    }
+
+    private func answerChecks(_ state: UpdateState) {
+        let pending = checks
+        checks = []
+        pending.forEach { $0.resume(returning: state) }
     }
 
     /// The version Sparkle last installed: the next launch running it shows What's New once.
@@ -149,8 +167,7 @@ extension Updater: SPUUpdaterDelegate {
             return
         }
         let state: UpdateState = if let failure { .error(Self.message(for: failure)) } else { found.map(available) ?? .idle }
-        checks.forEach { $0.resume(returning: state) }
-        checks = []
+        answerChecks(state)
     }
 }
 
@@ -160,6 +177,7 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
 
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
         if state.userInitiated { return NSApp.activate(ignoringOtherApps: true) }
+        waiting = update
         remind(update)
         onState?(available(update))
     }
@@ -169,6 +187,7 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
     }
 
     func standardUserDriverWillFinishUpdateSession() {
+        waiting = nil
         remind(nil)
     }
 }
