@@ -469,14 +469,16 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
             default: .off
             }
         case "location":
-            guard CLLocationManager.locationServicesEnabled() else { return .off }
+            // Apple warns this one can stall the calling thread; the Welcome window asks every 2 s.
+            guard await Task.detached(operation: { CLLocationManager.locationServicesEnabled() }).value else { return .off }
             return switch CLLocationManager().authorizationStatus {
             case .authorizedAlways, .authorized: .allowed
             case .notDetermined: .notAsked
             default: .off
             }
         case "automation":
-            return Self.automationState()
+            // It talks to each player, which can take seconds while one launches or hangs: never on the main thread.
+            return await Task.detached(operation: Self.automationState).value
         case "notifications":
             return switch await UNUserNotificationCenter.current().notificationSettings().authorizationStatus {
             case .authorized, .provisional, .ephemeral: .allowed
@@ -490,7 +492,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, ServiceSink {
 
     /// The media players installed, each asked without a prompt: allowed if any is, off if one was refused.
     /// A player that isn't running can't answer (`procNotFound`), so it reads as not asked.
-    private static func automationState() -> PermissionStateValue {
+    nonisolated private static func automationState() -> PermissionStateValue {
         let players = ["com.apple.Music", "com.spotify.client"].filter {
             NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil
         }
@@ -551,7 +553,10 @@ enum Accessibility {
             return UserDefaults.standard.bool(forKey: grantedKey) ? .broken : .notAsked
         }
         var value: CFTypeRef?
-        let probe = AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &value)
+        // The answer comes from the app in front; a hung one would hold this (the main thread) for AX's 6 s default.
+        let systemWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemWide, 0.25)
+        let probe = AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &value)
         if probe == .apiDisabled || failed { return .broken }
         UserDefaults.standard.set(true, forKey: grantedKey)
         return .allowed
