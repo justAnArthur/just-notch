@@ -556,6 +556,8 @@ const handlers: Handlers = {
     else publish('media', { ...media, playing: command.command === 'toggle' ? !media.playing : command.command === 'play' })
     return null
   },
+  'power.stayAwake': () => null,
+  'power.allowSleep': () => null,
   'audio.setVolume': ({ volume }) => {
     publish('audio', { ...values.audio, volume })
     return null

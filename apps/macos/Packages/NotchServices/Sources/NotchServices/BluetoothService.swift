@@ -1,4 +1,5 @@
 import Foundation
+import CoreBluetooth
 import IOBluetooth
 import IOKit
 
@@ -40,6 +41,17 @@ enum BluetoothBattery {
         return levels
     }
 
+    /// AirPods and Beats: IOBluetoothDevice's own battery properties (private, so looked up before use). The lower
+    /// earbud counts, as it dies first; the case doesn't. 0 means unknown.
+    static func headset(_ device: NSObject) -> Double? {
+        func read(_ key: String) -> Double? {
+            guard device.responds(to: NSSelectorFromString(key)), let value = device.value(forKey: key) as? NSNumber, value.intValue > 0 else { return nil }
+            return value.doubleValue
+        }
+        let buds = ["batteryPercentLeft", "batteryPercentRight"].compactMap(read)
+        return buds.min() ?? read("batteryPercentSingle") ?? read("batteryPercentCombined")
+    }
+
     static func normalize(_ address: String) -> String {
         address.lowercased().replacingOccurrences(of: ":", with: "-")
     }
@@ -56,6 +68,14 @@ public final class BluetoothService: NotchService {
     public weak var sink: ServiceSink?
 
     private var observer: Observer?
+    /// Batteries drain without a connect or disconnect: read them again every minute. Also notices when Bluetooth
+    /// access is granted later.
+    private var poll: Timer?
+    private static let pollInterval: TimeInterval = 60
+
+    /// IOBluetooth blocks the main thread on the permission prompt when access isn't decided yet, so it's only
+    /// touched once access is granted (Settings or onboarding ask for it).
+    private static var authorized: Bool { CBManager.authorization == .allowedAlways }
     private var connectNotification: IOBluetoothUserNotification?
     private var disconnectNotifications: [String: IOBluetoothUserNotification] = [:]
     private var latest = Latest<[BluetoothDevice]>()
@@ -67,10 +87,14 @@ public final class BluetoothService: NotchService {
         let observer = Observer(service: self)
         self.observer = observer
         refresh()
-        connectNotification = IOBluetoothDevice.register(forConnectNotifications: observer, selector: #selector(Observer.connected(_:device:)))
+        poll = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
     }
 
     public func stop(topic: String) {
+        poll?.invalidate()
+        poll = nil
         connectNotification?.unregister()
         connectNotification = nil
         disconnectNotifications.values.forEach { $0.unregister() }
@@ -80,7 +104,7 @@ public final class BluetoothService: NotchService {
     }
 
     public func snapshot(topic: String) async -> Data? {
-        Self.devices().json()
+        (Self.authorized ? Self.devices() : []).json()
     }
 
     fileprivate func connected(_ device: IOBluetoothDevice) {
@@ -97,7 +121,10 @@ public final class BluetoothService: NotchService {
     }
 
     private func refresh() {
-        guard let observer else { return }
+        guard let observer, Self.authorized else { return }
+        if connectNotification == nil {
+            connectNotification = IOBluetoothDevice.register(forConnectNotifications: observer, selector: #selector(Observer.connected(_:device:)))
+        }
         let paired = Self.paired()
         for device in paired where device.isConnected() {
             guard let id = device.addressString, disconnectNotifications[id] == nil else { continue }
@@ -126,7 +153,7 @@ public final class BluetoothService: NotchService {
             name: device.nameOrAddress ?? address,
             kind: BluetoothKind.kind(major: device.deviceClassMajor, minor: device.deviceClassMinor),
             connected: device.isConnected(),
-            batteryPercent: batteries[id]
+            batteryPercent: batteries[id] ?? (device.isConnected() ? BluetoothBattery.headset(device) : nil)
         )
     }
 

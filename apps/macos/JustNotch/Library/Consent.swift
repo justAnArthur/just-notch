@@ -9,6 +9,7 @@ enum Consent {
         case "media.read": "See what’s playing in your music and video apps"
         case "media.control": "Play, pause and skip in your media apps"
         case "power.read": "See your battery level and charging state"
+        case "power.control": "Keep your Mac awake"
         case "audio.read": "See the volume and the output device"
         case "audio.control": "Change the volume"
         case "display.control": "See and change screen and keyboard brightness"

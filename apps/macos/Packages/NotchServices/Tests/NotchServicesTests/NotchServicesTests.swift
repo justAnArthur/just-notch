@@ -623,3 +623,15 @@ struct LauncherServiceTests {
         #expect(String(decoding: data, as: UTF8.self) == "[]")
     }
 }
+
+@Suite @MainActor struct AwakeTests {
+    @Test func holdsAndReleases() async throws {
+        let service = AwakeService()
+        _ = try await service.handle(method: "power.stayAwake", params: Data(#"{"display":false,"reason":"test"}"#.utf8))
+        #expect(service.isHolding)
+        _ = try await service.handle(method: "power.stayAwake", params: Data(#"{"display":true,"reason":"test"}"#.utf8))
+        #expect(service.isHolding)
+        _ = try await service.handle(method: "power.allowSleep", params: Data("{}".utf8))
+        #expect(!service.isHolding)
+    }
+}

@@ -4,7 +4,7 @@ import Foundation
 /// `engines.notch` is checked with. Both run packages/bridge-schema/test/semver-cases.json.
 public enum Semver {
     /// What plugins are written against; keep equal to bridge-schema's `API_VERSION`.
-    public static let apiVersion = "1.7.0"
+    public static let apiVersion = "1.8.0"
 
     struct Version {
         var major: Int

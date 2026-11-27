@@ -1,4 +1,4 @@
-import type { Events, PowerState } from '@just-notch/sdk'
+import type { BluetoothDevice, Events, PowerState } from '@just-notch/sdk'
 
 export type Hud = Events['hud']
 export type Shade = 'off' | 'low' | 'mid' | 'high'
@@ -34,4 +34,34 @@ export function formatMinutes(minutes: number | undefined): string | undefined {
   if (minutes === undefined || minutes <= 0) return undefined
   const m = Math.round(minutes)
   return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`
+}
+
+/** Each connected accessory's armed thresholds, by device id. */
+export type ArmedDevices = Record<string, Armed>
+
+/**
+ * Accessories (AirPods, mouse, keyboard) that just crossed 20 % or 10 %, with the same rules as the Mac's battery:
+ * once each on the way down, re-armed when the level rises (it charged) and never on a device's first reading.
+ * A disconnected device or one without a level drops out, so it starts over when it comes back.
+ */
+export function crossDevices(armed: ArmedDevices, devices: BluetoothDevice[]): { crossed: { device: BluetoothDevice; threshold: Threshold }[]; armed: ArmedDevices } {
+  const next: ArmedDevices = {}
+  const crossed: { device: BluetoothDevice; threshold: Threshold }[] = []
+  for (const device of devices) {
+    if (!device.connected || device.batteryPercent === undefined) continue
+    const percent = device.batteryPercent
+    next[device.id] = Object.fromEntries(THRESHOLDS.map((t) => [t, percent > t])) as Armed
+    const before = armed[device.id]
+    if (!before) continue
+    const threshold = [...THRESHOLDS].reverse().find((t) => before[t] && percent <= t)
+    if (threshold !== undefined) crossed.push({ device, threshold })
+  }
+  return { crossed, armed: next }
+}
+
+/** Connected accessories at or below `below` %, lowest first: worth charging along with the Mac. */
+export function lowDevices(devices: BluetoothDevice[], below = 30): BluetoothDevice[] {
+  return devices
+    .filter((d) => d.connected && d.batteryPercent !== undefined && d.batteryPercent <= below)
+    .sort((a, b) => (a.batteryPercent ?? 0) - (b.batteryPercent ?? 0))
 }

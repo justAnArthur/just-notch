@@ -1,9 +1,9 @@
 import { Button, List } from '@justanarthur/modo-ui'
 import { IslandFlash, Level } from '@justanarthur/modo-ui-notch'
-import { definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
-import { BatteryCharging, BatteryLow, BatteryWarning, Keyboard, KeyboardOff, type LucideIcon, Sun, SunDim, SunMedium, Volume, Volume1, Volume2, VolumeX } from 'lucide-react'
+import { type BluetoothDevice, definePlugin, type PluginContext, signal, SwitchRow, usePlugin, useStorage, useTopic } from '@just-notch/sdk'
+import { BatteryCharging, BatteryLow, BatteryWarning, Headphones, Keyboard, KeyboardOff, type LucideIcon, Mouse, Sun, SunDim, SunMedium, Volume, Volume1, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { type Armed, crossBattery, formatMinutes, type Hud, type Shade, shade, type Threshold } from './logic'
+import { type Armed, type ArmedDevices, crossBattery, crossDevices, formatMinutes, type Hud, lowDevices, type Shade, shade, type Threshold } from './logic'
 
 const LEVEL_MS = 1500
 const CHARGING_MS = 3000
@@ -11,9 +11,10 @@ const LOW_MS = 4000
 /** How often the plugin looks for Accessibility while it lacks it, to take over the keys once it's granted. */
 const TRUST_POLL_MS = 3000
 const ACCESSIBILITY_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+const BLUETOOTH_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth'
 
 /** The settings switches, all on by default. */
-const KEYS = { hud: 'replaceHud', charging: 'flashCharging', low: 'flashLowBattery' } as const
+const KEYS = { hud: 'replaceHud', charging: 'flashCharging', low: 'flashLowBattery', accessories: 'flashAccessories' } as const
 const on = async (ctx: PluginContext, key: string) => (await ctx.storage.get<boolean>(key)) ?? true
 
 const GLYPHS: Record<Hud['kind'], Record<Shade, LucideIcon>> = {
@@ -69,6 +70,44 @@ function lowBattery(threshold: Threshold) {
   }
 }
 const LOW_VIEWS = { 20: lowBattery(20), 10: lowBattery(10) }
+
+const deviceIcon = (device: BluetoothDevice) => {
+  const Icon = device.kind === 'mouse' ? Mouse : device.kind === 'keyboard' ? Keyboard : device.kind === 'headphones' || device.kind === 'speaker' ? Headphones : BatteryLow
+  return <Icon size={20} strokeWidth={1.75} />
+}
+
+/** An accessory crossed 20 % or 10 %: say which, before it dies mid-call or mid-task. */
+function deviceLow(device: BluetoothDevice, threshold: Threshold) {
+  const critical = threshold === 10
+  const hint = device.kind === 'headphones' ? 'Charge them before your next call' : 'Charge it soon'
+  return function DeviceLow() {
+    return (
+      <IslandFlash
+        tone={critical ? 'error' : 'warning'}
+        icon={deviceIcon(device)}
+        title={`${device.name} ${critical ? 'very low' : 'low'}`}
+        caption={hint}
+        value={`${Math.round(device.batteryPercent ?? 0)}%`}
+      />
+    )
+  }
+}
+
+/** While the Mac charges: accessories worth plugging in too. */
+function chargeToo(devices: BluetoothDevice[]) {
+  const [first, ...rest] = devices
+  return function ChargeToo() {
+    return (
+      <IslandFlash
+        tone="warning"
+        icon={deviceIcon(first!)}
+        title={`Charge ${first!.name} too`}
+        caption={rest.length ? `Also low: ${rest.map((d) => `${d.name} ${Math.round(d.batteryPercent ?? 0)}%`).join(', ')}` : 'While you are plugged in'}
+        value={`${Math.round(first!.batteryPercent ?? 0)}%`}
+      />
+    )
+  }
+}
 
 /**
  * Takes over the volume and brightness keys while the plugin runs and the switch is on, and gives them back to the
@@ -126,15 +165,33 @@ function activate(ctx: PluginContext) {
     void on(ctx, KEYS.low).then((show) => show && ctx.activity.flash({ priority: 'alert', key: 'power', view: LOW_VIEWS[threshold], durationMs: LOW_MS }))
   })
 
+  let devices: BluetoothDevice[] = []
+  let armedDevices: ArmedDevices = {}
+  const stopDevices = ctx.subscribe('bluetooth', (next) => {
+    devices = next
+    const result = crossDevices(armedDevices, next)
+    armedDevices = result.armed
+    if (!result.crossed.length) return
+    void on(ctx, KEYS.accessories).then((show) => {
+      if (!show) return
+      for (const { device, threshold } of result.crossed) {
+        ctx.activity.flash({ priority: 'alert', key: `device-${device.id}`, view: deviceLow(device, threshold), durationMs: LOW_MS })
+      }
+    })
+  })
+
   const stopPlug = ctx.on('power.plugged', ({ pluggedIn }) => {
     if (!pluggedIn) return
     void on(ctx, KEYS.charging).then((show) => show && ctx.activity.flash({ priority: 'alert', key: 'power', view: Charging, durationMs: CHARGING_MS }))
+    const low = lowDevices(devices)
+    if (low.length) void on(ctx, KEYS.accessories).then((show) => show && ctx.activity.flash({ priority: 'alert', key: 'charge-too', view: chargeToo(low), durationMs: LOW_MS }))
   })
 
   return () => {
     stopReplacing()
     stopHud()
     stopPower()
+    stopDevices()
     stopPlug()
   }
 }
@@ -144,6 +201,15 @@ function Settings() {
   const [hud, setHud] = useStorage<boolean>(KEYS.hud, true)
   const [charging, setCharging] = useStorage<boolean>(KEYS.charging, true)
   const [low, setLow] = useStorage<boolean>(KEYS.low, true)
+  const [accessories, setAccessories] = useStorage<boolean>(KEYS.accessories, true)
+  const [bluetooth, setBluetooth] = useState(true)
+  useEffect(() => {
+    if (!accessories) return
+    const check = () => void call('permissions.status', { permission: 'bluetooth' }).then(({ granted }) => setBluetooth(granted), () => {})
+    check()
+    const timer = setInterval(check, TRUST_POLL_MS)
+    return () => clearInterval(timer)
+  }, [call, accessories])
   const [trusted, setTrusted] = useState(true)
 
   useEffect(() => {
@@ -180,6 +246,19 @@ function Settings() {
       <List.Section title="Battery">
         <SwitchRow label="Charging" description="When you plug in: the level and how long until full." checked={charging} onCheckedChange={setCharging} />
         <SwitchRow label="Low battery" description="Once at 20 % and once at 10 %, while on battery." checked={low} onCheckedChange={setLow} />
+        <SwitchRow
+          label="AirPods, mouse and keyboard"
+          description="Once at 20 % and once at 10 % for each, so they don't die mid-call. When you plug in the Mac, which ones to charge too."
+          checked={accessories}
+          onCheckedChange={setAccessories}
+        />
+        {accessories && !bluetooth && (
+          <List.Row label="Needs Bluetooth" description="Allow Just Notch under Privacy & Security › Bluetooth to see your accessories' batteries.">
+            <Button variant="secondary" size="compact" onClick={() => void call('system.openUrl', { url: BLUETOOTH_URL })}>
+              Open…
+            </Button>
+          </List.Row>
+        )}
       </List.Section>
     </List>
   )

@@ -22,6 +22,7 @@ enum Permission: String, Codable {
     case mediaRead = "media.read"
     case mediaControl = "media.control"
     case powerRead = "power.read"
+    case powerControl = "power.control"
     case audioRead = "audio.read"
     case audioControl = "audio.control"
     case displayControl = "display.control"
@@ -161,6 +162,8 @@ enum Schema {
     static let methodPermission: [String: Permission] = [
         "media.command": .mediaControl,
         "audio.setVolume": .audioControl,
+        "power.stayAwake": .powerControl,
+        "power.allowSleep": .powerControl,
         "display.setBrightness": .displayControl,
         "display.setKeyboardBacklight": .displayControl,
         "hud.setEnabled": .hud,

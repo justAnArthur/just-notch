@@ -2,13 +2,14 @@
   "id": "controls",
   "name": "Controls",
   "version": "0.1.0",
-  "description": "Volume, brightness and keyboard light as a level under the notch, in place of the system's overlay; a flash when you plug in and when the battery runs low.",
+  "description": "Volume, brightness and keyboard light as a level under the notch, in place of the system's overlay; a flash when you plug in and when the Mac's, AirPods', mouse's or keyboard's battery runs low.",
   "defaultEnabled": true,
   "entry": "dist/index.js",
   "style": "dist/index.css",
   "permissions": [
     "hud",
-    "power.read"
+    "power.read",
+    "bluetooth.read"
   ],
   "engines": {
     "notch": "^1.0.0"

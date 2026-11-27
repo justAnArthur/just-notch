@@ -3,6 +3,7 @@ public enum ServiceRegistry {
     @MainActor public static func makeAll() -> [NotchService] {
         [
             PowerService(),
+            AwakeService(),
             AudioService(),
             DisplayService(),
             HUDService(),

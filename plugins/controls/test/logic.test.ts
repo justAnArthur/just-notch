@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import type { PowerState } from '@just-notch/sdk'
-import { type Armed, crossBattery, formatMinutes, shade } from '../src/logic'
+import type { BluetoothDevice } from '@just-notch/sdk'
+import { type Armed, type ArmedDevices, crossBattery, crossDevices, formatMinutes, lowDevices, shade } from '../src/logic'
 
 const power = (percent: number, plugged = false): PowerState => ({ percent, charging: plugged, pluggedIn: plugged, lowPowerMode: false, hasBattery: true })
 
@@ -52,5 +53,40 @@ describe('time left', () => {
     expect(formatMinutes(120)).toBe('2 h')
     expect(formatMinutes(35)).toBe('35 min')
     expect(formatMinutes(undefined)).toBeUndefined()
+  })
+})
+
+const pods = (batteryPercent?: number, connected = true): BluetoothDevice => ({ id: 'pods', name: 'AirPods', kind: 'headphones', connected, batteryPercent })
+
+function deviceFired(readings: BluetoothDevice[][]) {
+  let armed: ArmedDevices = {}
+  const out: string[] = []
+  for (const reading of readings) {
+    const result = crossDevices(armed, reading)
+    armed = result.armed
+    out.push(...result.crossed.map((c) => `${c.device.name} ${c.threshold}`))
+  }
+  return out
+}
+
+describe('accessory batteries', () => {
+  it('warns once at 20 % and once at 10 % per device', () => {
+    expect(deviceFired([[pods(40)], [pods(20)], [pods(18)], [pods(10)], [pods(5)]])).toEqual(['AirPods 20', 'AirPods 10'])
+  })
+
+  it('is quiet on the first reading and re-arms after charging', () => {
+    expect(deviceFired([[pods(15)], [pods(12)]])).toEqual([])
+    expect(deviceFired([[pods(25)], [pods(19)], [pods(80)], [pods(19)]])).toEqual(['AirPods 20', 'AirPods 20'])
+  })
+
+  it('starts over when a device disconnects or loses its level', () => {
+    expect(deviceFired([[pods(25)], [pods(25, false)], [pods(15)]])).toEqual([])
+    expect(deviceFired([[pods(25)], [pods(undefined)], [pods(15)]])).toEqual([])
+  })
+
+  it('lists low devices to charge with the Mac, lowest first', () => {
+    const mouse: BluetoothDevice = { id: 'm', name: 'Mouse', kind: 'mouse', connected: true, batteryPercent: 12 }
+    expect(lowDevices([pods(25), mouse, pods(60)]).map((d) => d.name)).toEqual(['Mouse', 'AirPods'])
+    expect(lowDevices([pods(25, false)])).toEqual([])
   })
 })

@@ -5,6 +5,7 @@ export const PERMISSIONS = [
   'media.read',
   'media.control',
   'power.read',
+  'power.control',
   'audio.read',
   'audio.control',
   'display.control',

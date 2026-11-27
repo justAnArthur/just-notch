@@ -45,6 +45,8 @@ export type Permission =
   | 'media.read'
   | 'media.control'
   | 'power.read'
+  /** `power.stayAwake`, `power.allowSleep`: keeps the Mac (and optionally its display) from sleeping. */
+  | 'power.control'
   | 'audio.read'
   | 'audio.control'
   | 'display.control'
@@ -169,7 +171,7 @@ export interface HideWhen {
  * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention, 1.6
  * search action shortcuts, `stay` and number keys.
  */
-export const API_VERSION = '1.7.0'
+export const API_VERSION = '1.8.0'
 
 interface Version {
   major: number
@@ -804,6 +806,13 @@ export interface Methods {
 
   'media.command': { params: MediaCommand; result: null }
   'audio.setVolume': { params: { volume: number }; result: null }
+  /**
+   * Keeps the Mac from idle sleep, and the display too when `display`, until `power.allowSleep` or the plugin stops.
+   * `reason` shows in `pmset -g assertions`. Calling it again replaces the plugin's hold. API 1.8.
+   */
+  'power.stayAwake': { params: { display: boolean; reason: string }; result: null }
+  /** Ends the plugin's `power.stayAwake`. API 1.8. */
+  'power.allowSleep': { params: Record<string, never>; result: null }
   'display.setBrightness': { params: { brightness: number }; result: null }
   'display.setKeyboardBacklight': { params: { level: number }; result: null }
   /** While enabled the host intercepts volume / brightness keys and sends `hud` events instead of the system HUD. Needs Accessibility. */
@@ -1029,6 +1038,8 @@ export interface HostRequest<M extends Method = Method> {
 export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'media.command': 'media.control',
   'audio.setVolume': 'audio.control',
+  'power.stayAwake': 'power.control',
+  'power.allowSleep': 'power.control',
   'display.setBrightness': 'display.control',
   'display.setKeyboardBacklight': 'display.control',
   'hud.setEnabled': 'hud',

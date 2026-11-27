@@ -1,0 +1,16 @@
+{
+  "id": "awake",
+  "name": "Stay Awake",
+  "version": "0.1.0",
+  "description": "Keeps your Mac awake for a download, a render or a talk, then lets it sleep on its own: after a time you pick, or when the battery gets low.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "power.control",
+    "power.read"
+  ],
+  "engines": {
+    "notch": "^1.8.0"
+  }
+}
