@@ -9,6 +9,7 @@ public enum ServiceRegistry {
             ScreenTextService(),
             TranslateService(),
             RemindersService(),
+            NetworkService(),
             DisplayService(),
             HUDService(),
             MediaService(),

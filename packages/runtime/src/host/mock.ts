@@ -84,6 +84,7 @@ const values: Topics = {
   power: { percent: 76, charging: false, pluggedIn: false, minutesRemaining: 312, lowPowerMode: false, hasBattery: true },
   audio: { volume: 0.5, muted: false, outputDevice: 'MacBook Pro Speakers' },
   reminders: { access: 'granted', due: [] },
+  network: { online: true, kind: 'wifi', vpn: false, inCall: false, failedProbes: 0 },
   audioDevices: {
     outputs: [
       { id: 'builtin-out', name: 'MacBook Pro Speakers', transport: 'builtIn' },
@@ -893,6 +894,10 @@ export const mock = {
     emit({ type: 'bluetooth.connected', payload: device })
     // macOS moves both the output and the input to AirPods when they connect.
     publish('audioDevices', { ...values.audioDevices, output: 'airpods-out', input: 'airpods-in' })
+  },
+  /** The connection changes: `network({ online: false })`, `network({ inCall: true, latencyMs: 900 })`. */
+  network(change: Partial<Topics['network']>) {
+    publish('network', { ...values.network, ...change })
   },
   /** A reminder comes due now. */
   reminderDue(title = 'Call the bank') {

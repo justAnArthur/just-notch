@@ -25,6 +25,7 @@ enum Permission: String, Codable {
     case powerControl = "power.control"
     case screenRead = "screen.read"
     case reminders
+    case networkRead = "network.read"
     case audioRead = "audio.read"
     case audioControl = "audio.control"
     case displayControl = "display.control"
@@ -152,6 +153,7 @@ enum Schema {
         "audio": .audioRead,
         "audioDevices": .audioRead,
         "reminders": .reminders,
+        "network": .networkRead,
         "calendar": .calendarRead,
         "bluetooth": .bluetoothRead,
         "stats": .statsRead,

@@ -1,0 +1,15 @@
+{
+  "id": "connection",
+  "name": "Connection",
+  "version": "0.1.0",
+  "description": "Is it you or them? During a call it tells you when your own connection gets slow or drops, and any time when you go offline or your VPN disconnects. Silent otherwise.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "network.read"
+  ],
+  "engines": {
+    "notch": "^1.12.0"
+  }
+}

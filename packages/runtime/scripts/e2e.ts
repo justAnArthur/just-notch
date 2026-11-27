@@ -502,6 +502,21 @@ await page.screenshot({ path: join(shots, '0-page.png') })
   check(/Copied 2 lines/.test(await page.locator('#island').innerText()), 'grab text: the picked text is copied, with a flash')
   await page.waitForTimeout(3400)
 
+  // Connection: offline flashes at once; during a call, a slow connection is called out as yours.
+  await mock(page, 'network({ online: false })')
+  await waitState(page, 'flash')
+  check(/offline/i.test(await page.locator('#island').innerText()), 'connection: going offline flashes')
+  await page.waitForTimeout(4400)
+  await mock(page, 'network({ online: true })')
+  await mock(page, 'network({ inCall: true, latencyMs: 60 })')
+  await page.waitForTimeout(300)
+  await mock(page, 'network({ inCall: true, latencyMs: 900 })')
+  await waitState(page, 'flash')
+  check(/on your side/.test(await page.locator('#island').innerText()), 'connection: a slow connection in a call is called out')
+  await shoot(page, 'connection-slow')
+  await mock(page, 'network({ inCall: false })')
+  await page.waitForTimeout(6400)
+
   // Reminders: one that comes due flashes, then stays beside the notch until Done.
   await mock(page, `reminderDue('Call the bank')`)
   await waitState(page, 'flash')

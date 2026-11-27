@@ -666,3 +666,18 @@ struct LauncherServiceTests {
         }
     }
 }
+
+@Suite @MainActor struct NetworkTests {
+    @Test func publishesTheConnection() async throws {
+        let sink = RecordingSink()
+        let service = NetworkService()
+        service.sink = sink
+        service.start(topic: "network")
+        defer { service.stop(topic: "network") }
+        for _ in 0..<40 where sink.published["network"] == nil { try await Task.sleep(for: .milliseconds(50)) }
+        let state = try JSONDecoder().decode(NetworkState.self, from: try #require(sink.published["network"]?.last))
+        // This Mac is online while the tests run; outside a call there's no probe.
+        #expect(state.online)
+        #expect(state.latencyMs == nil || state.inCall)
+    }
+}

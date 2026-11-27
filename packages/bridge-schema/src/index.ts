@@ -51,6 +51,8 @@ export type Permission =
   | 'screen.read'
   /** `reminders` topic and `reminders.*`: your due reminders; add, complete and snooze them. */
   | 'reminders'
+  /** `network` topic: online or not, Wi-Fi or wired, a VPN, and during calls how quick the connection is. */
+  | 'network.read'
   | 'audio.read'
   | 'audio.control'
   | 'display.control'
@@ -175,7 +177,7 @@ export interface HideWhen {
  * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention, 1.6
  * search action shortcuts, `stay` and number keys.
  */
-export const API_VERSION = '1.11.0'
+export const API_VERSION = '1.12.0'
 
 interface Version {
   major: number
@@ -395,6 +397,21 @@ export interface CalendarEvent {
   calendarColor: string // `#rrggbb` from EventKit; plugin data, not a theme value
   location?: string
   meetingUrl?: string
+}
+
+/** The Mac's connection. API 1.12. */
+export interface NetworkState {
+  online: boolean
+  /** How it's connected while online. */
+  kind?: 'wifi' | 'ethernet' | 'cellular' | 'other'
+  /** A full-tunnel VPN carries the traffic (it is the primary interface). */
+  vpn: boolean
+  /** An app records from the microphone: the host measures the connection only then. */
+  inCall: boolean
+  /** During a call: the last TCP handshake with the internet, ms. */
+  latencyMs?: number
+  /** During a call: handshakes in a row that failed or took over 3 s. */
+  failedProbes: number
 }
 
 /** An incomplete reminder from Apple Reminders. API 1.11. */
@@ -656,6 +673,7 @@ export interface Topics {
   audio: AudioState
   audioDevices: AudioDevices
   reminders: RemindersState
+  network: NetworkState
   display: DisplayState
   calendar: CalendarState
   bluetooth: BluetoothDevice[]
@@ -675,6 +693,7 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
   audio: 'audio.read',
   audioDevices: 'audio.read',
   reminders: 'reminders',
+  network: 'network.read',
   calendar: 'calendar.read',
   bluetooth: 'bluetooth.read',
   stats: 'stats.read',
