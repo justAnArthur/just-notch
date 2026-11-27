@@ -198,6 +198,24 @@
         "react": ">=19",
       },
     },
+    "plugins/finish-line": {
+      "name": "@just-notch/plugin-finish-line",
+      "version": "0.1.0",
+      "dependencies": {
+        "@just-notch/sdk": "workspace:*",
+        "lucide-react": "^1.72.0",
+      },
+      "devDependencies": {
+        "@just-notch/cli": "workspace:*",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.8.0",
+        "@types/react": "^19.2.0",
+        "react": "^19.2.0",
+      },
+      "peerDependencies": {
+        "react": ">=19",
+      },
+    },
     "plugins/now-playing": {
       "name": "@just-notch/plugin-now-playing",
       "version": "0.2.0",
@@ -413,6 +431,8 @@
     "@just-notch/plugin-clock": ["@just-notch/plugin-clock@workspace:plugins/clock"],
 
     "@just-notch/plugin-controls": ["@just-notch/plugin-controls@workspace:plugins/controls"],
+
+    "@just-notch/plugin-finish-line": ["@just-notch/plugin-finish-line@workspace:plugins/finish-line"],
 
     "@just-notch/plugin-github": ["@just-notch/plugin-github@workspace:library/github"],
 

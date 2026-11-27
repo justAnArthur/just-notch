@@ -491,6 +491,22 @@ await page.screenshot({ path: join(shots, '0-page.png') })
   await waitState(page, 'compact')
   check((await outline()) >= 30, 'back to full: the island shows its activity again')
 
+  // Finish Line: a long command shows beside the notch, and its end flashes ✓ or ✗.
+  await page.waitForTimeout(2600)
+  await mock(page, `deepLink('justnotch://task/start?id=e2e-1&title=npm%20run%20build&app=com.apple.Terminal')`)
+  await page.waitForTimeout(800)
+  check(/Finish Line|running/i.test((await page.locator('#island').innerHTML())) || ['compact', 'split'].includes((await state(page)) ?? ''), 'finish line: a long command shows beside the notch')
+  await mock(page, `deepLink('justnotch://task/end?id=e2e-1&title=npm%20run%20build&status=0&seconds=133')`)
+  await waitState(page, 'flash')
+  const doneText = await page.locator('#island').innerText()
+  check(/npm run build/.test(doneText) && /Done in 2 min 13 s/.test(doneText), 'finish line: the end flashes with how long it took')
+  await shoot(page, 'finish-line-done')
+  await page.waitForTimeout(5600)
+  await mock(page, `deepLink('justnotch://task/end?id=e2e-2&title=make&status=2&seconds=5')`)
+  await waitState(page, 'flash')
+  check(/exit code 2/.test(await page.locator('#island').innerText()), 'finish line: a failure says its exit code')
+  await page.waitForTimeout(8600)
+
   // Sound Check: AirPods take the output and the mic in one flash; a call on their mic offers the Mac's.
   await page.waitForTimeout(2600)
   await mock(page, 'airpods()')

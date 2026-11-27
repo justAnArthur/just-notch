@@ -1,0 +1,16 @@
+{
+  "id": "finish-line",
+  "name": "Finish Line",
+  "version": "0.1.0",
+  "description": "Shows a terminal command that runs long beside the notch, and flashes ✓ or ✗ the moment it ends, so you can stop checking on builds, installs and exports.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "apps.read",
+    "apps.launch"
+  ],
+  "engines": {
+    "notch": "^1.9.0"
+  }
+}
