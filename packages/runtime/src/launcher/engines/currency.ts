@@ -10,7 +10,8 @@ const SYMBOLS: Record<string, string> = {
 const NAMES: Record<string, string> = {
   dollar: 'USD', buck: 'USD', euro: 'EUR', pound: 'GBP', quid: 'GBP', yen: 'JPY', ruble: 'RUB', rouble: 'RUB',
   koruna: 'CZK', crown: 'CZK', zloty: 'PLN', złoty: 'PLN', rupee: 'INR', yuan: 'CNY', renminbi: 'CNY', won: 'KRW',
-  franc: 'CHF', lira: 'TRY', hryvnia: 'UAH', real: 'BRL', reais: 'BRL', peso: 'MXN', forint: 'HUF', shekel: 'ILS',
+  franc: 'CHF', lira: 'TRY', hryvnia: 'UAH', hryvnya: 'UAH', грн: 'UAH', tenge: 'KZT', lari: 'GEL', dirham: 'AED',
+  riyal: 'SAR', dong: 'VND', manat: 'AZN', taka: 'BDT', real: 'BRL', reais: 'BRL', peso: 'MXN', forint: 'HUF', shekel: 'ILS',
 }
 
 // [prefix symbol] amount [currency] (in|to|→) currency
@@ -42,11 +43,13 @@ export function currencyAnswer(input: string, rates: CurrencyRates | null | unde
   const value = (amount * rateOf(to, rates)) / rateOf(from, rates)
   const digits = fractionDigits(to)
   const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  const day = (iso: string) => date.format(new Date(`${iso}T00:00:00Z`))
+  const extra = rates.extra && [from, to].some((code) => rates.extra?.codes.includes(code)) ? rates.extra : null
   return {
     kind: 'currency',
     expression: `${formatNumber(amount, locale)} ${from} → ${to}`,
     result: `${formatFixed(value, digits, locale)} ${to}`,
     copy: value.toFixed(digits),
-    detail: `ECB rates of ${date.format(new Date(`${rates.date}T00:00:00Z`))}`,
+    detail: extra ? `ECB and NBU rates of ${day(extra.date)}` : `ECB rates of ${day(rates.date)}`,
   }
 }

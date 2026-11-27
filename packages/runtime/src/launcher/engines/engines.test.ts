@@ -195,6 +195,17 @@ describe('currency', () => {
     })
   })
 
+  it('crosses currencies the ECB leaves out through the NBU', () => {
+    const withUah: CurrencyRates = { ...rates, rates: { ...rates.rates, UAH: 50 }, extra: { source: 'NBU', date: '2026-11-19', codes: ['UAH'] } }
+    expect(answer('1120 uah in eur', { rates: withUah })).toMatchObject({
+      expression: '1,120 UAH → EUR',
+      result: '22.40 EUR',
+      detail: 'ECB and NBU rates of 19 Nov 2026',
+    })
+    expect(answer('100 hryvnias to usd', { rates: withUah })?.copy).toBe('2.50')
+    expect(answer('10 usd to eur', { rates: withUah })?.detail).toBe('ECB rates of 18 Nov 2026')
+  })
+
   it('needs rates and known currencies', () => {
     expect(answer('12 usd to eur', { rates: null })).toBeNull()
     expect(answer('12 usd to eur', { rates: undefined })).toBeNull()

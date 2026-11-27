@@ -204,6 +204,21 @@ public struct CurrencyRates: Codable, Equatable, Sendable {
     /// `YYYY-MM-DD`.
     public var date: String
     public var rates: [String: Double]
+    /// Currencies the ECB doesn't publish, crossed through another source; their rates are in `rates`.
+    public var extra: Extra?
+
+    public struct Extra: Codable, Equatable, Sendable {
+        public var source: String
+        public var date: String
+        public var codes: [String]
+    }
+
+    public init(base: String, date: String, rates: [String: Double], extra: Extra? = nil) {
+        self.base = base
+        self.date = date
+        self.rates = rates
+        self.extra = extra
+    }
 }
 
 public enum SystemAction: String, Codable, Sendable {

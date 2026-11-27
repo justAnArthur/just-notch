@@ -505,6 +505,9 @@ export interface CurrencyRates {
   date: string
   /** Units of each currency for 1 EUR, by ISO 4217 code (`USD`, `CZK`…). */
   rates: Record<string, number>
+  /** Currencies the ECB doesn't publish (`UAH`, `KZT`, `AED`…), crossed through the National Bank of Ukraine's
+   *  official rates and included in `rates`. Absent when that fetch failed. */
+  extra?: { source: 'NBU'; date: string; codes: string[] }
 }
 
 /** System actions the launcher offers (its Actions scope). */

@@ -587,6 +587,16 @@ struct LauncherServiceTests {
         #expect(ECBParser.parse(Data("<html/>".utf8)) == nil)
     }
 
+    @Test func nbuFillsInWhatTheECBLeavesOut() throws {
+        let ecb = CurrencyRates(base: "EUR", date: "2026-11-26", rates: ["USD": 1.08])
+        let json = #"[{"cc":"EUR","rate":50,"exchangedate":"27.11.2026"},{"cc":"USD","rate":46,"exchangedate":"27.11.2026"},{"cc":"KZT","rate":0.1,"exchangedate":"27.11.2026"},{"cc":"XAU","rate":160000,"exchangedate":"27.11.2026"}]"#
+        let merged = NBURates.merge(Data(json.utf8), into: ecb)
+        #expect(merged.rates == ["USD": 1.08, "UAH": 50, "KZT": 500])
+        #expect(merged.extra == .init(source: "NBU", date: "2026-11-27", codes: ["KZT", "UAH"]))
+        #expect(NBURates.merge(nil, into: ecb) == ecb)
+        #expect(NBURates.merge(Data("<html/>".utf8), into: ecb) == ecb)
+    }
+
     @Test func fileExclusions() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         #expect(!FileSearch.excluded("\(home)/Documents/report.pdf"))

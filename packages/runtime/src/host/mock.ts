@@ -351,8 +351,9 @@ function mockRates(): CurrencyRates {
       USD: 1.0812, JPY: 163.42, BGN: 1.9558, CZK: 25.118, DKK: 7.4742, GBP: 0.83581, HUF: 369.43, PLN: 4.2715, RON: 5.3473,
       SEK: 11.284, CHF: 0.9412, ISK: 147.9, NOK: 10.6475, TRY: 55.4737, AUD: 1.6378, BRL: 6.4765, CAD: 1.5719, CNY: 7.7821,
       HKD: 8.6239, IDR: 17_412.5, ILS: 3.6149, INR: 102.55, KRW: 1460.23, MXN: 20.7946, MYR: 4.5205, NZD: 1.989, PHP: 70.014,
-      SGD: 1.4176, THB: 37.218, ZAR: 18.9948,
+      SGD: 1.4176, THB: 37.218, ZAR: 18.9948, UAH: 49.4942,
     },
+    extra: { source: 'NBU', date: new Date().toISOString().slice(0, 10), codes: ['UAH'] },
   }
 }
 
