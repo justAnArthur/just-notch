@@ -49,6 +49,8 @@ export type Permission =
   | 'power.control'
   /** `screen.grabText`: reads the text in a region of the screen you pick (asks for Screen Recording). */
   | 'screen.read'
+  /** `reminders` topic and `reminders.*`: your due reminders; add, complete and snooze them. */
+  | 'reminders'
   | 'audio.read'
   | 'audio.control'
   | 'display.control'
@@ -173,7 +175,7 @@ export interface HideWhen {
  * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention, 1.6
  * search action shortcuts, `stay` and number keys.
  */
-export const API_VERSION = '1.10.0'
+export const API_VERSION = '1.11.0'
 
 interface Version {
   major: number
@@ -393,6 +395,24 @@ export interface CalendarEvent {
   calendarColor: string // `#rrggbb` from EventKit; plugin data, not a theme value
   location?: string
   meetingUrl?: string
+}
+
+/** An incomplete reminder from Apple Reminders. API 1.11. */
+export interface Reminder {
+  /** EventKit's calendar item id. */
+  id: string
+  title: string
+  /** When it's due, epoch ms; a reminder with a day and no time is due at 9:00 that day. */
+  due: number
+  list: string
+  /** The list's color, `#rrggbb`. */
+  listColor: string
+}
+
+/** Reminders due by the end of today, overdue ones included, soonest first (at most 50). API 1.11. */
+export interface RemindersState {
+  access: 'granted' | 'denied' | 'undetermined'
+  due: Reminder[]
 }
 
 export interface CalendarState {
@@ -635,6 +655,7 @@ export interface Topics {
   power: PowerState
   audio: AudioState
   audioDevices: AudioDevices
+  reminders: RemindersState
   display: DisplayState
   calendar: CalendarState
   bluetooth: BluetoothDevice[]
@@ -653,6 +674,7 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
   power: 'power.read',
   audio: 'audio.read',
   audioDevices: 'audio.read',
+  reminders: 'reminders',
   calendar: 'calendar.read',
   bluetooth: 'bluetooth.read',
   stats: 'stats.read',
@@ -861,6 +883,13 @@ export interface Methods {
    * already in it). Fails with what to download when a pair is missing. API 1.10.
    */
   'text.translate': { params: { text: string; to?: string }; result: Translated }
+  /** Asks for Reminders access (the system prompt the first time). API 1.11. */
+  'reminders.requestAccess': { params: Record<string, never>; result: { granted: boolean } }
+  /** Adds a reminder to the default list, due (with an alarm) at `due` epoch ms when given. API 1.11. */
+  'reminders.add': { params: { title: string; due?: number }; result: { id: string } }
+  'reminders.complete': { params: { id: string }; result: null }
+  /** Moves the reminder's due time and alarm `minutes` from now. API 1.11. */
+  'reminders.snooze': { params: { id: string; minutes: number }; result: null }
   /** Makes a device the default output (system sounds follow) or input. API 1.9. */
   'audio.setDevice': { params: { id: string; kind: 'output' | 'input' }; result: null }
   'display.setBrightness': { params: { brightness: number }; result: null }
@@ -1092,6 +1121,10 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'power.allowSleep': 'power.control',
   'audio.setDevice': 'audio.control',
   'screen.grabText': 'screen.read',
+  'reminders.requestAccess': 'reminders',
+  'reminders.add': 'reminders',
+  'reminders.complete': 'reminders',
+  'reminders.snooze': 'reminders',
   'display.setBrightness': 'display.control',
   'display.setKeyboardBacklight': 'display.control',
   'hud.setEnabled': 'hud',

@@ -23,6 +23,7 @@ const AREAS: Record<string, { name: string; path?: string }> = {
   'finish-line': { name: 'Finish Line', path: 'plugins/finish-line' },
   'grab-text': { name: 'Grab Text', path: 'plugins/grab-text' },
   translate: { name: 'Translate', path: 'plugins/translate' },
+  reminders: { name: 'Reminders', path: 'plugins/reminders' },
 }
 
 const titleCase = (id: string) => id.replace(/[-_]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase())

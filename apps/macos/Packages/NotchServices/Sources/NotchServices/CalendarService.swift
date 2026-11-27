@@ -118,7 +118,7 @@ public final class CalendarService: NotchService {
         )
     }
 
-    static func hex(_ color: NSColor?) -> String {
+    nonisolated static func hex(_ color: NSColor?) -> String {
         guard let rgb = color?.usingColorSpace(.sRGB) else { return "#808080" }
         func channel(_ value: CGFloat) -> Int { Int((min(1, max(0, value)) * 255).rounded()) }
         return String(format: "#%02x%02x%02x", channel(rgb.redComponent), channel(rgb.greenComponent), channel(rgb.blueComponent))

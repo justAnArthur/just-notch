@@ -1,0 +1,15 @@
+{
+  "id": "reminders",
+  "name": "Reminders",
+  "version": "0.1.0",
+  "description": "A due reminder stays beside the notch until you finish or snooze it, even in full screen, instead of a notification you swipe away. Type “remind 5pm call the bank” in the launcher to add one; they live in Apple Reminders and sync to your phone.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "reminders"
+  ],
+  "engines": {
+    "notch": "^1.11.0"
+  }
+}

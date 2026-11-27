@@ -17,6 +17,7 @@ const NULLABLE: { [T in Topic]: null extends Topics[T] ? true : false } = {
   power: false,
   audio: false,
   audioDevices: false,
+  reminders: false,
   display: false,
   calendar: false,
   bluetooth: false,

@@ -11,6 +11,7 @@ export const PERMISSION_INFO: Record<Permission, LibraryPermission> = {
   'media.read': { label: 'Now playing', description: 'Sees what’s playing in your music and video apps.' },
   'media.control': { label: 'Media control', description: 'Plays, pauses and skips in your media apps.' },
   'power.read': { label: 'Battery', description: 'Sees your battery level and whether it’s charging.' },
+  reminders: { label: 'Reminders', description: 'Sees your due reminders, and adds, completes and snoozes them in Apple Reminders.' },
   'screen.read': { label: 'Screen text', description: 'Reads the text and QR codes in a part of the screen you pick. Nothing leaves your Mac.' },
   'power.control': { label: 'Keep awake', description: 'Keeps your Mac, and its display if asked, from going to sleep.' },
   'audio.read': { label: 'Volume', description: 'Sees the volume and which speakers or headphones play.' },

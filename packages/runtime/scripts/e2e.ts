@@ -502,6 +502,17 @@ await page.screenshot({ path: join(shots, '0-page.png') })
   check(/Copied 2 lines/.test(await page.locator('#island').innerText()), 'grab text: the picked text is copied, with a flash')
   await page.waitForTimeout(3400)
 
+  // Reminders: one that comes due flashes, then stays beside the notch until Done.
+  await mock(page, `reminderDue('Call the bank')`)
+  await waitState(page, 'flash')
+  check(/Call the bank/.test(await page.locator('#island').innerText()), 'reminders: a due reminder flashes')
+  await shoot(page, 'reminder-due')
+  await page.getByRole('button', { name: 'Done' }).click()
+  await away()
+  await page.waitForTimeout(1200)
+  check(!/Call the bank/.test(await page.locator('#island').innerText()), 'reminders: Done clears it')
+  await page.waitForTimeout(1500)
+
   // Finish Line: a long command shows beside the notch, and its end flashes ✓ or ✗.
   await page.waitForTimeout(2600)
   await mock(page, `deepLink('justnotch://task/start?id=e2e-1&title=npm%20run%20build&app=com.apple.Terminal')`)

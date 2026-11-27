@@ -24,6 +24,7 @@ enum Permission: String, Codable {
     case powerRead = "power.read"
     case powerControl = "power.control"
     case screenRead = "screen.read"
+    case reminders
     case audioRead = "audio.read"
     case audioControl = "audio.control"
     case displayControl = "display.control"
@@ -150,6 +151,7 @@ enum Schema {
         "power": .powerRead,
         "audio": .audioRead,
         "audioDevices": .audioRead,
+        "reminders": .reminders,
         "calendar": .calendarRead,
         "bluetooth": .bluetoothRead,
         "stats": .statsRead,
@@ -168,6 +170,10 @@ enum Schema {
         "power.allowSleep": .powerControl,
         "audio.setDevice": .audioControl,
         "screen.grabText": .screenRead,
+        "reminders.requestAccess": .reminders,
+        "reminders.add": .reminders,
+        "reminders.complete": .reminders,
+        "reminders.snooze": .reminders,
         "display.setBrightness": .displayControl,
         "display.setKeyboardBacklight": .displayControl,
         "hud.setEnabled": .hud,

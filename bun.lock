@@ -270,6 +270,24 @@
         "react": ">=19",
       },
     },
+    "plugins/reminders": {
+      "name": "@just-notch/plugin-reminders",
+      "version": "0.1.0",
+      "dependencies": {
+        "@just-notch/sdk": "workspace:*",
+        "lucide-react": "^1.72.0",
+      },
+      "devDependencies": {
+        "@just-notch/cli": "workspace:*",
+        "@justanarthur/modo-ui": "^2.2.0",
+        "@justanarthur/modo-ui-notch": "^0.8.0",
+        "@types/react": "^19.2.0",
+        "react": "^19.2.0",
+      },
+      "peerDependencies": {
+        "react": ">=19",
+      },
+    },
     "plugins/sound": {
       "name": "@just-notch/plugin-sound",
       "version": "0.1.0",
@@ -477,6 +495,8 @@
     "@just-notch/plugin-now-playing": ["@just-notch/plugin-now-playing@workspace:plugins/now-playing"],
 
     "@just-notch/plugin-recent-files": ["@just-notch/plugin-recent-files@workspace:plugins/recent-files"],
+
+    "@just-notch/plugin-reminders": ["@just-notch/plugin-reminders@workspace:plugins/reminders"],
 
     "@just-notch/plugin-sound": ["@just-notch/plugin-sound@workspace:plugins/sound"],
 

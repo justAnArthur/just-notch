@@ -11,6 +11,7 @@ enum Consent {
         case "power.read": "See your battery level and charging state"
         case "power.control": "Keep your Mac awake"
         case "screen.read": "Read the text in parts of the screen you pick"
+        case "reminders": "See, add and complete your reminders"
         case "audio.read": "See the volume and the output device"
         case "audio.control": "Change the volume"
         case "display.control": "See and change screen and keyboard brightness"

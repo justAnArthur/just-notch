@@ -83,6 +83,7 @@ const values: Topics = {
   },
   power: { percent: 76, charging: false, pluggedIn: false, minutesRemaining: 312, lowPowerMode: false, hasBattery: true },
   audio: { volume: 0.5, muted: false, outputDevice: 'MacBook Pro Speakers' },
+  reminders: { access: 'granted', due: [] },
   audioDevices: {
     outputs: [
       { id: 'builtin-out', name: 'MacBook Pro Speakers', transport: 'builtIn' },
@@ -571,6 +572,20 @@ const handlers: Handlers = {
   },
   'power.stayAwake': () => null,
   'power.allowSleep': () => null,
+  'reminders.requestAccess': () => ({ granted: true }),
+  'reminders.add': ({ title, due }) => {
+    const id = `r${Date.now()}`
+    publish('reminders', { ...values.reminders, due: [...values.reminders.due, { id, title, due: due ?? Date.now(), list: 'Reminders', listColor: '#ff9f0a' }] })
+    return { id }
+  },
+  'reminders.complete': ({ id }) => {
+    publish('reminders', { ...values.reminders, due: values.reminders.due.filter((r) => r.id !== id) })
+    return null
+  },
+  'reminders.snooze': ({ id, minutes }) => {
+    publish('reminders', { ...values.reminders, due: values.reminders.due.map((r) => (r.id === id ? { ...r, due: Date.now() + minutes * 60_000 } : r)) })
+    return null
+  },
   'text.translate': ({ text, to }) => ({ text: `[${to ?? 'en'}] ${text}`, from: 'uk', to: to ?? 'en' }),
   'screen.grabText': () => ({ text: 'Error 0x8007045D\nThe request could not be performed because of an I/O device error.', codes: [] }),
   'audio.setDevice': ({ id, kind }) => {
@@ -878,6 +893,10 @@ export const mock = {
     emit({ type: 'bluetooth.connected', payload: device })
     // macOS moves both the output and the input to AirPods when they connect.
     publish('audioDevices', { ...values.audioDevices, output: 'airpods-out', input: 'airpods-in' })
+  },
+  /** A reminder comes due now. */
+  reminderDue(title = 'Call the bank') {
+    publish('reminders', { ...values.reminders, due: [...values.reminders.due, { id: `r${Date.now()}`, title, due: Date.now() - 1000, list: 'Reminders', listColor: '#ff9f0a' }] })
   },
   /** An app starts (or stops) recording from the microphone: a call. */
   call(on = true) {

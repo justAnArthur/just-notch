@@ -7,6 +7,7 @@ export const PERMISSIONS = [
   'power.read',
   'power.control',
   'screen.read',
+  'reminders',
   'audio.read',
   'audio.control',
   'display.control',
