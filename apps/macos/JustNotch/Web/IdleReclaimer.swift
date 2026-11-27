@@ -39,7 +39,7 @@ final class IdleReclaimer {
         let now = Date()
         for panel in panels() where panel.isQuiet && now.timeIntervalSince(panel.lastActive) >= Self.quietFor {
             // The pill on a display without a notch is visible: it would blink.
-            guard panel.geometry.hasNotch || panel.steppedAside || panel.geometry.mode == .hidden else { continue }
+            guard panel.geometry.hasNotch || panel.steppedAside || panel.geometry.quiet || panel.geometry.mode == .hidden else { continue }
             let webView = panel.webView
             guard let footprint = Self.footprint(of: webView), footprint > Self.threshold else { continue }
             webView.evaluateJavaScript("window.__notch?.idle?.() === true") { [weak self] result, _ in

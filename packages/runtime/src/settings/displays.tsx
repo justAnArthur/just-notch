@@ -42,8 +42,8 @@ export default function DisplaysPage({ preferences, onChange }: DisplaysPageProp
       </List.Section>
       <List.Section title="Step aside">
         <SwitchRow
-          label="In full screen"
-          description="Hides the island on a display while an app is full screen there."
+          label="Quiet in full screen"
+          description="While an app is full screen, the island keeps out of the way there: nothing playing or running shows, only volume, brightness and alerts, and it still opens when you point at the notch."
           checked={hideWhen.fullScreen}
           onCheckedChange={(fullScreen) => onChange({ hideWhen: { fullScreen } })}
         />

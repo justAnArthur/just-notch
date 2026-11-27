@@ -126,6 +126,11 @@ export interface ScreenGeometry {
    * `hidden` no island (the panel stays only so the launcher can drop out of it, when every display is hidden).
    */
   mode: DisplayMode
+  /**
+   * An app is full screen on this display (with `HideWhen.fullScreen` on): the island keeps out of the way, as
+   * `pill` does, and shows no ongoing activities, only flashes (volume, brightness…) and what the pointer opens.
+   */
+  quiet?: boolean
 }
 
 /** The island on a display: `hidden`, `pill` (activities and hover only) or `full`. */
@@ -141,7 +146,7 @@ export interface DisplayInfo {
 
 /** When the island steps aside on its own. */
 export interface HideWhen {
-  /** An app is full screen on its display. */
+  /** An app is full screen on its display: the island goes quiet there (see `ScreenGeometry.quiet`). */
   fullScreen: boolean
   /** The microphone is in use (a call), on every display. */
   calls: boolean

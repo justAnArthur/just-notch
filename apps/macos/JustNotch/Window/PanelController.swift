@@ -19,8 +19,10 @@ final class PanelController {
     private var fileDragActive = false
     /// A file drag from another app is in flight (set by the app's pointer polling).
     private var externalFileDrag = false
-    /// Faded out for a full-screen app on this screen, or a call (`ScreenLayout.hideWhen`).
+    /// Faded out for a call (`ScreenLayout.hideWhen.calls`).
     private(set) var steppedAside = false
+    /// A full-screen app on this screen: the island stays reachable but shows only flashes (`ScreenGeometry.quiet`).
+    private var quiet = false
     /// The last time the pointer was at the island, its shape changed or a drag touched it (`IdleReclaimer`).
     private(set) var lastActive = Date()
 
@@ -43,8 +45,14 @@ final class PanelController {
     func move(to screen: NSScreen) {
         let layout = ScreenLayout.layout(screen)
         panel.setFrame(layout.frame, display: true)
-        guard layout.geometry != geometry else { return }
-        geometry = layout.geometry
+        var next = layout.geometry
+        next.quiet = quiet
+        setGeometry(next)
+    }
+
+    private func setGeometry(_ next: ScreenGeometry) {
+        guard next != geometry else { return }
+        geometry = next
         events.send("geometry", geometry, key: "geometry", to: [webView])
     }
 
@@ -99,10 +107,16 @@ final class PanelController {
 
     // MARK: stepping aside
 
-    /// Fades the island out (or back) for what `PresenceMonitor` saw; never while the launcher is open here.
+    /// Quiets the island for a full-screen app here, and fades it out (or back) for a call; never while the
+    /// launcher is open here.
     func updatePresence(fullScreen: Set<String>, call: Bool) {
         let rules = ScreenLayout.hideWhen
-        let aside = !panel.launcher && ((rules.fullScreen && fullScreen.contains(geometry.screenId)) || (rules.calls && call))
+        quiet = rules.fullScreen && fullScreen.contains(geometry.screenId)
+        var next = geometry
+        next.quiet = quiet
+        setGeometry(next)
+
+        let aside = !panel.launcher && rules.calls && call
         guard aside != steppedAside else { return }
         steppedAside = aside
         if aside { panel.ignoresMouseEvents = true }

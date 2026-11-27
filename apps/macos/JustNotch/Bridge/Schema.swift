@@ -87,6 +87,8 @@ struct ScreenGeometry: Codable, Equatable {
     var scale: Double
     var screenId: String
     var mode: DisplayMode = .full
+    /// An app is full screen here (and `HideWhen.fullScreen` is on): no ongoing activities, only flashes and hover.
+    var quiet = false
 }
 
 /// bridge-schema `DisplayMode`: the island on a display.

@@ -818,6 +818,11 @@ export const mock = {
     emit({ type: 'launcher', payload: { open, top: 220 } })
   },
   hover: (inside: boolean) => emit({ type: 'hover', payload: { inside } }),
+  /** An app goes full screen on this display (or leaves it): the host's quiet geometry. */
+  fullScreen: (on: boolean) => {
+    geometry.quiet = on
+    emit({ type: 'geometry', payload: { ...geometry } })
+  },
   /** Presses the shortcut registered as `accelerator`, else the last one registered. */
   shortcut(accelerator?: string) {
     const id = [...shortcuts].reverse().find(([, a]) => !accelerator || a === accelerator)?.[0]
