@@ -171,7 +171,7 @@ export interface HideWhen {
  * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention, 1.6
  * search action shortcuts, `stay` and number keys.
  */
-export const API_VERSION = '1.8.0'
+export const API_VERSION = '1.9.0'
 
 interface Version {
   major: number
@@ -347,6 +347,24 @@ export interface AudioState {
   volume: number // 0…1
   muted: boolean
   outputDevice: string
+}
+
+/** A speaker, headphones or microphone. */
+export interface AudioDevice {
+  /** CoreAudio's UID: stable across launches and reconnects. */
+  id: string
+  name: string
+  transport: 'builtIn' | 'bluetooth' | 'usb' | 'hdmi' | 'displayPort' | 'airPlay' | 'virtual' | 'other'
+}
+
+/** The Mac's audio devices, which ones are in use, and whether an app is recording (usually a call). API 1.9. */
+export interface AudioDevices {
+  outputs: AudioDevice[]
+  inputs: AudioDevice[]
+  /** The default output's and input's ids. */
+  output?: string
+  input?: string
+  micInUse: boolean
 }
 
 export interface CalendarEvent {
@@ -599,6 +617,7 @@ export interface Topics {
   media: MediaState | null
   power: PowerState
   audio: AudioState
+  audioDevices: AudioDevices
   display: DisplayState
   calendar: CalendarState
   bluetooth: BluetoothDevice[]
@@ -616,6 +635,7 @@ export const TOPIC_PERMISSION: Record<Topic, Permission> = {
   media: 'media.read',
   power: 'power.read',
   audio: 'audio.read',
+  audioDevices: 'audio.read',
   calendar: 'calendar.read',
   bluetooth: 'bluetooth.read',
   stats: 'stats.read',
@@ -813,6 +833,8 @@ export interface Methods {
   'power.stayAwake': { params: { display: boolean; reason: string }; result: null }
   /** Ends the plugin's `power.stayAwake`. API 1.8. */
   'power.allowSleep': { params: Record<string, never>; result: null }
+  /** Makes a device the default output (system sounds follow) or input. API 1.9. */
+  'audio.setDevice': { params: { id: string; kind: 'output' | 'input' }; result: null }
   'display.setBrightness': { params: { brightness: number }; result: null }
   'display.setKeyboardBacklight': { params: { level: number }; result: null }
   /** While enabled the host intercepts volume / brightness keys and sends `hud` events instead of the system HUD. Needs Accessibility. */
@@ -1040,6 +1062,7 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'audio.setVolume': 'audio.control',
   'power.stayAwake': 'power.control',
   'power.allowSleep': 'power.control',
+  'audio.setDevice': 'audio.control',
   'display.setBrightness': 'display.control',
   'display.setKeyboardBacklight': 'display.control',
   'hud.setEnabled': 'hud',

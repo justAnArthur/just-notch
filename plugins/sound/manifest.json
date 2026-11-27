@@ -1,0 +1,16 @@
+{
+  "id": "sound",
+  "name": "Sound Check",
+  "version": "0.1.0",
+  "description": "Says when your sound or microphone moves to another device, and warns when a call is about to use your AirPods' microphone, with a one-click switch.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "audio.read",
+    "audio.control"
+  ],
+  "engines": {
+    "notch": "^1.9.0"
+  }
+}

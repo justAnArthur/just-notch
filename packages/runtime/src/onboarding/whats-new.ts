@@ -19,6 +19,7 @@ const AREAS: Record<string, { name: string; path?: string }> = {
   'now-playing': { name: 'Now Playing', path: 'plugins/now-playing' },
   'recent-files': { name: 'Recent files', path: 'plugins/recent-files' },
   awake: { name: 'Stay Awake', path: 'plugins/awake' },
+  sound: { name: 'Sound Check', path: 'plugins/sound' },
 }
 
 const titleCase = (id: string) => id.replace(/[-_]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase())

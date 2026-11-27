@@ -83,6 +83,19 @@ const values: Topics = {
   },
   power: { percent: 76, charging: false, pluggedIn: false, minutesRemaining: 312, lowPowerMode: false, hasBattery: true },
   audio: { volume: 0.5, muted: false, outputDevice: 'MacBook Pro Speakers' },
+  audioDevices: {
+    outputs: [
+      { id: 'builtin-out', name: 'MacBook Pro Speakers', transport: 'builtIn' },
+      { id: 'airpods-out', name: 'AirPods Pro', transport: 'bluetooth' },
+    ],
+    inputs: [
+      { id: 'builtin-in', name: 'MacBook Pro Microphone', transport: 'builtIn' },
+      { id: 'airpods-in', name: 'AirPods Pro', transport: 'bluetooth' },
+    ],
+    output: 'builtin-out',
+    input: 'builtin-in',
+    micInUse: false,
+  },
   display: { brightness: 0.6, keyboardBacklight: 0.4 },
   calendar: {
     access: 'granted',
@@ -558,6 +571,10 @@ const handlers: Handlers = {
   },
   'power.stayAwake': () => null,
   'power.allowSleep': () => null,
+  'audio.setDevice': ({ id, kind }) => {
+    publish('audioDevices', { ...values.audioDevices, [kind]: id })
+    return null
+  },
   'audio.setVolume': ({ volume }) => {
     publish('audio', { ...values.audio, volume })
     return null
@@ -857,6 +874,12 @@ export const mock = {
     const device: BluetoothDevice = { id: 'airpods', name: 'AirPods Pro', kind: 'headphones', connected: true, batteryPercent: 82 }
     publish('bluetooth', values.bluetooth.map((d) => (d.id === device.id ? device : d)))
     emit({ type: 'bluetooth.connected', payload: device })
+    // macOS moves both the output and the input to AirPods when they connect.
+    publish('audioDevices', { ...values.audioDevices, output: 'airpods-out', input: 'airpods-in' })
+  },
+  /** An app starts (or stops) recording from the microphone: a call. */
+  call(on = true) {
+    publish('audioDevices', { ...values.audioDevices, micInUse: on })
   },
   fileDrag() {
     emit({ type: 'files.dragging', payload: { active: true, count: 2 } })
