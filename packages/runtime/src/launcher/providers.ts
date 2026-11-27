@@ -49,7 +49,7 @@ const FILES_TIMEOUT_MS = 2000
 export const rootSources = (scopes: Scope[]) =>
   [BUILT_IN[0], BUILT_IN[2], BUILT_IN[1], ...scopes.filter((s) => s.plugin && s.rootLimit !== false)].map((s) => ({ id: s.id, title: s.title }))
 
-/** Built-in scopes, then each running plugin's, in the host's plugin order. */
+/** Built-in scopes, then each running plugin's, in the host's plugin order. Only the first `MAX_SCOPES` get a button. */
 export function useScopes(): Scope[] {
   const plugins = usePlugins()
   const own = plugins.flatMap((plugin): Scope[] => {
@@ -58,7 +58,7 @@ export function useScopes(): Scope[] {
     const root = search.root === false ? false : (search.root?.limit ?? 3)
     return [{ id: `plugin:${plugin.installed.manifest.id}`, title: search.title, icon: search.icon ?? Sparkles, plugin, keywords: search.keywords ?? [], rootLimit: root, numberKeys: search.numberKeys }]
   })
-  return [...BUILT_IN, ...own].slice(0, MAX_SCOPES)
+  return [...BUILT_IN, ...own]
 }
 
 const SYSTEM_ACTIONS: { action: SystemAction; title: string; keywords: string[]; icon: ComponentType<IconProps>; confirm?: string }[] = [

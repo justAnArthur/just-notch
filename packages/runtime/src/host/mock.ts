@@ -571,6 +571,8 @@ const handlers: Handlers = {
   },
   'power.stayAwake': () => null,
   'power.allowSleep': () => null,
+  'text.translate': ({ text, to }) => ({ text: `[${to ?? 'en'}] ${text}`, from: 'uk', to: to ?? 'en' }),
+  'screen.grabText': () => ({ text: 'Error 0x8007045D\nThe request could not be performed because of an I/O device error.', codes: [] }),
   'audio.setDevice': ({ id, kind }) => {
     publish('audioDevices', { ...values.audioDevices, [kind]: id })
     return null

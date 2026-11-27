@@ -23,6 +23,7 @@ enum Permission: String, Codable {
     case mediaControl = "media.control"
     case powerRead = "power.read"
     case powerControl = "power.control"
+    case screenRead = "screen.read"
     case audioRead = "audio.read"
     case audioControl = "audio.control"
     case displayControl = "display.control"
@@ -166,6 +167,7 @@ enum Schema {
         "power.stayAwake": .powerControl,
         "power.allowSleep": .powerControl,
         "audio.setDevice": .audioControl,
+        "screen.grabText": .screenRead,
         "display.setBrightness": .displayControl,
         "display.setKeyboardBacklight": .displayControl,
         "hud.setEnabled": .hud,

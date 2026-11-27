@@ -131,7 +131,8 @@ function search(query: string, ctx: PluginContext, root: boolean): SearchItem[] 
   const wantsMic = /\b(mic|microphone|input)/.test(q)
   // Virtual devices (Loom, Zoom, loopback tools) only inside the scope, not in every search.
   const shown = (d: AudioDevice) => !root || d.transport !== 'virtual'
-  const named = (d: AudioDevice) => !q || root || d.name.toLowerCase().includes(q) || /^(sound|audio|output|speaker|mic|microphone|input)/.test(q)
+  const word = /^(sou|aud|out|spe|mic|inp|hea)/.test(q)
+  const named = (d: AudioDevice) => !q || word || d.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || d.name.toLowerCase().startsWith(q)
   const outputs = wantsMic ? [] : devices.outputs.filter((d) => shown(d) && named(d))
   const inputs = devices.inputs.filter((d) => shown(d) && (wantsMic || named(d)))
   const row = (device: AudioDevice, kind: 'output' | 'input'): SearchItem => {

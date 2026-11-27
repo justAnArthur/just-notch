@@ -635,3 +635,34 @@ struct LauncherServiceTests {
         #expect(!service.isHolding)
     }
 }
+
+@Suite struct ScreenTextTests {
+    @Test func readsTextInAPicture() throws {
+        let size = NSSize(width: 640, height: 160)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: size).fill()
+        ("Build finished in 42 seconds" as NSString).draw(at: NSPoint(x: 20, y: 60), withAttributes: [.font: NSFont.systemFont(ofSize: 36), .foregroundColor: NSColor.black])
+        image.unlockFocus()
+        let cgImage = try #require(image.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        let grabbed = try ScreenTextService.read(cgImage)
+        #expect(grabbed.text.contains("Build finished"))
+        #expect(grabbed.codes.isEmpty)
+    }
+}
+
+@Suite @MainActor struct TranslateTests {
+    @Test func picksTheTarget() {
+        let english = Locale.Language(identifier: "en")
+        #expect(TranslateService.target(for: english, requested: "de").languageCode?.identifier == "de")
+        let mine = Locale.Language(identifier: Locale.preferredLanguages.first ?? "en")
+        #expect(TranslateService.target(for: mine, requested: nil).languageCode?.identifier == "en")
+    }
+
+    @Test func refusesEmptyText() async {
+        await #expect(throws: ServiceError.self) {
+            _ = try await TranslateService().handle(method: "text.translate", params: Data(#"{"text":"  "}"#.utf8))
+        }
+    }
+}

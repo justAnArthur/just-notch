@@ -1,0 +1,15 @@
+{
+  "id": "translate",
+  "name": "Translate",
+  "version": "0.1.0",
+  "description": "Read a message in your language without pasting it into a website: type tr and the text, or just tr for what you copied. Translated on your Mac by Apple's Translation; nothing leaves it.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "clipboard"
+  ],
+  "engines": {
+    "notch": "^1.10.0"
+  }
+}

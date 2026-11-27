@@ -491,6 +491,17 @@ await page.screenshot({ path: join(shots, '0-page.png') })
   await waitState(page, 'compact')
   check((await outline()) >= 30, 'back to full: the island shows its activity again')
 
+  // Grab Text: from the launcher, the picked region's text lands on the clipboard with a flash.
+  await mock(page, 'launcher()')
+  const grabSearch = page.getByPlaceholder(/Search/)
+  await grabSearch.waitFor({ timeout: 4000 })
+  await grabSearch.fill('grab')
+  await page.getByRole('option', { name: /Grab text from the screen/ }).waitFor({ timeout: 4000 })
+  await page.keyboard.press('Enter')
+  await waitState(page, 'flash')
+  check(/Copied 2 lines/.test(await page.locator('#island').innerText()), 'grab text: the picked text is copied, with a flash')
+  await page.waitForTimeout(3400)
+
   // Finish Line: a long command shows beside the notch, and its end flashes ✓ or ✗.
   await page.waitForTimeout(2600)
   await mock(page, `deepLink('justnotch://task/start?id=e2e-1&title=npm%20run%20build&app=com.apple.Terminal')`)

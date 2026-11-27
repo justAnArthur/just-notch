@@ -1,0 +1,25 @@
+{
+  "name": "@just-notch/plugin-translate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "notch build",
+    "dev": "notch dev",
+    "check": "notch check"
+  },
+  "dependencies": {
+    "@just-notch/sdk": "workspace:*",
+    "lucide-react": "^1.72.0"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@justanarthur/modo-ui": "^2.2.0",
+    "@justanarthur/modo-ui-notch": "^0.8.0",
+    "@just-notch/cli": "workspace:*",
+    "@types/react": "^19.2.0",
+    "react": "^19.2.0"
+  }
+}

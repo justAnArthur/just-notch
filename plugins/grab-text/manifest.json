@@ -1,0 +1,15 @@
+{
+  "id": "grab-text",
+  "name": "Grab Text",
+  "version": "0.1.0",
+  "description": "Copies the text you can't select: drag over an error dialog, a slide in a screen share, a video or a screenshot, and its text, or the link in a QR code, is on your clipboard. Read on your Mac; nothing is uploaded.",
+  "defaultEnabled": true,
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "permissions": [
+    "screen.read"
+  ],
+  "engines": {
+    "notch": "^1.10.0"
+  }
+}

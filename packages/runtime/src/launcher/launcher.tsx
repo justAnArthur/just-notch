@@ -179,6 +179,8 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   /** The preview pane in the root search, toggled with ⌘Y; scopes with previews always show it. */
   const [quickLook, setQuickLook] = useState(false)
   const scopes = useScopes()
+  /** The scopes with a button; the others are entered by keyword. */
+  const buttonScopes = scopes.slice(0, MAX_SCOPES)
   const scopesRef = useRef(scopes)
   scopesRef.current = scopes
   const input = useRef<HTMLInputElement>(null)
@@ -197,7 +199,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
   const fade = useMotionValue(1)
   const fadeScale = useTransform(() => 0.97 + 0.03 * fade.get())
 
-  const layout = layoutOf(geometry, top, scopes.length)
+  const layout = layoutOf(geometry, top, buttonScopes.length)
   const layoutRef = useRef(layout)
   layoutRef.current = layout
   const fieldWRef = useRef(0)
@@ -518,7 +520,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         event.preventDefault()
         // A scope whose provider takes number keys runs its nth row (Clipboard); elsewhere they pick a scope.
         if (active?.numberKeys) runRow(flat[nth])
-        else if (nth < scopes.length) setScope(scope === nth ? undefined : nth)
+        else if (nth < buttonScopes.length) setScope(scope === nth ? undefined : nth)
         return
       }
       // ⌘C copies what's selected in the field, as anywhere; with nothing selected it's the row's (an answer's Copy).
@@ -730,7 +732,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
         </div>
       )}
 
-      {scopes.map((s, i) => (
+      {buttonScopes.map((s, i) => (
         <motion.button
           key={s.id}
           type="button"
@@ -806,7 +808,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
 
       {/* What a scope button is, in the notch's own style rather than the system tooltip; over the results when they show. */}
       <AnimatePresence>
-        {hovered !== undefined && scopes[hovered] && content && buttonsShown && (
+        {hovered !== undefined && buttonScopes[hovered] && content && buttonsShown && (
           <motion.div
             key="scope-tip"
             className="pointer-events-none absolute flex items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--island)] px-2.5 py-1.5 text-caption text-foreground ring-1 ring-white/10 ring-inset"
@@ -816,7 +818,7 @@ export default function Launcher({ geometry }: { geometry: ScreenGeometry }) {
             exit={{ opacity: 0 }}
             transition={QUICK}
           >
-            {scopes[hovered].title} <Kbd>{`⌘${hovered + 1}`}</Kbd>
+            {buttonScopes[hovered].title} <Kbd>{`⌘${hovered + 1}`}</Kbd>
           </motion.div>
         )}
       </AnimatePresence>

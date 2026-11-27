@@ -47,6 +47,8 @@ export type Permission =
   | 'power.read'
   /** `power.stayAwake`, `power.allowSleep`: keeps the Mac (and optionally its display) from sleeping. */
   | 'power.control'
+  /** `screen.grabText`: reads the text in a region of the screen you pick (asks for Screen Recording). */
+  | 'screen.read'
   | 'audio.read'
   | 'audio.control'
   | 'display.control'
@@ -171,7 +173,7 @@ export interface HideWhen {
  * its result previews, 1.4 `windows`, 1.5 `hotkeys` and clipboard retention, 1.6
  * search action shortcuts, `stay` and number keys.
  */
-export const API_VERSION = '1.9.0'
+export const API_VERSION = '1.10.0'
 
 interface Version {
   major: number
@@ -347,6 +349,21 @@ export interface AudioState {
   volume: number // 0…1
   muted: boolean
   outputDevice: string
+}
+
+/** A translation: the text, and the languages (ISO 639 codes) it went from and to. API 1.10. */
+export interface Translated {
+  text: string
+  from: string
+  to: string
+}
+
+/** What `screen.grabText` read in the picked region. API 1.10. */
+export interface GrabbedText {
+  /** The lines of text, top to bottom. */
+  text: string
+  /** QR and other 2D codes' contents (links, Wi-Fi, text). */
+  codes: string[]
 }
 
 /** A speaker, headphones or microphone. */
@@ -833,6 +850,17 @@ export interface Methods {
   'power.stayAwake': { params: { display: boolean; reason: string }; result: null }
   /** Ends the plugin's `power.stayAwake`. API 1.8. */
   'power.allowSleep': { params: Record<string, never>; result: null }
+  /**
+   * Lets the user drag over a region of the screen (the system's own picker), then reads its text and QR codes on
+   * this Mac. `null` when they press Escape. The first call asks for Screen Recording. API 1.10.
+   */
+  'screen.grabText': { params: Record<string, never>; result: GrabbedText | null }
+  /**
+   * Translates on this Mac with Apple's Translation (macOS 26), for language pairs the Mac has downloaded; nothing
+   * is sent anywhere. The source language is detected; `to` defaults to the user's language (English when the text is
+   * already in it). Fails with what to download when a pair is missing. API 1.10.
+   */
+  'text.translate': { params: { text: string; to?: string }; result: Translated }
   /** Makes a device the default output (system sounds follow) or input. API 1.9. */
   'audio.setDevice': { params: { id: string; kind: 'output' | 'input' }; result: null }
   'display.setBrightness': { params: { brightness: number }; result: null }
@@ -1063,6 +1091,7 @@ export const METHOD_PERMISSION: Partial<Record<Method, Permission>> = {
   'power.stayAwake': 'power.control',
   'power.allowSleep': 'power.control',
   'audio.setDevice': 'audio.control',
+  'screen.grabText': 'screen.read',
   'display.setBrightness': 'display.control',
   'display.setKeyboardBacklight': 'display.control',
   'hud.setEnabled': 'hud',

@@ -6,6 +6,8 @@ public enum ServiceRegistry {
             AwakeService(),
             AudioService(),
             AudioDevicesService(),
+            ScreenTextService(),
+            TranslateService(),
             DisplayService(),
             HUDService(),
             MediaService(),
